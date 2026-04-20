@@ -91,10 +91,27 @@ interface FlashApi {
   onProgress(cb: (line: string) => void): Unsub
 }
 
+/**
+ * Cross-target autodetection — mirrors `DetectionResult` on the main side.
+ * Loose typing keeps the renderer buildable even if the preload bridge
+ * hasn't been rebuilt yet (the call itself is runtime-guarded).
+ */
+interface RawDetectionResult {
+  seedDfu?: boolean
+  seedSerial?: { path: string } | null
+  esp32Serial?: { path: string } | null
+  detectedBoard?: BoardTarget | null
+}
+
+interface DeviceApi {
+  detect(): Promise<RawDetectionResult>
+}
+
 interface MaybeDaisyApi {
   sdk?: SdkApi
   compile?: CompileApi
   flash?: FlashApi
+  device?: DeviceApi
 }
 
 function api(): MaybeDaisyApi {
@@ -130,6 +147,15 @@ export interface CompileState {
   lastBinaryPath: string | null
   deviceAvailable: boolean
   deviceLabel: string | null
+  /**
+   * Cross-target presence flags, updated by `detectBoards()`. Independent
+   * of `deviceAvailable` (which is scoped to the current target) so the
+   * StatusBar pill can show a "seed also available" / "esp32 also
+   * available" secondary indicator when a board is plugged in that isn't
+   * the currently-selected target.
+   */
+  seedAvailable: boolean
+  esp32Available: boolean
   log: LogLine[]
   logPanelOpen: boolean
 }
@@ -145,6 +171,13 @@ export interface CompileActions {
   installSdk(): Promise<void>
   build(): Promise<void>
   detectDevice(): Promise<void>
+  /**
+   * Cross-target autodetection. Polls `window.daisy.device.detect()`,
+   * updates `detectedBoard` + `seedAvailable` + `esp32Available`, and
+   * (with debounce) calls `autoSetTarget()` to switch the compile target
+   * when the user hasn't locked it manually.
+   */
+  detectBoards(): Promise<void>
   flash(): Promise<void>
 }
 
@@ -165,6 +198,15 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
   const append = (line: LogLine): void => {
     set((s) => ({ log: pushCapped(s.log, line) }))
   }
+
+  /*
+   * Debounce ring buffer for `detectBoards()`. We require TWO consecutive
+   * identical detections before auto-switching the target so a hotplug
+   * glitch (brief double-presence during a power-up) doesn't thrash the
+   * compile target. Kept on the closure rather than in store state — it's
+   * an implementation detail of the poller, not something the UI renders.
+   */
+  const recentDetections: (BoardTarget | null)[] = []
 
   /* ---------- onProgress listeners ----------
    *
@@ -202,6 +244,8 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
     lastBinaryPath: null,
     deviceAvailable: false,
     deviceLabel: null,
+    seedAvailable: false,
+    esp32Available: false,
     log: [],
     logPanelOpen: false,
 
@@ -444,6 +488,55 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
         }
       } catch {
         set({ deviceAvailable: false, deviceLabel: null })
+      }
+    },
+
+    async detectBoards() {
+      const device = api().device
+      const ed = useEditorStore.getState()
+      if (!device) {
+        // No bridge — nothing detected. Clear everything so stale state
+        // from a previous run doesn't linger.
+        ed.setDetectedBoard(null)
+        set({ seedAvailable: false, esp32Available: false })
+        recentDetections.length = 0
+        return
+      }
+      try {
+        const res = await device.detect()
+        const seedPresent = !!(res.seedDfu || res.seedSerial)
+        const esp32Present = !!res.esp32Serial
+        const board = (res.detectedBoard ?? null) as BoardTarget | null
+
+        // Presence flags are immediate — no debounce needed; they're used
+        // only for the StatusBar secondary indicator and don't mutate the
+        // compile target.
+        set({ seedAvailable: seedPresent, esp32Available: esp32Present })
+        ed.setDetectedBoard(board)
+
+        /*
+         * Debounce: `autoSetTarget` is only called after the SAME board
+         * has been detected for two consecutive polls. Stops a hotplug
+         * glitch (e.g. Seed briefly visible during an ESP32 power-up)
+         * from flipping the target mid-work. History is intentionally
+         * size-2 and stored on the closure so it survives across calls
+         * without polluting store state.
+         */
+        recentDetections.push(board)
+        while (recentDetections.length > 2) recentDetections.shift()
+
+        if (
+          board !== null &&
+          recentDetections.length === 2 &&
+          recentDetections[0] === board &&
+          recentDetections[1] === board &&
+          !ed.targetLockedByUser
+        ) {
+          ed.autoSetTarget(board)
+        }
+      } catch {
+        // Transient IPC failure — don't wipe presence flags, just skip
+        // this tick. The next 3s poll will try again.
       }
     },
 

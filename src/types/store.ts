@@ -8,6 +8,15 @@ import type { AudioGraph, Connection, NodeInstance, NodeKind } from './graph'
 import type { BoardPin, HardwareKind, HardwareLayout } from './hardware'
 
 /**
+ * Target-filter mode for the palette + command palette.
+ *   - 'all'       — every kind is visible; unsupported kinds render dimmed
+ *                   with a red dot
+ *   - 'available' — native + stub kinds; unsupported hidden (default)
+ *   - 'native'    — only kinds with full, tuned DSP for the current target
+ */
+export type PaletteFilterMode = 'all' | 'available' | 'native'
+
+/**
  * Compile target selected in the TopBar. Drives codegen, build-command
  * dispatch, and device detection.
  */
@@ -49,6 +58,26 @@ export interface LayoutSizes {
   buildLogH: number
   /** Bottom-right serial-monitor panel height in px (applied only while open). */
   serialMonitorH: number
+  /**
+   * Palette whole-panel collapse. When true the palette rail renders as a
+   * thin 44px vertical bar; the grid template still consumes the same
+   * track, the width is just overridden at the CSS level.
+   */
+  paletteCollapsed: boolean
+  /**
+   * Compact / icons-only rendering for palette cards. Independent of
+   * `paletteCollapsed` — collapsed wins visually when both are on.
+   */
+  paletteCompact: boolean
+  /** Category-header names that are currently collapsed. */
+  categoriesCollapsed: string[]
+  /** Active target-support filter. Default: 'available'. */
+  paletteFilter: PaletteFilterMode
+  /**
+   * Last 8 kinds the user dropped, front = most recent. Used by the
+   * palette's "RECENT" strip and the command palette's quick-pick.
+   */
+  recentKinds: NodeKind[]
 }
 
 export interface EditorStoreState {
@@ -85,6 +114,21 @@ export interface EditorStoreState {
    * existing patches behave identically to the single-target era.
    */
   target: BoardTarget
+
+  /**
+   * True when the user has explicitly picked a target via the TopBar
+   * dropdown. While true, autodetect MUST NOT override the selection —
+   * the explicit pick "wins" until the user releases the lock.
+   */
+  targetLockedByUser: boolean
+
+  /**
+   * Latest unambiguous autodetection result (mirrors
+   * `DetectionResult.detectedBoard` from the preload bridge). `null` when
+   * nothing is plugged in or when multiple targets are simultaneously
+   * present (ambiguous — user must pick manually).
+   */
+  detectedBoard: BoardTarget | null
 }
 
 export interface EditorStoreActions {
@@ -150,17 +194,47 @@ export interface EditorStoreActions {
   /** Replace layout wholesale (used when loading a `.dpatch`). */
   setLayout(layout: Partial<LayoutSizes>): void
 
+  /* palette UI prefs (not history-tracked — same story as resize) */
+  setPaletteCollapsed(collapsed: boolean): void
+  togglePaletteCollapsed(): void
+  setPaletteCompact(compact: boolean): void
+  togglePaletteCompact(): void
+  toggleCategoryCollapsed(category: string): void
+  setPaletteFilter(mode: PaletteFilterMode): void
+  /** Push a kind onto the recent-drops list (front, deduped, cap 8). */
+  noteRecentKind(kind: NodeKind): void
+
   /* per-node view state — collapse chevron on a Rete node */
   toggleCollapsed(id: string): void
   setCollapsed(ids: string[], collapsed: boolean): void
 
   /**
-   * Switch compile target. Also updates the hardware layout's `board`
-   * field so saved patches remember their target. Pin assignments stay
-   * intact — the HardwareView flags any that are invalid on the new
-   * board instead of clearing them.
+   * Switch compile target (explicit USER action — e.g. TopBar dropdown).
+   * Also sets `targetLockedByUser = true` so subsequent autodetect ticks
+   * respect the pick. Also updates the hardware layout's `board` field
+   * so saved patches remember their target. Pin assignments stay intact —
+   * the HardwareView flags any that are invalid on the new board instead
+   * of clearing them.
    */
   setTarget(target: BoardTarget): void
+
+  /**
+   * Switch compile target from an AUTOMATED source (autodetect). Applies
+   * the change only if the user hasn't locked the target. Does NOT set
+   * `targetLockedByUser`. The underlying hardware-board flip and status
+   * bookkeeping match `setTarget()`.
+   */
+  autoSetTarget(target: BoardTarget): void
+
+  /**
+   * Release the "user pick" lock. The next autodetect tick that yields
+   * an unambiguous board will apply automatically. Used by the TopBar
+   * lock affordance.
+   */
+  releaseTargetLock(): void
+
+  /** Mirror the current autodetection result. Called by `detectBoards()`. */
+  setDetectedBoard(board: BoardTarget | null): void
 }
 
 export type EditorStore = EditorStoreState & EditorStoreActions

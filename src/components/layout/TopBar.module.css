@@ -105,6 +105,46 @@
   border-bottom-color: var(--dp-accent);
 }
 
+/* Autodetect-status dot sitting adjacent to the TargetSwitcher. */
+.targetDot {
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  padding: 0;
+  border-radius: 50%;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  align-self: center;
+  transition: box-shadow var(--dp-motion-fast) var(--dp-ease);
+}
+
+.targetDotMatch {
+  background: var(--dp-success);
+  box-shadow: 0 0 6px var(--dp-success);
+}
+
+.targetDotMismatch {
+  background: var(--dp-warning);
+  box-shadow: 0 0 6px var(--dp-warning);
+  cursor: pointer;
+}
+
+/* Lock affordance next to the active target seg — a click releases. */
+.targetLockDot {
+  background: transparent;
+  border: 0;
+  color: var(--dp-accent);
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  font-size: 10px;
+  line-height: 1;
+  align-self: center;
+  letter-spacing: 0;
+}
+
+.targetLockDot:hover { color: var(--dp-text); }
+
 .filename {
   display: inline-flex;
   align-items: center;

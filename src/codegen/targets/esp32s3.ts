@@ -273,7 +273,16 @@ export function generateEsp32S3Project(
     warnings
   })
 
-  const platformioIni = buildPlatformioIni(hw)
+  // Feature flags derived from the graph — drive platformio.ini lib_deps and
+  // memory flags (PSRAM for granulator, Adafruit SSD1306 for OLED).
+  const graphFeatures = {
+    hasOled: graph.nodes.some((n) => n.kind === 'oled') || !!hw.oled,
+    hasGranulator: graph.nodes.some((n) => n.kind === 'granulator'),
+    hasMidi: graph.nodes.some((n) =>
+      n.kind === 'midi_in_note' || n.kind === 'midi_in_cc' || n.kind === 'midi_out_note'
+    )
+  }
+  const platformioIni = buildPlatformioIni(hw, graphFeatures)
   const projectJson = JSON.stringify(graph, null, 2)
 
   return {
@@ -287,22 +296,34 @@ export function generateEsp32S3Project(
   }
 }
 
-function buildPlatformioIni(hw: HwState): string {
+function buildPlatformioIni(
+  hw: HwState,
+  features: { hasOled: boolean; hasGranulator: boolean; hasMidi: boolean }
+): string {
   const libs: string[] = []
-  if (hw.oled) {
-    libs.push('adafruit/Adafruit SSD1306 @ ^2.5.9')
+  if (hw.oled || features.hasOled) {
+    libs.push('adafruit/Adafruit SSD1306 @ ^2.5.13')
     libs.push('adafruit/Adafruit GFX Library @ ^1.11.9')
   }
   const libDeps = libs.length
     ? `lib_deps =\n    ${libs.join('\n    ')}\n`
     : ''
+  // Granulator's 4-second capture buffer (~770 KB at 48 kHz fp32) doesn't fit
+  // in DRAM; we place it in external PSRAM via EXT_RAM_ATTR. Enable the octal
+  // PSRAM mapping on the DevKitC so malloc/BSS in PSRAM is available.
+  const psramBlock = features.hasGranulator
+    ? `board_build.arduino.memory_type = qio_opi\nboard_build.flash_mode = qio\nboard_upload.flash_size = 8MB\nboard_build.partitions = default_8MB.csv\n`
+    : ''
+  // USB MIDI needs the USB CDC / MODE flags already present; no extra libs
+  // since USBMIDI ships in the Arduino-ESP32 core.
+  const midiNote = features.hasMidi ? '; USB MIDI: uses <USBMIDI.h> from arduino-esp32 core\n' : ''
   return `[env:esp32-s3-devkitc-1]
 platform = espressif32
 board = esp32-s3-devkitc-1
 framework = arduino
 monitor_speed = 115200
 build_flags = -DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1
-${libDeps}`
+${psramBlock}${midiNote}${libDeps}`
 }
 
 function buildMainCpp(args: {

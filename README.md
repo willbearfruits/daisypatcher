@@ -12,7 +12,7 @@ Visual node-based patcher for the Electro-Smith **Daisy Seed** and **ESP32-S3**.
 - **Hardware view.** Second canvas: a render of your board with labeled pins. Drag knobs, buttons, switches, LEDs, MIDI/I2S jacks, OLEDs onto pins; codegen wires the right peripheral init.
 - **Compile + flash.** First-run installer clones libDaisy + DaisySP with submodules and runs `make -C libDaisy`. Build button runs `make` (Seed) or `pio run` (ESP32); flash button runs `dfu-util` or `pio run -t upload`. Build log streams live.
 - **Serial monitor.** Bottom-right panel talks to the Daisy over USB CDC. Send / receive / clear.
-- **Everything else:** save/load `.dpatch`, undo/redo with drag coalescing, multi-select, copy/cut/paste, collapsible nodes (Cmd+.), resizable panels, palette fuzzy search, CPU-budget meter.
+- **Everything else:** save/load `.dpatch`, undo/redo with drag coalescing, multi-select, copy/cut/paste, collapsible nodes (Cmd+.), resizable panels, collapsible palette (Cmd+B) with category folding + target-aware filter + icons-only mode, floating command palette (Cmd+K), recent-kinds strip, CPU-budget meter, auto-target detection from plugged-in hardware, electron-updater auto-update.
 
 ## Quickstart
 
@@ -32,10 +32,18 @@ On first launch the app will prompt to install libDaisy + DaisySP into `~/.confi
 ### Building a distributable
 
 ```bash
-npm run dist       # produces an AppImage in dist/ (Linux)
+npm run dist         # build all configured targets for the current host
+npm run dist:linux   # Linux only: AppImage (x64/arm64) + Flatpak (x64)
+npm run dist:win     # Windows only: NSIS installer + portable .exe (x64)
+npm run dist:all     # Linux + Windows in one pass
+npm run publish      # build + upload artifacts to a GitHub Release
 ```
 
-Mac `.dmg` and Windows `.exe` targets are stubbed in the electron-builder config but not yet regularly tested — PRs welcome.
+Linux produces an AppImage and a Flatpak bundle in `dist/`. Building the Flatpak requires `flatpak-builder` on the host (`sudo apt install flatpak-builder` on Debian/Ubuntu).
+
+Windows produces an NSIS installer (`.exe`, per-user install, user-selectable path) and a standalone portable `.exe`. Cross-building the Windows targets from a Linux host requires Wine (`sudo apt install wine`). Without code-signing certificates configured, SmartScreen will flag the installer on end-user machines — see the packaging notes before cutting a public Windows release.
+
+Mac `.dmg` is not yet configured — PRs welcome.
 
 ## Architecture at a glance
 
@@ -48,8 +56,7 @@ Full internals and the checklist for adding a new node kind live in [`CLAUDE.md`
 **Works:** real DSP for most of the 84 nodes, emulation, Daisy Seed compile + flash, hardware view round-trips, save/load, OLED emulator preview.
 
 **Stubbed or partial:**
-- ESP32 codegen covers ~30 of 84 kinds natively; complex DaisySP-backed nodes (FM2, karplus, reverb, chorus, phaser, flanger, pitch_shifter, granulator, full OLED draw) emit a warning + passthrough on ESP32.
-- OLED drawing on real hardware needs a small wiring step not yet finished (emitted as commented guidance). Emulator preview is full.
+- ESP32 parity: real inline-C++ DSP now covers virtually all 84 kinds — reverb (FreeVerb), FM2, karplus, chorus, phaser, flanger, pitch shifter, granulator, drums, formant, wavetable, etc. Only `expression` (AST parser port pending) and `i2s_in` / `i2s_out` (not applicable — `audio_in` / `audio_out` already handle I2S on ESP32) remain passthrough. OLED drawing emits full Adafruit_SSD1306 code for ESP32.
 - Studio Rack and CRT Patchbay themes reserved but not implemented — Signal Lab is the only live theme.
 - No sketch → nodes reverse import (one-way codegen only; our own patches round-trip via `project.json`).
 - No CLI, no MIDI learn, no polyphony, no subpatching — all on the roadmap.

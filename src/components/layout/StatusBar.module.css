@@ -169,6 +169,22 @@
   flex: 0 0 auto;
 }
 
+/*
+ * Secondary "other target also available" indicator. Sits adjacent to the
+ * device pill when the non-active target is simultaneously plugged in —
+ * purely informational, not actionable from here (use the TopBar dot).
+ */
+.alsoDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-text-muted);
+  box-shadow: 0 0 4px var(--dp-text-muted);
+  flex: 0 0 auto;
+  margin-left: -2px;
+}
+
 /* CPU budget bar — far right of the status bar. */
 
 .cpu {

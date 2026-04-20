@@ -54,9 +54,40 @@ export interface SerialPortInfo {
   productId?: string
 }
 
+/**
+ * Cross-target device autodetection result. Mirrored from
+ * `electron/main/deviceDetection.ts`. `detectedBoard` is `null` when nothing
+ * is plugged in OR when both a Daisy and an ESP32 are present
+ * simultaneously (ambiguous — renderer must not auto-switch).
+ */
+export interface DetectionResult {
+  seedDfu: boolean
+  seedSerial: { path: string } | null
+  esp32Serial: { path: string } | null
+  detectedBoard: BoardTarget | null
+}
+
 export interface SerialOpenResult {
   success: boolean
   error?: string
+}
+
+/**
+ * Lifecycle of an update check, mirrored from electron-updater events. The
+ * renderer drives UI state off this single union.
+ */
+export type UpdateStatusPayload =
+  | { state: 'checking' }
+  | { state: 'available'; version: string; releaseNotes: string | null }
+  | { state: 'none'; version: string | null }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string }
+
+export interface UpdateProgressPayload {
+  percent: number
+  bytesPerSecond: number
+  transferred: number
+  total: number
 }
 
 /**
@@ -66,6 +97,19 @@ export interface SerialOpenResult {
  */
 function onChannel(channel: string, cb: (line: string) => void): () => void {
   const listener = (_e: unknown, line: string): void => cb(line)
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
+  }
+}
+
+/**
+ * Same idea as `onChannel` but for structured object payloads. We keep them
+ * separate so call sites stay self-documenting (string = a log line, object
+ * = a status/progress event).
+ */
+function onObjectChannel<T>(channel: string, cb: (payload: T) => void): () => void {
+  const listener = (_e: unknown, payload: T): void => cb(payload)
   ipcRenderer.on(channel, listener)
   return () => {
     ipcRenderer.removeListener(channel, listener)
@@ -112,6 +156,9 @@ const api = {
     onProgress: (cb: (line: string) => void): (() => void) =>
       onChannel('flash:progress', cb)
   },
+  device: {
+    detect: (): Promise<DetectionResult> => ipcRenderer.invoke('device:detect')
+  },
   serial: {
     list: (): Promise<SerialPortInfo[]> => ipcRenderer.invoke('serial:list'),
     open: (path: string, baud: number): Promise<SerialOpenResult> =>
@@ -121,6 +168,15 @@ const api = {
       ipcRenderer.invoke('serial:write', { text }),
     onLine: (cb: (line: string) => void): (() => void) =>
       onChannel('serial:line', cb)
+  },
+  updates: {
+    check: (): Promise<void> => ipcRenderer.invoke('update:check'),
+    download: (): Promise<void> => ipcRenderer.invoke('update:download'),
+    install: (): Promise<void> => ipcRenderer.invoke('update:install'),
+    onStatus: (cb: (payload: UpdateStatusPayload) => void): (() => void) =>
+      onObjectChannel<UpdateStatusPayload>('update:status', cb),
+    onProgress: (cb: (payload: UpdateProgressPayload) => void): (() => void) =>
+      onObjectChannel<UpdateProgressPayload>('update:progress', cb)
   }
 }
 

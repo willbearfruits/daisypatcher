@@ -5,12 +5,14 @@ import { join, resolve } from 'node:path'
 import { getSdkStatus, installSdk, WORKSPACE } from './sdk'
 import { buildProject, isInside, type BuildInput } from './buildService'
 import { detectFlashDevices, flashBinary } from './flashService'
+import { detectAllBoards } from './deviceDetection'
 import {
   listSerialPorts,
   openSerial,
   closeSerial,
   writeSerial
 } from './serialService'
+import { initAutoUpdater } from './updater'
 
 const isDev = !app.isPackaged
 
@@ -123,6 +125,12 @@ function registerIpcHandlers(): void {
     return await detectFlashDevices(target ?? 'daisy_seed')
   })
 
+  // Cross-target autodetection. Non-breaking sibling of flash:detect — this
+  // one is target-agnostic and drives the renderer's auto-target-switch.
+  ipcMain.handle('device:detect', async () => {
+    return await detectAllBoards()
+  })
+
   ipcMain.handle(
     'flash:run',
     async (evt, payload: { binaryPath: string; target?: 'daisy_seed' | 'esp32_s3' }) => {
@@ -205,6 +213,12 @@ function createWindow(): void {
     // Pop DevTools open in dev so runtime errors (and main→renderer IPC
     // progress) are immediately visible. Closed on release builds.
     if (isDev) win.webContents.openDevTools({ mode: 'detach' })
+    // Auto-updater is a hard no-op in dev — electron-updater throws on
+    // unsigned/dev builds because there's no `app-update.yml` on disk.
+    // Guard the entire wire-up behind `app.isPackaged`.
+    if (app.isPackaged) {
+      initAutoUpdater(win)
+    }
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {

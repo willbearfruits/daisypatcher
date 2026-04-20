@@ -1,6 +1,13 @@
 import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+
+// Read the app version once at config-load so the renderer can expose it
+// without having to reach into node APIs or touch package.json at runtime.
+const pkgVersion: string = JSON.parse(
+  readFileSync(resolve(__dirname, 'package.json'), 'utf8')
+).version
 
 export default defineConfig({
   main: {
@@ -34,6 +41,12 @@ export default defineConfig({
     root: '.',
     resolve: {
       alias: { '@': resolve(__dirname, 'src') }
+    },
+    define: {
+      // Injected at build time so the updater UI can print the currently
+      // running version without pulling in fs or hitting IPC. JSON.stringify
+      // is mandatory — Vite substitutes the raw text into the bundle.
+      __APP_VERSION__: JSON.stringify(pkgVersion)
     },
     plugins: [react()],
     build: {

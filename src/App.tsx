@@ -23,6 +23,10 @@ import {
 import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
+// Imported for its side effect: the updateState store registers its IPC
+// listeners at construction time so update events that fire during
+// first-paint work are captured even before any UI subscribes.
+import '@/state/updateState'
 import { ReteEditor, type ReteEditorHandle } from '@/editor/ReteEditor'
 import { createAudioEngine } from '@/audio'
 import { AudioEngineProvider } from '@/audio/AudioEngineContext'
@@ -30,6 +34,8 @@ import { useGlobalKeybindings } from '@/hooks/useGlobalKeybindings'
 import { BuildLogPanel } from '@/components/layout/BuildLogPanel'
 import { SerialMonitorPanel } from '@/components/layout/SerialMonitorPanel'
 import { SdkInstallModal } from '@/components/layout/SdkInstallModal'
+import { CommandPalette } from '@/components/layout/CommandPalette'
+import type { NodeKind } from '@/types/graph'
 import { HardwarePalette } from '@/hardware/HardwarePalette'
 import { HardwareView } from '@/hardware/HardwareView'
 import { HardwareInspector } from '@/hardware/HardwareInspector'
@@ -90,6 +96,21 @@ export default function App() {
     }
   }, [engine])
 
+  // The Palette's "Recent" strip and the command palette both drop nodes
+  // without a drag — they dispatch a `dp-drop-kind` CustomEvent and we
+  // route it through the Rete ref here. Keeps those components ignorant
+  // of the editor instance.
+  useEffect(() => {
+    const onDrop = (ev: Event) => {
+      const ce = ev as CustomEvent<{ kind: NodeKind; clientX: number; clientY: number }>
+      const d = ce.detail
+      if (!d) return
+      reteRef.current?.onDropNode(d.kind, d.clientX, d.clientY)
+    }
+    window.addEventListener('dp-drop-kind', onDrop)
+    return () => window.removeEventListener('dp-drop-kind', onDrop)
+  }, [])
+
   // One-shot SDK status probe on mount — drives the install-modal
   // visibility logic. The DFU poller fires every 3s on an interval bounded
   // to this effect's lifetime, so unmount cancels cleanly with no leaks.
@@ -98,11 +119,16 @@ export default function App() {
     const s = useSerialStore.getState()
     void c.refreshSdkStatus()
     void c.detectDevice()
+    // Fire an initial cross-target probe so startup doesn't wait 3s for
+    // the first autodetect guess.
+    void c.detectBoards()
     void s.refreshPorts()
-    // Single 3s poller drives both DFU detect and port enumeration so
-    // we don't double up on timers or interleave their cadences.
+    // Single 3s poller drives target-scoped DFU detection, cross-target
+    // autodetect, and port enumeration. One timer, one cadence — no
+    // double-polling or drift between them.
     const id = window.setInterval(() => {
       void useCompileStore.getState().detectDevice()
+      void useCompileStore.getState().detectBoards()
       void useSerialStore.getState().refreshPorts()
     }, 3000)
     return () => window.clearInterval(id)
@@ -115,6 +141,7 @@ export default function App() {
         <BuildLogPanel />
         <SerialMonitorPanel />
         <SdkInstallModal />
+        <CommandPalette />
       </AudioEngineProvider>
     </ThemeProvider>
   )
@@ -131,9 +158,13 @@ export default function App() {
 const DEFAULT_PALETTE_W = 240
 const DEFAULT_INSPECTOR_W = 280
 
+/** Width of the collapsed palette rail — matches `Palette.module.css .rootCollapsed`. */
+const COLLAPSED_PALETTE_W = 44
+
 function MainShell({ reteRef }: { reteRef: React.RefObject<ReteEditorHandle | null> }) {
   const view = useEditorStore((s) => s.view)
   const paletteW = useEditorStore((s) => s.layout.paletteW)
+  const paletteCollapsed = useEditorStore((s) => s.layout.paletteCollapsed)
   const inspectorW = useEditorStore((s) => s.layout.inspectorW)
   const setPaletteW = useEditorStore((s) => s.setPaletteW)
   const setInspectorW = useEditorStore((s) => s.setInspectorW)
@@ -141,9 +172,11 @@ function MainShell({ reteRef }: { reteRef: React.RefObject<ReteEditorHandle | nu
 
   // Five tracks: [palette] [handle] [canvas] [handle] [inspector]. The
   // handles are fixed 4px so the main canvas absorbs all remaining space.
-  // Composing the template inline means we never need to touch index.css
-  // for a resize — the store owns the sizes.
-  const gridTemplateColumns = `${paletteW}px 4px 1fr 4px ${inspectorW}px`
+  // When the palette is collapsed we override its track width to a thin
+  // rail — the resize handle is also disabled in that mode (there's
+  // nothing to drag against).
+  const effectivePaletteW = paletteCollapsed ? COLLAPSED_PALETTE_W : paletteW
+  const gridTemplateColumns = `${effectivePaletteW}px 4px 1fr 4px ${inspectorW}px`
 
   return (
     <div className="dp-app">
@@ -155,7 +188,12 @@ function MainShell({ reteRef }: { reteRef: React.RefObject<ReteEditorHandle | nu
         <ResizeHandle
           orientation="vertical"
           ariaLabel="Resize palette"
-          onResize={(dx) => setPaletteW(paletteW + dx)}
+          onResize={(dx) => {
+            // No-op while collapsed — dragging a thin rail would just
+            // auto-expand it unexpectedly. User should uncollapse first.
+            if (paletteCollapsed) return
+            setPaletteW(paletteW + dx)
+          }}
           onReset={() => setPaletteW(DEFAULT_PALETTE_W)}
         />
         <main className="dp-canvas-shell">

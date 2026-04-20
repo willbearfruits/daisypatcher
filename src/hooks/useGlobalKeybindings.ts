@@ -12,6 +12,7 @@ import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
 import { newPatch, openPatch, savePatch } from '@/state/patchFile'
+import { OPEN_COMMAND_PALETTE_EVENT } from '@/components/layout/CommandPalette'
 
 function isEditableTarget(el: EventTarget | null): boolean {
   if (!el || !(el instanceof HTMLElement)) return false
@@ -50,17 +51,21 @@ export function useGlobalKeybindings(): void {
       // From here on, `mod` is true.
       const k = key.toLowerCase()
 
-      // Cmd/Ctrl+K — focus the palette filter input. Works even from
-      // within other inputs: users expect a "jump to search" to override
-      // current focus.
+      // Cmd/Ctrl+K — open the floating command palette (fuzzy picker).
+      // Works from anywhere, including text inputs: it's a "jump to
+      // command" that should override current focus.
       if (k === 'k') {
-        const el = document.getElementById('dp-palette-search')
-        if (el instanceof HTMLInputElement) {
-          ev.preventDefault()
-          el.focus()
-          el.select()
-          return
-        }
+        ev.preventDefault()
+        window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT))
+        return
+      }
+
+      // Cmd/Ctrl+B — toggle palette collapse (universal sidebar-toggle
+      // binding). Also works from inputs so the rail can always collapse.
+      if (k === 'b') {
+        ev.preventDefault()
+        useEditorStore.getState().togglePaletteCollapsed()
+        return
       }
 
       // Build-log panel toggle. `ev.key` for backtick is literally "`".

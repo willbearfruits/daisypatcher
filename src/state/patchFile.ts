@@ -15,10 +15,10 @@
  * as an AudioGraph and synthesize an empty hardware layout.
  */
 
-import type { AudioGraph } from '@/types/graph'
+import type { AudioGraph, NodeKind } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
 import { emptyHardwareLayout } from '@/types/hardware'
-import type { LayoutSizes } from '@/types/store'
+import type { LayoutSizes, PaletteFilterMode } from '@/types/store'
 import { useEditorStore } from './store'
 
 type Store = typeof useEditorStore
@@ -75,6 +75,25 @@ function extractLayout(raw: unknown): Partial<LayoutSizes> | undefined {
   if (typeof src.inspectorW === 'number') out.inspectorW = src.inspectorW
   if (typeof src.buildLogH === 'number') out.buildLogH = src.buildLogH
   if (typeof src.serialMonitorH === 'number') out.serialMonitorH = src.serialMonitorH
+  if (typeof src.paletteCollapsed === 'boolean') out.paletteCollapsed = src.paletteCollapsed
+  if (typeof src.paletteCompact === 'boolean') out.paletteCompact = src.paletteCompact
+  if (Array.isArray(src.categoriesCollapsed)) {
+    out.categoriesCollapsed = src.categoriesCollapsed.filter(
+      (c): c is string => typeof c === 'string'
+    )
+  }
+  if (
+    src.paletteFilter === 'all' ||
+    src.paletteFilter === 'available' ||
+    src.paletteFilter === 'native'
+  ) {
+    out.paletteFilter = src.paletteFilter as PaletteFilterMode
+  }
+  if (Array.isArray(src.recentKinds)) {
+    out.recentKinds = src.recentKinds.filter(
+      (k): k is NodeKind => typeof k === 'string'
+    )
+  }
   return Object.keys(out).length ? out : undefined
 }
 

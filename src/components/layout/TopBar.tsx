@@ -14,6 +14,7 @@ import { THEMES } from '@/theme'
 import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { newPatch, openPatch, savePatch } from '@/state/patchFile'
+import { UpdateBadge, UpdateMenu } from './UpdateBadge'
 import styles from './TopBar.module.css'
 
 /* ---------- inline 16x16 icons ---------- */
@@ -120,6 +121,7 @@ export function TopBar() {
       <div className={styles.left}>
         <span className={styles.dot} aria-hidden />
         <span className={styles.wordmark}>DAISYPATCHER</span>
+        <UpdateBadge />
         <span className={styles.divider} aria-hidden />
         <IconButton label="New" onClick={() => newPatch()}>
           <IconNew />
@@ -157,6 +159,7 @@ export function TopBar() {
       </div>
 
       <div className={styles.right}>
+        <UpdateMenu />
         <select
           className={styles.select}
           value={skinId}
@@ -350,23 +353,68 @@ function ViewSwitcher() {
  * same `.viewSwitch` styling so it feels like a sibling, differentiated
  * only by being in mono + uppercase.
  *
- * Changing the target triggers `setTarget()`, which flips the hardware
- * layout's `board` id and surfaces a status-bar warning if any placed
- * components have pin bindings that no longer make sense on the new
- * board. Also re-runs SDK + device detection so the gates refresh
- * immediately.
+ * Autodetect affordance (one adjacent dot):
+ *   - green dot: detected board matches the current target.
+ *   - amber dot: detected board differs AND the user has locked the
+ *                target. Clicking asks whether to switch; accepting
+ *                releases the lock and applies autodetect.
+ *   - no dot:    nothing detected, or detection is ambiguous.
+ *
+ * A second tiny "●" lock indicator appears directly next to whichever
+ * segment is active when `targetLockedByUser` is true. Clicking it
+ * releases the lock so the next autodetect tick can apply.
  */
 function TargetSwitcher() {
   const target = useEditorStore((s) => s.target)
   const setTarget = useEditorStore((s) => s.setTarget)
+  const autoSetTarget = useEditorStore((s) => s.autoSetTarget)
+  const releaseTargetLock = useEditorStore((s) => s.releaseTargetLock)
+  const targetLockedByUser = useEditorStore((s) => s.targetLockedByUser)
+  const detectedBoard = useEditorStore((s) => s.detectedBoard)
   const refreshSdkStatus = useCompileStore((s) => s.refreshSdkStatus)
   const detectDevice = useCompileStore((s) => s.detectDevice)
+
   const choose = (t: typeof target): void => {
     if (t === target) return
     setTarget(t)
     void refreshSdkStatus()
     void detectDevice()
   }
+
+  // Dot logic: null when no useful signal, 'match' (green) when detect
+  // agrees, 'mismatch' (amber) when detect disagrees but the user has
+  // locked the target (so we're nudging, not overriding).
+  const dotState: 'match' | 'mismatch' | null =
+    detectedBoard === null
+      ? null
+      : detectedBoard === target
+        ? 'match'
+        : targetLockedByUser
+          ? 'mismatch'
+          : null
+
+  const onDotClick = (): void => {
+    if (dotState !== 'mismatch' || detectedBoard === null) return
+    const label = detectedBoard === 'daisy_seed' ? 'Seed' : 'ESP32'
+    const ok = window.confirm(`A ${label} is connected. Switch target?`)
+    if (!ok) return
+    releaseTargetLock()
+    autoSetTarget(detectedBoard)
+    void refreshSdkStatus()
+    void detectDevice()
+  }
+
+  const onLockClick = (): void => {
+    releaseTargetLock()
+  }
+
+  const dotTitle =
+    dotState === 'match'
+      ? 'Autodetect: this target is plugged in'
+      : dotState === 'mismatch'
+        ? `Autodetect: a ${detectedBoard === 'daisy_seed' ? 'Seed' : 'ESP32'} is plugged in — click to switch`
+        : ''
+
   return (
     <div className={styles.viewSwitch} role="tablist" aria-label="Target">
       <button
@@ -389,6 +437,26 @@ function TargetSwitcher() {
       >
         ESP32
       </button>
+      {dotState !== null ? (
+        <button
+          type="button"
+          className={`${styles.targetDot} ${dotState === 'match' ? styles.targetDotMatch : styles.targetDotMismatch}`}
+          onClick={onDotClick}
+          aria-label={dotTitle}
+          title={dotTitle}
+        />
+      ) : null}
+      {targetLockedByUser ? (
+        <button
+          type="button"
+          className={styles.targetLockDot}
+          onClick={onLockClick}
+          aria-label="Target locked by user \u2014 click to release and re-apply autodetect"
+          title="Target locked \u2014 click to release"
+        >
+          {'\u25CF'}
+        </button>
+      ) : null}
     </div>
   )
 }

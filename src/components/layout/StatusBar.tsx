@@ -36,6 +36,8 @@ export function StatusBar() {
 
   const deviceAvailable = useCompileStore((s) => s.deviceAvailable)
   const deviceLabel = useCompileStore((s) => s.deviceLabel)
+  const seedAvailable = useCompileStore((s) => s.seedAvailable)
+  const esp32Available = useCompileStore((s) => s.esp32Available)
   const toggleLogPanel = useCompileStore((s) => s.toggleLogPanel)
   const detectDevice = useCompileStore((s) => s.detectDevice)
   const target = useEditorStore((s) => s.target)
@@ -74,6 +76,18 @@ export function StatusBar() {
       : pillState === 'dfu'
         ? (deviceLabel ?? (target === 'esp32_s3' ? 'ESP32 \u00B7 Port' : 'Daisy Seed \u00B7 DFU'))
         : 'no device'
+
+  /*
+   * "Other board also available" secondary indicator. When the user's
+   * chosen target is selected for compile/flash but the OTHER target is
+   * ALSO physically plugged in, surface a tiny neutral dot so the user
+   * can see it's available without the pill overclaiming. Drives the
+   * amber dot in the target dropdown too — here we just light up the
+   * pill corner so the StatusBar stays informative.
+   */
+  const otherAvailable =
+    target === 'daisy_seed' ? esp32Available : seedAvailable
+  const otherLabel = target === 'daisy_seed' ? 'ESP32' : 'Seed'
 
   const onPillClick = (ev: MouseEvent<HTMLButtonElement>): void => {
     // Ctrl/Cmd+click re-routes to the build log so developers still have
@@ -126,6 +140,13 @@ export function StatusBar() {
           </svg>
           <span>{pillLabel}</span>
         </button>
+        {otherAvailable ? (
+          <span
+            className={styles.alsoDot}
+            title={`${otherLabel} also available`}
+            aria-label={`${otherLabel} also available`}
+          />
+        ) : null}
         <span className={`${styles.dot} ${engineDotClass}`} aria-hidden />
         <span className={styles.engineText}>{engineText}</span>
       </div>

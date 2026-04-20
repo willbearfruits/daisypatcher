@@ -38,8 +38,16 @@ const DEFAULT_LAYOUT: LayoutSizes = {
   paletteW: 240,
   inspectorW: 280,
   buildLogH: 220,
-  serialMonitorH: 260
+  serialMonitorH: 260,
+  paletteCollapsed: false,
+  paletteCompact: false,
+  categoriesCollapsed: [],
+  paletteFilter: 'available',
+  recentKinds: []
 }
+
+/** FIFO cap for `layout.recentKinds`. */
+const RECENT_KINDS_LIMIT = 8
 
 /** Resize clamps, tuned to keep the shell usable on a 1280x720 display. */
 const LAYOUT_LIMITS = {
@@ -246,11 +254,23 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     layout: { ...DEFAULT_LAYOUT },
 
     target: 'daisy_seed' as BoardTarget,
+    targetLockedByUser: false,
+    detectedBoard: null,
 
     addNode(kind, position) {
       const id = nanoid(8)
       const node: NodeInstance = { id, kind, position, params: initialParams(kind) }
       mutate((s) => ({ graph: { ...s.graph, nodes: [...s.graph.nodes, node] } }))
+      // Track the drop in the palette's recent-kinds strip. This is a UI
+      // pref (not history-tracked), so we patch `layout` directly rather
+      // than routing through `mutate`.
+      const layout = get().layout
+      const dedup = layout.recentKinds.filter((k) => k !== kind)
+      const next = [kind, ...dedup].slice(0, RECENT_KINDS_LIMIT)
+      if (next.length !== layout.recentKinds.length ||
+          next.some((k, i) => k !== layout.recentKinds[i])) {
+        set({ layout: { ...layout, recentKinds: next } })
+      }
       return id
     },
 
@@ -692,9 +712,58 @@ export const useEditorStore = create<EditorStore>((set, get) => {
           patch.serialMonitorH ?? cur.serialMonitorH,
           LAYOUT_LIMITS.serialMonitorH.min,
           LAYOUT_LIMITS.serialMonitorH.max
-        )
+        ),
+        paletteCollapsed: patch.paletteCollapsed ?? cur.paletteCollapsed,
+        paletteCompact: patch.paletteCompact ?? cur.paletteCompact,
+        categoriesCollapsed: patch.categoriesCollapsed ?? cur.categoriesCollapsed,
+        paletteFilter: patch.paletteFilter ?? cur.paletteFilter,
+        recentKinds: patch.recentKinds ?? cur.recentKinds
       }
       set({ layout: merged })
+    },
+
+    setPaletteCollapsed(collapsed) {
+      const cur = get().layout
+      if (cur.paletteCollapsed === collapsed) return
+      set({ layout: { ...cur, paletteCollapsed: collapsed } })
+    },
+
+    togglePaletteCollapsed() {
+      const cur = get().layout
+      set({ layout: { ...cur, paletteCollapsed: !cur.paletteCollapsed } })
+    },
+
+    setPaletteCompact(compact) {
+      const cur = get().layout
+      if (cur.paletteCompact === compact) return
+      set({ layout: { ...cur, paletteCompact: compact } })
+    },
+
+    togglePaletteCompact() {
+      const cur = get().layout
+      set({ layout: { ...cur, paletteCompact: !cur.paletteCompact } })
+    },
+
+    toggleCategoryCollapsed(category) {
+      const cur = get().layout
+      const list = cur.categoriesCollapsed
+      const next = list.includes(category)
+        ? list.filter((c) => c !== category)
+        : [...list, category]
+      set({ layout: { ...cur, categoriesCollapsed: next } })
+    },
+
+    setPaletteFilter(mode) {
+      const cur = get().layout
+      if (cur.paletteFilter === mode) return
+      set({ layout: { ...cur, paletteFilter: mode } })
+    },
+
+    noteRecentKind(kind) {
+      const cur = get().layout
+      const dedup = cur.recentKinds.filter((k) => k !== kind)
+      const next = [kind, ...dedup].slice(0, RECENT_KINDS_LIMIT)
+      set({ layout: { ...cur, recentKinds: next } })
     },
 
     /* ---------- per-node view state ---------- */
@@ -731,28 +800,46 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     /* ---------- compile target ---------- */
 
     setTarget(target) {
-      const cur = get().target
-      if (cur === target) return
-      const boardId = boardForTarget(target)
-      const hw = get().hardware
-      // Flip the hardware layout's board id alongside the target. We
-      // deliberately do NOT clear component pin assignments — the
-      // hardware view flags any that aren't valid on the new board so
-      // the user can rebind without losing their layout. Still mutates
-      // through mutate() so the switch is a single undo step.
-      mutate((s) => ({
-        hardware: { ...s.hardware, board: boardId }
-      }))
-      set({ target })
-      // Surface a non-blocking status line so the user knows the target
-      // changed (and can tell at a glance if their placed components
-      // still make sense).
-      const invalid = countInvalidComponentsForBoard(hw, boardId)
-      const msg = invalid > 0
-        ? `target: ${target} — ${invalid} component${invalid === 1 ? '' : 's'} may need repinning`
-        : `target: ${target}`
-      set({ status: { kind: invalid > 0 ? 'warn' : 'info', message: msg } })
+      applyTargetSwitch(target)
+      set({ targetLockedByUser: true })
+    },
+
+    autoSetTarget(target) {
+      // Autodetect MUST NOT override an explicit user pick.
+      if (get().targetLockedByUser) return
+      applyTargetSwitch(target)
+    },
+
+    releaseTargetLock() {
+      if (!get().targetLockedByUser) return
+      set({ targetLockedByUser: false })
+    },
+
+    setDetectedBoard(board) {
+      if (get().detectedBoard === board) return
+      set({ detectedBoard: board })
     }
+  }
+
+  /**
+   * Core target-switch: flip the hardware board id alongside `target`,
+   * surface a status line, and keep pin assignments intact. Shared by
+   * the explicit `setTarget` and the autodetect-driven `autoSetTarget`.
+   */
+  function applyTargetSwitch(target: BoardTarget): void {
+    const cur = get().target
+    if (cur === target) return
+    const boardId = boardForTarget(target)
+    const hw = get().hardware
+    mutate((s) => ({
+      hardware: { ...s.hardware, board: boardId }
+    }))
+    set({ target })
+    const invalid = countInvalidComponentsForBoard(hw, boardId)
+    const msg = invalid > 0
+      ? `target: ${target} — ${invalid} component${invalid === 1 ? '' : 's'} may need repinning`
+      : `target: ${target}`
+    set({ status: { kind: invalid > 0 ? 'warn' : 'info', message: msg } })
   }
 })
 
