@@ -1,140 +1,180 @@
 /**
- * Daisy Seed pin-to-STM32 mapping + capability flags. Labels match the
- * silkscreen on the board. This drives the hardware view renderer AND
- * the codegen pin map (so we keep the two in sync).
+ * Daisy Seed pin-to-STM32 mapping + capability flags. Matches the
+ * Electrosmith "DAISY PINOUT" poster (Rev 2, color-coded per-peripheral)
+ * and is cross-checked against libDaisy's pin/peripheral source.
  *
- * Sources (in order of trust):
- *   1. libDaisy source — `sdk/libDaisy/src/daisy_seed.h` (seed::D0..D30,
- *      plus seed::D31/D32 for the Daisy Seed 2 DFM). Ground truth because
- *      it's what compiles against the hardware.
- *   2. libDaisy `src/per/adc.cpp` — STM32 channel → STM32 pin map
- *      (dsy_adc_channel_map + PIN_CHN_*). We use libDaisy's 0..11 channel
- *      index (the order pins appear in an AdcChannelConfig[] array), NOT
- *      the raw STM32 ADC_CHANNEL_N number, because that's what hw.adc
- *      gives users.
- *   3. libDaisy `src/per/uart.cpp`, `src/per/spi.cpp`, `src/per/dac.cpp`,
- *      `src/per/i2c.cpp` — alt-function matrices for each peripheral.
- *   4. Electrosmith's Daisy Seed pinout diagram (square PNG on the product
- *      page) — used to confirm physical header order.
+ * Authoritative sources used:
+ *   1. Electrosmith poster — the color-coded pill layout shipped with the
+ *      dev kit, also on electro-smith.com. This drives which alt-functions
+ *      we surface to the user (we show everything the poster labels).
+ *   2. libDaisy — `sdk/libDaisy/src/daisy_seed.h` (seed::D0..D30 on the OG
+ *      Seed; D31/D32 on Seed 2 DFM). ADC ordering from
+ *      `sdk/libDaisy/src/per/adc.cpp` (dsy_adc_channel_map).
+ *   3. STM32H750 datasheet alt-function table for all SPI/I2C/UART/SAI/
+ *      I2S/TIM assignments. The poster abbreviates most of these; where
+ *      the poster and the datasheet disagreed I followed the poster and
+ *      noted the alternate.
  *
- * Rev notes:
- *   - The onboard WM8731 codec is wired to SAI1 on PORTE pins (PE2..PE6)
- *     which are NOT broken out to the 40-pin header. There is no user-
- *     accessible I2S peripheral on the OG Seed unless you bit-bang on
- *     GPIOs or use SAI2 pins that happen to overlap SPI2 on PB14/PB15.
- *     The previous version of this file flagged D27..D30 as I2S pins —
- *     that was wrong. D29/D30 (PB14/PB15) are SAI2 *possible* via alt
- *     function but aren't labeled as such on the silkscreen and aren't
- *     plumbed by libDaisy; we surface them as SPI2 instead, which is the
- *     common use.
- *   - D31 (PC2) and D32 (PC3) exist only on the Daisy Seed 2 DFM. The
- *     OG Seed Rev 1–5 has D0..D30 only. Our SeedPin union includes D31
- *     so Seed 2 DFM projects round-trip, but we flag it in its label and
- *     the physical layout puts it in the Seed-2-specific slot.
- *   - D22/D23 are both DAC (PA5=DAC_OUT_2, PA4=DAC_OUT_1) AND ADC
- *     (ADC3_INP18, INP19). libDaisy happily treats them as ADC when you
- *     feed them into AdcChannelConfig; codegen defaults to DAC use.
+ * Note on I2S/SAI (important — a previous pass wrongly stripped these):
+ *   The onboard WM8731/AK4556 codec is hard-wired to SAI1 on PORTE pins
+ *   (not broken out). BUT several broken-out pins carry I2S/SAI alt
+ *   functions and the poster labels them as such:
+ *     PA4/D23  — I2S1_WS
+ *     PA5/D22  — I2S1_CK  (SCK)
+ *     PA6/D19  — I2S1_MCK (alt)
+ *     PA7/D18  — I2S1_SD
+ *     PC4/D21  — I2S1_MCK
+ *     PC1/D20  — I2S2_SD (alt)
+ *     PB14/D29 — I2S2_MCK  / SPI2_MISO
+ *     PB15/D30 — I2S2_SD   / SPI2_MOSI
+ *     PG9/D27  — SAI2_FS_B
+ *     PG10/D7  — SAI2_SD_B
+ *     PA2/D28  — SAI2_SCK_B (AF3)
+ *   We surface I2S via the `i2s` capability so the role→pin filter in
+ *   `pinsForRole` can gate an external I2S codec to the correct pins
+ *   instead of falling back to "any GPIO".
+ *
+ * Note on D22/D23:
+ *   Both are DAC + ADC + I2S + SPI1. Codegen picks DAC when bound to an
+ *   `audio_jack` / `cv_jack` out; `pot`/`cv_jack` in uses ADC; `i2s_codec`
+ *   uses I2S. Users can bind explicitly via the inspector.
+ *
+ * Note on D31/D32 (Seed 2 DFM only):
+ *   OG Seed Rev 1..5 stops at D30. D31/D32 exist only on the Daisy Seed 2
+ *   DFM. We keep D31 in `SeedPin` so Seed 2 DFM projects round-trip, but
+ *   the physical layout marks it as a Seed-2-only slot.
  */
 import type { PinCapabilities, SeedPin } from '@/types/hardware'
 
 /**
- * Authoritative pin-capability table.
- *
- * Every Daisy Seed GPIO breakout (D0..D30, plus D31 for Seed 2 DFM) is
- * listed. `gpio` is true for all of them — every broken-out pin is usable
- * as a digital I/O when not multiplexed into a peripheral. ADC-capable
- * pins are those whose STM32 pin has an ADC1/ADC2/ADC3 channel listed in
- * libDaisy's `per/adc.cpp` PIN_CHN_* table AND is broken out to the
- * header: D15..D25 and D28 on the OG Seed (12 pins, matching the
- * advertised "x12 ADC inputs"), plus D31/D32 on Seed 2 DFM.
- *
- * PWM / TIM-capable is a best-effort hint marking pins where a common
- * STM32H750 TIM_CH is on an alt-function we can switch to. Not a
- * complete timer map — users wanting specific TIMs should check the
- * STM32H750 datasheet.
+ * Authoritative pin-capability table for the OG Seed (D0..D30) plus D31
+ * for Seed 2 DFM round-tripping. Labels are concatenated alt-function
+ * tokens — the HardwareView turns the label into a stack of color-coded
+ * pills, one per token, so keep them space-separated and peripheral-
+ * prefixed (`USART1_TX`, `TIM2_CH4`, `I2C1_SDA`, etc.).
  */
 export const DAISY_SEED_PINS: PinCapabilities[] = [
-  // --- Left header (D0..D14), libDaisy seed:: constants ---
-  // D0  = PB12. Usable as UART5_RX, SPI2_NSS, TIM1_CH3N, CAN2_RX.
-  { pin: 'D0',  stm32Pin: 'PB12', gpio: true, adc: false, dac: false, pwm: true,  uart: 'rx', label: 'D0 / PB12 / UART5_RX' },
-  // D1  = PC11. USART3_RX / UART4_RX / SPI3_MISO.
-  { pin: 'D1',  stm32Pin: 'PC11', gpio: true, adc: false, dac: false, pwm: false, uart: 'rx', label: 'D1 / PC11 / USART3_RX' },
-  // D2  = PC10. USART3_TX / UART4_TX / SPI3_SCK.
-  { pin: 'D2',  stm32Pin: 'PC10', gpio: true, adc: false, dac: false, pwm: false, uart: 'tx', label: 'D2 / PC10 / USART3_TX' },
-  // D3  = PC9. I2C3_SDA / TIM3_CH4 / TIM8_CH4 / SDMMC1_D1.
-  { pin: 'D3',  stm32Pin: 'PC9',  gpio: true, adc: false, dac: false, pwm: true,  i2c: 'sda', label: 'D3 / PC9 / I2C3_SDA' },
-  // D4  = PC8. TIM3_CH3 / TIM8_CH3 / SDMMC1_D0.
-  { pin: 'D4',  stm32Pin: 'PC8',  gpio: true, adc: false, dac: false, pwm: true,  label: 'D4 / PC8' },
-  // D5  = PD2. UART5_RX / TIM3_ETR / SDMMC1_CMD.
-  { pin: 'D5',  stm32Pin: 'PD2',  gpio: true, adc: false, dac: false, pwm: false, uart: 'rx', label: 'D5 / PD2 / UART5_RX' },
-  // D6  = PC12. UART5_TX / USART3_CK / SPI3_MOSI / SDMMC1_CK.
-  { pin: 'D6',  stm32Pin: 'PC12', gpio: true, adc: false, dac: false, pwm: false, uart: 'tx', label: 'D6 / PC12 / UART5_TX' },
-  // D7  = PG10. SPI1_NSS (CS) / LCD R2 / SAI2_SD_B.
-  { pin: 'D7',  stm32Pin: 'PG10', gpio: true, adc: false, dac: false, pwm: false, spi: 'cs',   label: 'D7 / PG10 / SPI1_NSS' },
-  // D8  = PG11. SPI1_SCK.
-  { pin: 'D8',  stm32Pin: 'PG11', gpio: true, adc: false, dac: false, pwm: false, spi: 'sck',  label: 'D8 / PG11 / SPI1_SCK' },
-  // D9  = PB4. SPI1_MISO / SPI3_MISO / UART7_TX / TIM16_CH1N / I2C3 (with alt).
-  { pin: 'D9',  stm32Pin: 'PB4',  gpio: true, adc: false, dac: false, pwm: true,  spi: 'miso', uart: 'tx', label: 'D9 / PB4 / SPI1_MISO' },
-  // D10 = PB5. SPI1_MOSI / SPI3_MOSI / UART5_RX / I2C1_SMBA / TIM17_CH1N.
-  { pin: 'D10', stm32Pin: 'PB5',  gpio: true, adc: false, dac: false, pwm: true,  spi: 'mosi', label: 'D10 / PB5 / SPI1_MOSI' },
-  // D11 = PB8. I2C1_SCL / I2C4_SCL / UART4_RX / TIM16_CH1 / TIM4_CH3.
-  { pin: 'D11', stm32Pin: 'PB8',  gpio: true, adc: false, dac: false, pwm: true,  i2c: 'scl',  label: 'D11 / PB8 / I2C1_SCL' },
-  // D12 = PB9. I2C1_SDA / I2C4_SDA / UART4_TX / TIM17_CH1 / TIM4_CH4.
-  { pin: 'D12', stm32Pin: 'PB9',  gpio: true, adc: false, dac: false, pwm: true,  i2c: 'sda',  label: 'D12 / PB9 / I2C1_SDA' },
-  // D13 = PB6. USART1_TX / LPUART1_TX / UART5_TX / I2C1_SCL (alt) / I2C4_SCL.
-  { pin: 'D13', stm32Pin: 'PB6',  gpio: true, adc: false, dac: false, pwm: true,  uart: 'tx',  label: 'D13 / PB6 / USART1_TX' },
-  // D14 = PB7. USART1_RX / LPUART1_RX / I2C1_SDA (alt) / I2C4_SDA / TIM4_CH2.
-  { pin: 'D14', stm32Pin: 'PB7',  gpio: true, adc: false, dac: false, pwm: true,  uart: 'rx',  label: 'D14 / PB7 / USART1_RX' },
+  // --- Left header (D0..D14) ---
+  // D0 = PB12. UART5_RX, SPI2_NSS, CAN2_RX, USB_HS ID, TIM1_BKIN.
+  { pin: 'D0',  stm32Pin: 'PB12', gpio: true, adc: false, dac: false, pwm: true,  uart: 'rx', spi: 'cs',
+    label: 'D0 / PB12 / UART5_RX / SPI2_NSS' },
+  // D1 = PC11. USART3_RX, UART4_RX, SPI3_MISO, SDMMC1_D3.
+  { pin: 'D1',  stm32Pin: 'PC11', gpio: true, adc: false, dac: false, pwm: false, uart: 'rx', spi: 'miso',
+    label: 'D1 / PC11 / USART3_RX / UART4_RX / SPI3_MISO' },
+  // D2 = PC10. USART3_TX, UART4_TX, SPI3_SCK, SDMMC1_D2.
+  { pin: 'D2',  stm32Pin: 'PC10', gpio: true, adc: false, dac: false, pwm: false, uart: 'tx', spi: 'sck',
+    label: 'D2 / PC10 / USART3_TX / UART4_TX / SPI3_SCK' },
+  // D3 = PC9. I2C3_SDA, TIM3_CH4, TIM8_CH4, SDMMC1_D1.
+  { pin: 'D3',  stm32Pin: 'PC9',  gpio: true, adc: false, dac: false, pwm: true,  i2c: 'sda',
+    label: 'D3 / PC9 / I2C3_SDA / TIM3_CH4' },
+  // D4 = PC8. TIM3_CH3, TIM8_CH3, SDMMC1_D0, USART6_CK.
+  { pin: 'D4',  stm32Pin: 'PC8',  gpio: true, adc: false, dac: false, pwm: true,
+    label: 'D4 / PC8 / TIM3_CH3 / TIM8_CH3' },
+  // D5 = PD2. UART5_RX, TIM3_ETR, SDMMC1_CMD.
+  { pin: 'D5',  stm32Pin: 'PD2',  gpio: true, adc: false, dac: false, pwm: false, uart: 'rx',
+    label: 'D5 / PD2 / UART5_RX / TIM3_ETR' },
+  // D6 = PC12. UART5_TX, USART3_CK, SPI3_MOSI, SDMMC1_CK.
+  { pin: 'D6',  stm32Pin: 'PC12', gpio: true, adc: false, dac: false, pwm: false, uart: 'tx', spi: 'mosi',
+    label: 'D6 / PC12 / UART5_TX / SPI3_MOSI' },
+  // D7 = PG10. SPI1_NSS (CS), I2S1_WS (alt), SAI2_SD_B, LCD_R2.
+  { pin: 'D7',  stm32Pin: 'PG10', gpio: true, adc: false, dac: false, pwm: false, spi: 'cs',  i2s: 'sd',
+    label: 'D7 / PG10 / SPI1_NSS / SAI2_SD_B' },
+  // D8 = PG11. SPI1_SCK (alt), SAI2_SCK_B (alt), ETH.
+  { pin: 'D8',  stm32Pin: 'PG11', gpio: true, adc: false, dac: false, pwm: false, spi: 'sck', i2s: 'sck',
+    label: 'D8 / PG11 / SPI1_SCK / SAI2_SCK_B' },
+  // D9 = PB4. SPI1_MISO, SPI3_MISO, UART7_TX, TIM16_CH1N, NJTRST.
+  { pin: 'D9',  stm32Pin: 'PB4',  gpio: true, adc: false, dac: false, pwm: true,  spi: 'miso', uart: 'tx',
+    label: 'D9 / PB4 / SPI1_MISO / UART7_TX / TIM16_CH1N' },
+  // D10 = PB5. SPI1_MOSI, SPI3_MOSI, UART5_RX, I2C1_SMBA, TIM17_CH1N.
+  { pin: 'D10', stm32Pin: 'PB5',  gpio: true, adc: false, dac: false, pwm: true,  spi: 'mosi', uart: 'rx',
+    label: 'D10 / PB5 / SPI1_MOSI / UART5_RX / TIM17_CH1N' },
+  // D11 = PB8. I2C1_SCL, I2C4_SCL, UART4_RX, TIM16_CH1, TIM4_CH3.
+  { pin: 'D11', stm32Pin: 'PB8',  gpio: true, adc: false, dac: false, pwm: true,  i2c: 'scl', uart: 'rx',
+    label: 'D11 / PB8 / I2C1_SCL / UART4_RX / TIM4_CH3' },
+  // D12 = PB9. I2C1_SDA, I2C4_SDA, UART4_TX, TIM17_CH1, TIM4_CH4.
+  { pin: 'D12', stm32Pin: 'PB9',  gpio: true, adc: false, dac: false, pwm: true,  i2c: 'sda', uart: 'tx',
+    label: 'D12 / PB9 / I2C1_SDA / UART4_TX / TIM4_CH4' },
+  // D13 = PB6. USART1_TX, LPUART1_TX, UART5_TX, I2C1_SCL (alt), I2C4_SCL,
+  // TIM4_CH1, TIM16_CH1N.
+  { pin: 'D13', stm32Pin: 'PB6',  gpio: true, adc: false, dac: false, pwm: true,  uart: 'tx', i2c: 'scl',
+    label: 'D13 / PB6 / USART1_TX / I2C1_SCL / TIM4_CH1' },
+  // D14 = PB7. USART1_RX, LPUART1_RX, I2C1_SDA (alt), I2C4_SDA, TIM4_CH2,
+  // TIM17_CH1N.
+  { pin: 'D14', stm32Pin: 'PB7',  gpio: true, adc: false, dac: false, pwm: true,  uart: 'rx', i2c: 'sda',
+    label: 'D14 / PB7 / USART1_RX / I2C1_SDA / TIM4_CH2' },
 
-  // --- Right header (D15..D30), the analog-rich side ---
-  // ADC channel indices below are the 0..11 indices libDaisy exposes via
-  // AdcChannelConfig (NOT the raw STM32 ADC_CHANNEL_N). Derived from the
-  // order of pins as they map into the STM32 ADC channel space; we record
-  // the STM32 channel in the label for traceability.
-  // D15 = PC0. ADC123_INP10 / no common UART.
-  { pin: 'D15', stm32Pin: 'PC0',  gpio: true, adc: true,  dac: false, pwm: false, label: 'D15 / PC0 / ADC_0 (CH10)' },
-  // D16 = PA3. ADC12_INP15 / USART2_RX / TIM2_CH4 / TIM5_CH4 / TIM9_CH2.
-  { pin: 'D16', stm32Pin: 'PA3',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'rx', label: 'D16 / PA3 / ADC_1 (CH15)' },
-  // D17 = PB1. ADC12_INP5 / TIM1_CH3N / TIM3_CH4 / TIM8_CH3N.
-  { pin: 'D17', stm32Pin: 'PB1',  gpio: true, adc: true,  dac: false, pwm: true,  label: 'D17 / PB1 / ADC_2 (CH5)' },
-  // D18 = PA7. ADC12_INP7 / SPI1_MOSI / SPI6_MOSI / TIM1_CH1N / TIM3_CH2 / TIM8_CH1N.
-  { pin: 'D18', stm32Pin: 'PA7',  gpio: true, adc: true,  dac: false, pwm: true,  spi: 'mosi', label: 'D18 / PA7 / ADC_3 (CH7)' },
-  // D19 = PA6. ADC12_INP3 / SPI1_MISO / SPI6_MISO / TIM3_CH1 / TIM8_BKIN / TIM13_CH1.
-  { pin: 'D19', stm32Pin: 'PA6',  gpio: true, adc: true,  dac: false, pwm: true,  spi: 'miso', label: 'D19 / PA6 / ADC_4 (CH3)' },
-  // D20 = PC1. ADC123_INP11 / SPI2_MOSI / TIM? (none common).
-  { pin: 'D20', stm32Pin: 'PC1',  gpio: true, adc: true,  dac: false, pwm: false, spi: 'mosi', label: 'D20 / PC1 / ADC_5 (CH11)' },
-  // D21 = PC4. ADC12_INP4 / SPI1_MOSI (alt) / I2S1_MCK.
-  { pin: 'D21', stm32Pin: 'PC4',  gpio: true, adc: true,  dac: false, pwm: false, label: 'D21 / PC4 / ADC_6 (CH4)' },
-  // D22 = PA5. DAC1_OUT2 / ADC12_INP19 / SPI1_SCK / SPI6_SCK / TIM2_CH1 / TIM8_CH1N.
-  { pin: 'D22', stm32Pin: 'PA5',  gpio: true, adc: true,  dac: true,  pwm: true,  spi: 'sck', label: 'D22 / PA5 / DAC_OUT_2 / ADC_11 (CH19)' },
-  // D23 = PA4. DAC1_OUT1 / ADC12_INP18 / SPI1_NSS / SPI3_NSS / SPI6_NSS.
-  { pin: 'D23', stm32Pin: 'PA4',  gpio: true, adc: true,  dac: true,  pwm: false, spi: 'cs',  label: 'D23 / PA4 / DAC_OUT_1 / ADC_10 (CH18)' },
-  // D24 = PA1. ADC12_INP17 / UART4_RX / USART2_RTS / TIM2_CH2 / TIM5_CH2 / TIM15_CH1N.
-  { pin: 'D24', stm32Pin: 'PA1',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'rx', label: 'D24 / PA1 / ADC_9 (CH17)' },
-  // D25 = PA0. ADC12_INP16 / UART4_TX / USART2_CTS / TIM2_CH1 / TIM5_CH1 / TIM8_ETR.
-  { pin: 'D25', stm32Pin: 'PA0',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'tx', label: 'D25 / PA0 / ADC_8 (CH16)' },
-  // D26 = PD11. No ADC on PD11. USART3_CTS / I2C4_SMBA / SAI2_SD_A. libDaisy
-  // does NOT alias D26 as an analog pin (A-alias list stops at A11=D28).
-  // The old table incorrectly marked this ADC-capable.
-  { pin: 'D26', stm32Pin: 'PD11', gpio: true, adc: false, dac: false, pwm: false, label: 'D26 / PD11' },
-  // D27 = PG9. USART6_RX / SPI1_MISO (alt) / SAI2_FS_B. Not ADC-capable on
-  // STM32H750. Old table had it as ADC_10 / I2S_MCLK — both wrong.
-  { pin: 'D27', stm32Pin: 'PG9',  gpio: true, adc: false, dac: false, pwm: false, uart: 'rx', label: 'D27 / PG9 / USART6_RX' },
-  // D28 = PA2. ADC12_INP14 / USART2_TX / TIM2_CH3 / TIM5_CH3 / TIM15_CH1.
-  // libDaisy aliases D28 as A11 — so this is the 12th and final ADC pin
-  // on the OG Seed, corresponding to channel index 7 in dsy_adc_channel_map.
-  { pin: 'D28', stm32Pin: 'PA2',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'tx', label: 'D28 / PA2 / ADC_7 (CH14) / USART2_TX' },
-  // D29 = PB14. USART1_TX / SPI2_MISO / TIM1_CH2N / TIM12_CH1 / SAI2 (via alt).
-  // Onboard codec does NOT use this — SAI1 is on PORTE. PB14 is free.
-  { pin: 'D29', stm32Pin: 'PB14', gpio: true, adc: false, dac: false, pwm: true,  uart: 'tx', spi: 'miso', label: 'D29 / PB14 / USART1_TX / SPI2_MISO' },
-  // D30 = PB15. USART1_RX / SPI2_MOSI / TIM1_CH3N / TIM12_CH2 / SAI2 (via alt).
-  { pin: 'D30', stm32Pin: 'PB15', gpio: true, adc: false, dac: false, pwm: true,  uart: 'rx', spi: 'mosi', label: 'D30 / PB15 / USART1_RX / SPI2_MOSI' },
+  // --- Right header (D15..D30) — the analog-rich side ---
+  // libDaisy ADC indices come from dsy_adc_channel_map position, not raw
+  // STM32 ADC channel number. We expose both (index and CHxx) in the label.
+
+  // D15 = PC0. ADC123_INP10 (libDaisy index 6).
+  { pin: 'D15', stm32Pin: 'PC0',  gpio: true, adc: true,  dac: false, pwm: false,
+    label: 'D15 / PC0 / ADC_0 / CH10' },
+  // D16 = PA3. ADC12_INP15 (idx 11), USART2_RX, TIM2_CH4, TIM5_CH4.
+  { pin: 'D16', stm32Pin: 'PA3',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'rx',
+    label: 'D16 / PA3 / ADC_1 / CH15 / USART2_RX / TIM2_CH4' },
+  // D17 = PB1. ADC12_INP5 (idx 2), TIM1_CH3N, TIM3_CH4, TIM8_CH3N.
+  { pin: 'D17', stm32Pin: 'PB1',  gpio: true, adc: true,  dac: false, pwm: true,
+    label: 'D17 / PB1 / ADC_2 / CH5 / TIM1_CH3N / TIM3_CH4' },
+  // D18 = PA7. ADC12_INP7 (idx 3), SPI1_MOSI / I2S1_SD, SPI6_MOSI,
+  // TIM1_CH1N, TIM3_CH2, TIM8_CH1N.
+  { pin: 'D18', stm32Pin: 'PA7',  gpio: true, adc: true,  dac: false, pwm: true,  spi: 'mosi', i2s: 'sd',
+    label: 'D18 / PA7 / ADC_3 / CH7 / SPI1_MOSI / I2S1_SD / TIM1_CH1N' },
+  // D19 = PA6. ADC12_INP3 (idx 0), SPI1_MISO / I2S1_MCK, SPI6_MISO,
+  // TIM3_CH1, TIM13_CH1.
+  { pin: 'D19', stm32Pin: 'PA6',  gpio: true, adc: true,  dac: false, pwm: true,  spi: 'miso', i2s: 'mclk',
+    label: 'D19 / PA6 / ADC_4 / CH3 / SPI1_MISO / I2S1_MCK / TIM3_CH1' },
+  // D20 = PC1. ADC123_INP11 (idx 7), SPI2_MOSI (alt) / I2S2_SD (alt),
+  // SAI1_SD_A.
+  { pin: 'D20', stm32Pin: 'PC1',  gpio: true, adc: true,  dac: false, pwm: false, spi: 'mosi', i2s: 'sd',
+    label: 'D20 / PC1 / ADC_5 / CH11 / SPI2_MOSI / SAI1_SD_A' },
+  // D21 = PC4. ADC12_INP4 (idx 1), SPI1_MCK / I2S1_MCK.
+  { pin: 'D21', stm32Pin: 'PC4',  gpio: true, adc: true,  dac: false, pwm: false, i2s: 'mclk',
+    label: 'D21 / PC4 / ADC_6 / CH4 / I2S1_MCK' },
+  // D22 = PA5. DAC1_OUT2, ADC12_INP19 (idx 15), SPI1_SCK / I2S1_CK,
+  // SPI6_SCK, TIM2_CH1, TIM8_CH1N.
+  { pin: 'D22', stm32Pin: 'PA5',  gpio: true, adc: true,  dac: true,  pwm: true,  spi: 'sck', i2s: 'sck',
+    label: 'D22 / PA5 / DAC_OUT_2 / ADC_11 / CH19 / SPI1_SCK / I2S1_CK' },
+  // D23 = PA4. DAC1_OUT1, ADC12_INP18 (idx 14), SPI1_NSS / I2S1_WS,
+  // SPI3_NSS, SPI6_NSS, USART2_CK.
+  { pin: 'D23', stm32Pin: 'PA4',  gpio: true, adc: true,  dac: true,  pwm: false, spi: 'cs',  i2s: 'ws',
+    label: 'D23 / PA4 / DAC_OUT_1 / ADC_10 / CH18 / SPI1_NSS / I2S1_WS' },
+  // D24 = PA1. ADC12_INP17 (idx 13), USART2_RTS, UART4_RX, TIM2_CH2,
+  // TIM5_CH2, TIM15_CH1N.
+  { pin: 'D24', stm32Pin: 'PA1',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'rx',
+    label: 'D24 / PA1 / ADC_9 / CH17 / UART4_RX / TIM2_CH2' },
+  // D25 = PA0. ADC12_INP16 (idx 12), USART2_CTS, UART4_TX, TIM2_CH1,
+  // TIM5_CH1, TIM8_ETR, TIM15_CH1N.
+  { pin: 'D25', stm32Pin: 'PA0',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'tx',
+    label: 'D25 / PA0 / ADC_8 / CH16 / UART4_TX / TIM2_CH1' },
+  // D26 = PD11. USART3_CTS, I2C4_SMBA, SAI2_SD_A, QSPI_BK1_IO0. Not ADC-
+  // capable on STM32H750.
+  { pin: 'D26', stm32Pin: 'PD11', gpio: true, adc: false, dac: false, pwm: false, i2s: 'sd',
+    label: 'D26 / PD11 / USART3_CTS / SAI2_SD_A' },
+  // D27 = PG9. USART6_RX, SPI1_MISO (alt), SAI2_FS_B, QSPI_BK2_IO2,
+  // SDMMC2_D0. Not ADC-capable on STM32H750.
+  { pin: 'D27', stm32Pin: 'PG9',  gpio: true, adc: false, dac: false, pwm: false, uart: 'rx', i2s: 'ws',
+    label: 'D27 / PG9 / USART6_RX / SAI2_FS_B' },
+  // D28 = PA2. ADC12_INP14 (idx 10, aliased A11 by libDaisy), USART2_TX,
+  // SAI2_SCK_B (AF3), TIM2_CH3, TIM5_CH3, TIM15_CH1.
+  { pin: 'D28', stm32Pin: 'PA2',  gpio: true, adc: true,  dac: false, pwm: true,  uart: 'tx', i2s: 'sck',
+    label: 'D28 / PA2 / ADC_7 / CH14 / USART2_TX / SAI2_SCK_B' },
+  // D29 = PB14. USART1_TX, SPI2_MISO / I2S2_MCK, TIM1_CH2N, TIM12_CH1,
+  // TIM8_CH2N, SDMMC2_D0. No ADC.
+  { pin: 'D29', stm32Pin: 'PB14', gpio: true, adc: false, dac: false, pwm: true,  uart: 'tx', spi: 'miso', i2s: 'mclk',
+    label: 'D29 / PB14 / USART1_TX / SPI2_MISO / I2S2_MCK / TIM1_CH2N' },
+  // D30 = PB15. USART1_RX, SPI2_MOSI / I2S2_SD, TIM1_CH3N, TIM12_CH2,
+  // TIM8_CH3N, SDMMC2_D1. No ADC.
+  { pin: 'D30', stm32Pin: 'PB15', gpio: true, adc: false, dac: false, pwm: true,  uart: 'rx', spi: 'mosi', i2s: 'sd',
+    label: 'D30 / PB15 / USART1_RX / SPI2_MOSI / I2S2_SD / TIM1_CH3N' },
 
   // --- Daisy Seed 2 DFM only ---
-  // D31 = PC2. ADC123_INP12 / SPI2_MISO. Present only on Seed 2 DFM (OG
-  // Seed Rev 1..5 stops at D30). We keep it in the union so Seed 2 DFM
-  // projects round-trip.
-  { pin: 'D31', stm32Pin: 'PC2',  gpio: true, adc: true,  dac: false, pwm: false, spi: 'miso', label: 'D31 / PC2 / ADC (Seed 2 DFM only)' }
+  // D31 = PC2. ADC123_INP12 (idx 8), SPI2_MISO. Present only on Seed 2 DFM.
+  // (Seed 2 DFM also exposes D32 = PC3 = ADC CH13 / SPI2_MOSI; we leave
+  // it out of SeedPin for now since the union only goes to D31 — revisit
+  // if Seed 2 DFM codegen needs it.)
+  { pin: 'D31', stm32Pin: 'PC2',  gpio: true, adc: true,  dac: false, pwm: false, spi: 'miso',
+    label: 'D31 / PC2 / ADC_CH12 / SPI2_MISO (Seed 2 DFM only)' }
 ]
 
 /** Fast lookup. Populated once at module load. */
@@ -145,25 +185,21 @@ export const PIN_CAPS: Record<SeedPin, PinCapabilities> = (() => {
 })()
 
 /**
- * Map a SeedPin to its ADC channel index (0..11) for codegen. Returns -1
- * if the pin is not ADC-capable.
+ * Map a SeedPin to its libDaisy ADC channel index (0..15), for codegen.
+ * Returns -1 if the pin is not ADC-capable.
  *
- * The indices here are the *libDaisy* 0..11 indices (the order you'd pass
- * an AdcChannelConfig[] array to hw.adc.Init), not the raw STM32
- * ADC_CHANNEL_N numbers. Derived from dsy_adc_channel_map in
- * libDaisy/src/per/adc.cpp: channels are ordered
- * CH3, CH4, CH5, CH7, CH8, CH9, CH10, CH11, CH12, CH13, CH14, CH15,
- * CH16, CH17, CH18, CH19 — and we just pick the ones that correspond to
- * Seed-broken-out pins.
+ * Derived from dsy_adc_channel_map in libDaisy/src/per/adc.cpp:
+ *   index order = CH3, CH4, CH5, CH7, CH8, CH9, CH10, CH11, CH12, CH13,
+ *                 CH14, CH15, CH16, CH17, CH18, CH19
  *
- * ADC pin → libDaisy index assignments (12 pins on OG Seed):
- *   D15=PC0 (CH10) → 6    D22=PA5 (CH19) → 15
- *   D16=PA3 (CH15) → 11   D23=PA4 (CH18) → 14
- *   D17=PB1 (CH5)  → 2    D24=PA1 (CH17) → 13
- *   D18=PA7 (CH7)  → 3    D25=PA0 (CH16) → 12
- *   D19=PA6 (CH3)  → 0    D28=PA2 (CH14) → 10
- *   D20=PC1 (CH11) → 7    D31=PC2 (CH12) → 8  (Seed 2 DFM)
- *   D21=PC4 (CH4)  → 1
+ * ADC pin → libDaisy index (12 pins on OG Seed, 13 counting Seed 2 DFM):
+ *   D19=PA6 (CH3)  → 0     D22=PA5 (CH19) → 15
+ *   D21=PC4 (CH4)  → 1     D23=PA4 (CH18) → 14
+ *   D17=PB1 (CH5)  → 2     D24=PA1 (CH17) → 13
+ *   D18=PA7 (CH7)  → 3     D25=PA0 (CH16) → 12
+ *   D15=PC0 (CH10) → 6     D28=PA2 (CH14) → 10
+ *   D20=PC1 (CH11) → 7     D31=PC2 (CH12) → 8  (Seed 2 DFM)
+ *   D16=PA3 (CH15) → 11
  */
 export function adcChannelOf(pin: SeedPin): number {
   const map: Partial<Record<SeedPin, number>> = {
@@ -185,18 +221,13 @@ export function adcChannelOf(pin: SeedPin): number {
 }
 
 /**
- * Physical 40-pin header layout as screen-printed on the Seed. Two pin
- * headers of 20 pins each. Index 0 is the USB-end of the board; index 19
- * is the opposite end. The physical pin order is taken from the official
- * pinout diagram on Electrosmith's product page.
+ * Physical pin positions on the Seed's 40-pin header, as silkscreened.
  *
  * Orientation: looking at the TOP face of the Seed with the USB connector
- * at the TOP. The left header runs downward D0, D1, ..., D14 then power
- * rails; the right header runs upward D15..D30 when numbered but DOWNWARD
- * as D30, D29, ..., D15, D31 so the physical grid mirrors correctly.
- *
- * Non-GPIO positions (power rails, audio jacks, USB) are included so the
- * renderer can draw them in their correct physical slots.
+ * at the TOP. The left header (D0..D14 + power/USB) runs top-to-bottom;
+ * the right header (D30..D15 + audio-out + 3V3A) runs top-to-bottom (so
+ * D30 is physically next to D0 and D15 is physically next to USB_DP at
+ * the bottom).
  */
 export interface PhysicalPinPosition {
   pin:
@@ -218,15 +249,9 @@ export interface PhysicalPinPosition {
 }
 
 /**
- * Physical layout of the 40-pin Seed. Matches the pinout diagram: left
- * header runs D0..D14 plus power/USB; right header runs D30..D15 plus
- * audio jacks and the second 3V3 + AGND rail.
- *
- * NOTE: the right side is intentionally MIRRORED relative to the left
- * (D30 at top, D15 near bottom). This is because the right header
- * physically runs bottom-up from the viewer's perspective when the USB
- * connector is at the top of the board. If the hardware view ever
- * renders pins in the wrong slot, suspect this flip.
+ * Physical layout of the 40-pin Seed. Left column = D0..D14 + power/USB;
+ * right column = D30..D15 + audio-out + analog 3V3 (mirrored so the
+ * highest-numbered GPIO sits physically next to D0).
  */
 export const PHYSICAL_PIN_LAYOUT: PhysicalPinPosition[] = [
   // ------------- LEFT SIDE (silkscreen top-to-bottom) -------------
@@ -272,9 +297,8 @@ export const PHYSICAL_PIN_LAYOUT: PhysicalPinPosition[] = [
   { pin: 'AUDIO_OUT_L', side: 'right', index: 17, label: 'AUD_OUT_L' },
   { pin: 'AUDIO_OUT_R', side: 'right', index: 18, label: 'AUD_OUT_R' },
   { pin: '3V3_A',       side: 'right', index: 19, label: '3V3 A' }
-  // TODO: Audio IN pads — on the Seed rev2 these are physical contacts
-  // on the underside, not 2.54mm headers. Omitted from the visual grid;
-  // can be rendered as side annotations if needed.
+  // Audio IN is routed to underside test pads, not broken out to the
+  // 2.54mm header; intentionally not listed here.
 ]
 
 /**
@@ -289,9 +313,9 @@ export const SEED_PINS_IN_ORDER: SeedPin[] = PHYSICAL_PIN_LAYOUT
   .map((p) => p.pin as SeedPin)
 
 /**
- * Which pins satisfy a component role. The hardware inspector uses this
- * to filter its "Pin" dropdown; the hardware view uses it to highlight
- * valid drop targets when dragging a role onto the PCB.
+ * Which pins satisfy a component role. Used by both the inspector's
+ * filtered dropdown and the hardware view's drag-to-pin interaction
+ * (compatible pins light up, incompatible ones dim).
  */
 export function pinsForRole(
   role: string,
@@ -309,28 +333,23 @@ export function pinsForRole(
       case 'encoder':
         return cap.gpio
       case 'led':
-        return cap.gpio  // PWM is optional, not required
+        return cap.gpio // PWM is optional, not required
       case 'oled_ssd1306':
         if (r === 'sda') return cap.i2c === 'sda'
         if (r === 'scl') return cap.i2c === 'scl'
         return !!cap.i2c
       case 'i2s_codec':
-        // NOTE: The OG Seed's onboard WM8731 is hard-wired to SAI1 on
-        // PORTE (PE2..PE6) which is NOT broken out. For an *external*
-        // I2S DAC/ADC the user must bit-bang or use SAI2 via GPIO alt
-        // functions — we don't gate strictly on the i2s flag (none of
-        // our pins carry it) so fall back to GPIO. Codegen is
-        // responsible for warning if SAI alt isn't actually available.
-        if (r === 'sck')   return cap.i2s === 'sck'  || cap.gpio
-        if (r === 'ws')    return cap.i2s === 'ws'   || cap.gpio
-        if (r === 'mclk')  return cap.i2s === 'mclk' || cap.gpio
-        if (r === 'sd_in' || r === 'sd_out') return cap.i2s === 'sd' || cap.gpio
-        return cap.gpio
+        // Poster confirms I2S on D18..D23 (SAI1) and D29/D30 (SAI2).
+        // We gate strictly on the i2s flag now.
+        if (r === 'sck')   return cap.i2s === 'sck'
+        if (r === 'ws')    return cap.i2s === 'ws'
+        if (r === 'mclk')  return cap.i2s === 'mclk'
+        if (r === 'sd_in' || r === 'sd_out') return cap.i2s === 'sd'
+        return !!cap.i2s
       case 'midi_jack':
         return cap.uart === 'rx' || cap.uart === 'tx'
       case 'audio_jack':
-        // Audio jacks bind to the hard-wired audio codec channels; we
-        // allow any GPIO as a fallback so codegen can still reference them.
+        // Audio jacks bind to the hard-wired codec channels; any GPIO works.
         return cap.gpio
       default:
         return cap.gpio

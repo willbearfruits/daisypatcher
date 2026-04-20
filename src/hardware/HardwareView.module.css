@@ -44,6 +44,8 @@
   border: 1px solid var(--dp-border);
 }
 
+/* --- Placed component cards --- */
+
 .card {
   position: absolute;
   min-width: 120px;
@@ -51,8 +53,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: var(--dp-space-2);
+  gap: 4px;
+  padding: var(--dp-space-2) var(--dp-space-2) 6px;
   background: var(--dp-surface-elevated);
   border: 1px solid var(--dp-border-strong);
   border-radius: var(--dp-radius-md);
@@ -109,4 +111,117 @@
 .cardStatus[data-status='warn'] {
   color: var(--dp-warning);
   background: color-mix(in srgb, var(--dp-warning) 14%, transparent);
+}
+
+/* --- Role badges along the bottom of each placed card --- */
+
+.roleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+  margin-top: 2px;
+  width: 100%;
+}
+
+.roleBadge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 7px;
+  font-family: var(--dp-font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: 999px;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+  transition:
+    background var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.roleBadge:hover {
+  background: var(--dp-surface-elevated);
+  border-color: var(--dp-accent);
+}
+
+.roleBound {
+  border-color: color-mix(in srgb, var(--dp-success) 60%, var(--dp-border));
+}
+
+.roleUnbound {
+  border-color: color-mix(in srgb, var(--dp-warning) 40%, var(--dp-border));
+}
+
+.roleDragging {
+  background: color-mix(in srgb, var(--dp-accent) 18%, var(--dp-surface-sunken));
+  border-color: var(--dp-accent);
+}
+
+.roleName {
+  text-transform: lowercase;
+}
+
+.roleDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--dp-bg);
+}
+
+.roleDot[data-bound='true'] {
+  background: var(--dp-success);
+}
+
+.roleDot[data-bound='false'] {
+  background: var(--dp-warning);
+  color: var(--dp-bg);
+}
+
+/* --- Inline pin-selection popover anchored to a role badge --- */
+
+.rolePopover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  background: var(--dp-surface-elevated);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-sm);
+  padding: 4px;
+  box-shadow: var(--dp-shadow-md);
+  pointer-events: auto;
+}
+
+.rolePopoverSelect {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text);
+  background: var(--dp-bg);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  padding: 3px 6px;
+  min-width: 240px;
+}
+
+/* Existing-wire fade-in so freshly-bound connections feel responsive. */
+
+@keyframes wireFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 0.9; }
+}
+
+.wireFadeIn {
+  animation: wireFadeIn 200ms var(--dp-ease);
 }
