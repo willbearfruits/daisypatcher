@@ -1,0 +1,83 @@
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(var(--dp-bg-grid) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, var(--dp-bg-grid) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--dp-bg);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--dp-canvas-overlay);
+}
+
+.dropActive::after {
+  content: '';
+  position: absolute;
+  inset: var(--dp-space-3);
+  border: 1px dashed var(--dp-accent);
+  border-radius: var(--dp-radius-md);
+  pointer-events: none;
+  box-shadow: var(--dp-shadow-glow);
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dp-space-3);
+  color: var(--dp-text-dim);
+  pointer-events: none;
+}
+
+.crosshair {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  opacity: 0.8;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--dp-accent);
+  opacity: 0.7;
+  box-shadow: 0 0 6px var(--dp-accent);
+}
+
+.crosshair::before {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.crosshair::after {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.emptyText {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  color: var(--dp-text-muted);
+}
+
+.children {
+  position: absolute;
+  inset: 0;
+}

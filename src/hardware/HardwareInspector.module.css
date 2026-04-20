@@ -1,0 +1,220 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  padding: var(--dp-space-3) var(--dp-space-4);
+  border-bottom: 1px solid var(--dp-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.headerId {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.labelInput {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-md);
+  color: var(--dp-text);
+  background: transparent;
+  border: 1px solid transparent;
+  outline: none;
+  padding: 2px 4px;
+  border-radius: var(--dp-radius-sm);
+  width: 100%;
+  transition: border-color var(--dp-motion-fast) var(--dp-ease), background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.labelInput:hover {
+  border-color: var(--dp-border);
+}
+
+.labelInput:focus {
+  border-color: var(--dp-accent);
+  background: var(--dp-surface-sunken);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--dp-space-3) var(--dp-space-4) var(--dp-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-4);
+}
+
+.empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dp-space-2);
+  color: var(--dp-text-muted);
+  padding: var(--dp-space-6);
+  text-align: center;
+}
+
+.emptyTitle {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--dp-text-dim);
+}
+
+.emptyHint {
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+}
+
+.sectionTitle {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  padding-bottom: var(--dp-space-1);
+  border-bottom: 1px solid var(--dp-border);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-1);
+}
+
+.fieldHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dp-space-2);
+}
+
+.fieldLabel {
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text-muted);
+}
+
+.fieldValue {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text);
+}
+
+.pinBadge {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-accent);
+  background: var(--dp-accent-muted);
+  padding: 2px 6px;
+  border-radius: var(--dp-radius-xs);
+}
+
+.pinMissing {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-warning);
+  letter-spacing: 0.04em;
+}
+
+.select,
+.textInput {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 6px var(--dp-space-2);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.select:hover,
+.textInput:hover {
+  border-color: var(--dp-border-strong);
+}
+
+.select:focus,
+.textInput:focus {
+  border-color: var(--dp-accent);
+}
+
+.slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  outline: none;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--dp-border-strong);
+}
+
+.slider::-moz-range-track {
+  height: 2px;
+  background: var(--dp-border-strong);
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dp-accent);
+  margin-top: -4px;
+}
+
+.slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dp-accent);
+  border: none;
+}
+
+.deleteBtn {
+  margin-top: var(--dp-space-3);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-danger);
+  background: transparent;
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: var(--dp-space-2);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition:
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.deleteBtn:hover {
+  border-color: var(--dp-danger);
+  background: color-mix(in srgb, var(--dp-danger) 12%, transparent);
+}

@@ -1,0 +1,218 @@
+.root {
+  height: var(--dp-statusbar-h);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 var(--dp-space-4);
+  gap: var(--dp-space-4);
+  background: var(--dp-surface);
+  color: var(--dp-text-muted);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.04em;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-width: 0;
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  color: var(--dp-text-dim);
+}
+
+.right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-width: 0;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-text-dim);
+  flex: 0 0 auto;
+}
+
+.dotIdle { background: var(--dp-text-dim); }
+
+.dotInfo {
+  background: var(--dp-accent);
+  box-shadow: 0 0 6px var(--dp-accent);
+}
+
+.dotWarn {
+  background: var(--dp-warning);
+  box-shadow: 0 0 6px var(--dp-warning);
+}
+
+.dotError {
+  background: var(--dp-danger);
+  box-shadow: 0 0 6px var(--dp-danger);
+}
+
+.dotRunning {
+  background: var(--dp-success);
+  box-shadow: 0 0 6px var(--dp-success);
+}
+
+.engineText {
+  color: var(--dp-text-muted);
+  text-transform: lowercase;
+}
+
+.messageIdle { color: var(--dp-text-dim); }
+.messageInfo { color: var(--dp-accent); }
+.messageWarn { color: var(--dp-warning); }
+.messageError { color: var(--dp-danger); }
+
+.sep {
+  color: var(--dp-text-dim);
+  opacity: 0.6;
+}
+
+/* DFU device pill — left edge. Doubles as build-log toggle. */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--dp-space-2);
+  border-radius: 999px;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  border: 1px solid var(--dp-border);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text-dim);
+  cursor: pointer;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.pill:hover { border-color: var(--dp-border-strong); color: var(--dp-text-muted); }
+
+.pillIcon { flex: 0 0 auto; }
+
+/*
+ * Legacy muted/live kept for any lingering consumer; pill-none / pill-dfu /
+ * pill-serial are the canonical 3-state set.
+ */
+.pillMuted {
+  color: var(--dp-text-dim);
+  border-color: var(--dp-border);
+}
+
+.pillLive {
+  color: var(--dp-signal-gate);
+  border-color: color-mix(in srgb, var(--dp-signal-gate) 50%, var(--dp-border));
+  background: color-mix(in srgb, var(--dp-signal-gate) 8%, var(--dp-surface-sunken));
+}
+
+/* Three canonical states. Each prepends a coloured state dot via ::before
+   so the SVG icon still reads as "device" and the dot carries the state. */
+
+.pillNone {
+  color: var(--dp-text-dim);
+  border-color: var(--dp-border);
+}
+
+.pillNone::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-text-dim);
+  flex: 0 0 auto;
+}
+
+.pillDfu {
+  color: var(--dp-signal-gate);
+  border-color: color-mix(in srgb, var(--dp-signal-gate) 50%, var(--dp-border));
+  background: color-mix(in srgb, var(--dp-signal-gate) 8%, var(--dp-surface-sunken));
+}
+
+.pillDfu::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-signal-gate);
+  box-shadow: 0 0 6px var(--dp-signal-gate);
+  flex: 0 0 auto;
+}
+
+.pillSerial {
+  color: var(--dp-signal-audio);
+  border-color: color-mix(in srgb, var(--dp-signal-audio) 50%, var(--dp-border));
+  background: color-mix(in srgb, var(--dp-signal-audio) 8%, var(--dp-surface-sunken));
+}
+
+.pillSerial::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-signal-audio);
+  box-shadow: 0 0 6px var(--dp-signal-audio);
+  flex: 0 0 auto;
+}
+
+/* CPU budget bar — far right of the status bar. */
+
+.cpu {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.cpuTrack {
+  position: relative;
+  width: 60px;
+  height: 4px;
+  background: var(--dp-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cpuFill {
+  height: 100%;
+  width: 0%;
+  border-radius: 2px;
+  transition:
+    width var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.cpuFillOk {
+  background: var(--dp-signal-audio);
+}
+
+.cpuFillWarn {
+  background: var(--dp-signal-gate);
+}
+
+.cpuFillDanger {
+  background: var(--dp-danger);
+}
+
+.cpuLabel {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  min-width: 2.5em;
+  text-align: right;
+}

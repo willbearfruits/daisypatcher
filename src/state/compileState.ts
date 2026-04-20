@@ -1,0 +1,514 @@
+/**
+ * Compile / flash / SDK state — lives in its own store, deliberately separate
+ * from the editor/graph store so build plumbing never touches patch mutations
+ * (and vice versa). Consumed by TopBar (Compile/Flash buttons), the DFU pill
+ * in StatusBar, the BuildLogPanel, and the first-run SdkInstallModal.
+ *
+ * IPC surface is expected to be exposed by the main process as:
+ *   window.daisy.sdk      — status() / install() / onProgress()
+ *   window.daisy.compile  — build()  / onProgress()
+ *   window.daisy.flash    — detect() / run() / onProgress()
+ *
+ * The preload bridge may not yet advertise these in global.d.ts — in that
+ * case we fall back to local narrow types that mirror the service spec in
+ * electron/main/buildService.ts and electron/main/sdk.ts. Every IPC call is
+ * guarded by a runtime presence check so the web-only dev path (no electron
+ * preload) degrades gracefully instead of throwing.
+ */
+
+import { create } from 'zustand'
+import { generateProject } from '@/codegen/generateProject'
+import { useEditorStore } from '@/state/store'
+import { getTarget } from '@/codegen/targets'
+import type { BoardTarget } from '@/types/store'
+
+/* ---------- local IPC types (mirror main-process spec) ----------------- */
+
+export interface SdkStatus {
+  ready: boolean
+  libDaisy: boolean
+  daisySP: boolean
+  libDaisyBuilt: boolean
+  toolchain: { gcc: boolean; make: boolean; dfuUtil: boolean }
+  issues: string[]
+}
+
+export interface BuildInput {
+  projectName: string
+  files: Record<string, string>
+  /** Which target to build for — drives compiler choice in the main process. */
+  target?: BoardTarget
+}
+
+export interface BuildResult {
+  success: boolean
+  projectPath: string
+  binaryPath?: string
+  binarySize?: number
+  durationMs: number
+  log: string
+}
+
+/** Loosely-typed mirror of the main-process FlashStatus — stays decoupled. */
+export interface FlashDetectResult {
+  available: boolean
+  label?: string
+  /** ESP32 ports enumerated (empty on Daisy target). */
+  esp32Ports?: string[]
+  /** DFU devices — length > 0 implies ready-to-flash Seed. */
+  dfuDevices?: unknown[]
+}
+
+export interface FlashResult {
+  success: boolean
+  durationMs: number
+  log: string
+}
+
+type Unsub = () => void
+
+interface SdkApi {
+  status(): Promise<SdkStatus>
+  install(): Promise<void>
+  onProgress(cb: (line: string) => void): Unsub
+}
+
+interface CompileApi {
+  build(input: BuildInput): Promise<BuildResult>
+  onProgress(cb: (line: string) => void): Unsub
+}
+
+interface RawFlashStatus {
+  dfuUtilInstalled?: boolean
+  devices?: unknown[]
+  esp32Ports?: string[]
+  target?: BoardTarget
+}
+
+interface FlashApi {
+  detect(target?: BoardTarget): Promise<RawFlashStatus>
+  run(binaryPath: string, target?: BoardTarget): Promise<FlashResult>
+  onProgress(cb: (line: string) => void): Unsub
+}
+
+interface MaybeDaisyApi {
+  sdk?: SdkApi
+  compile?: CompileApi
+  flash?: FlashApi
+}
+
+function api(): MaybeDaisyApi {
+  // `window.daisy` is typed as DaisyPatcherAPI which may or may not include
+  // the build/flash/sdk surfaces yet. We cast through `unknown` so this file
+  // keeps compiling while the preload surface is being expanded.
+  if (typeof window === 'undefined') return {}
+  const w = window as unknown as { daisy?: MaybeDaisyApi }
+  return w.daisy ?? {}
+}
+
+/* ---------- store shape ------------------------------------------------ */
+
+export interface LogLine {
+  stream: 'info' | 'build' | 'flash' | 'sdk' | 'error'
+  text: string
+  t: number
+}
+
+export interface CompileState {
+  sdkReady: boolean
+  sdkInstalling: boolean
+  sdkIssues: string[]
+  sdkChecked: boolean
+  /** Last install failure — surfaced in the SdkInstallModal. null = no error. */
+  sdkInstallError: string | null
+  building: boolean
+  flashing: boolean
+  lastBuildSuccess: boolean | null
+  lastBuildFlashUntilMs: number | null
+  lastFlashSuccess: boolean | null
+  lastFlashUntilMs: number | null
+  lastBinaryPath: string | null
+  deviceAvailable: boolean
+  deviceLabel: string | null
+  log: LogLine[]
+  logPanelOpen: boolean
+}
+
+export interface CompileActions {
+  openLogPanel(): void
+  closeLogPanel(): void
+  toggleLogPanel(): void
+  appendLog(line: LogLine): void
+  clearLog(): void
+
+  refreshSdkStatus(): Promise<void>
+  installSdk(): Promise<void>
+  build(): Promise<void>
+  detectDevice(): Promise<void>
+  flash(): Promise<void>
+}
+
+const LOG_CAP = 2000
+
+function pushCapped(list: LogLine[], line: LogLine): LogLine[] {
+  if (list.length < LOG_CAP) return [...list, line]
+  // Drop oldest 1/10th when we hit the cap so we don't re-copy every push.
+  const drop = Math.floor(LOG_CAP / 10)
+  const next = list.slice(drop)
+  next.push(line)
+  return next
+}
+
+export const useCompileStore = create<CompileState & CompileActions>((set, get) => {
+  /* ---------- log helpers ---------- */
+
+  const append = (line: LogLine): void => {
+    set((s) => ({ log: pushCapped(s.log, line) }))
+  }
+
+  /* ---------- onProgress listeners ----------
+   *
+   * Registered once at store construction. Each main-process channel pushes
+   * a typed LogLine into the single log buffer so the BuildLogPanel renders
+   * a unified stream. HMR cleanup intentionally deferred (Phase 1).
+   */
+  const a = api()
+  try {
+    a.sdk?.onProgress((text) => append({ stream: 'sdk', text, t: Date.now() }))
+    a.compile?.onProgress((text) =>
+      append({
+        stream: /\b(error|failed|fatal)\b/i.test(text) ? 'error' : 'build',
+        text,
+        t: Date.now()
+      })
+    )
+    a.flash?.onProgress((text) => append({ stream: 'flash', text, t: Date.now() }))
+  } catch {
+    // Preload surface not ready — this is fine; actions below re-check.
+  }
+
+  return {
+    sdkReady: false,
+    sdkInstalling: false,
+    sdkIssues: [],
+    sdkChecked: false,
+    sdkInstallError: null,
+    building: false,
+    flashing: false,
+    lastBuildSuccess: null,
+    lastBuildFlashUntilMs: null,
+    lastFlashSuccess: null,
+    lastFlashUntilMs: null,
+    lastBinaryPath: null,
+    deviceAvailable: false,
+    deviceLabel: null,
+    log: [],
+    logPanelOpen: false,
+
+    /* ---------- log panel ---------- */
+
+    openLogPanel() {
+      set({ logPanelOpen: true })
+    },
+    closeLogPanel() {
+      set({ logPanelOpen: false })
+    },
+    toggleLogPanel() {
+      set((s) => ({ logPanelOpen: !s.logPanelOpen }))
+    },
+    appendLog(line) {
+      append(line)
+    },
+    clearLog() {
+      set({ log: [] })
+    },
+
+    /* ---------- SDK ---------- */
+
+    async refreshSdkStatus() {
+      const sdk = api().sdk
+      const target = useEditorStore.getState().target
+
+      // ESP32 path: we don't manage a bundled SDK — PlatformIO owns its
+      // own toolchain. "ready" collapses to "pio on PATH". Status probe
+      // is done via the flash bridge's `sdk.status()` channel which
+      // returns the Daisy toolchain flags; we reuse the generic `gcc`
+      // shape and just ignore its DaisySP-specific fields.
+      if (target === 'esp32_s3') {
+        if (!sdk) {
+          set({
+            sdkReady: false,
+            sdkChecked: true,
+            sdkIssues: ['SDK bridge not available']
+          })
+          return
+        }
+        try {
+          const status = await sdk.status()
+          // We shoehorn "pio presence" into `toolchain.make` for now —
+          // the main process returns a synthesised status for ESP32
+          // target detection (see electron/main/sdk.ts). If the bridge
+          // doesn't yet know about targets, fall back: mark ready and
+          // let the build surface the real error.
+          const checks = getTarget('esp32_s3').toolchainCheck()
+          const issues = status.issues.filter((i) =>
+            i.toLowerCase().includes('platformio') || i.toLowerCase().includes('pio')
+          )
+          const ready = issues.length === 0
+          const tips = checks.map((c) => `${c.name}: ${c.installHint}`)
+          set({
+            sdkReady: ready,
+            sdkIssues: ready ? [] : issues.length ? issues : tips,
+            sdkChecked: true
+          })
+        } catch (err) {
+          append({
+            stream: 'error',
+            text: `[sdk] status failed: ${(err as Error).message}`,
+            t: Date.now()
+          })
+          set({ sdkChecked: true })
+        }
+        return
+      }
+
+      if (!sdk) {
+        // No bridge available — assume not ready so the install modal still
+        // shows (it will also be non-functional, which is the correct story).
+        set({
+          sdkReady: false,
+          sdkChecked: true,
+          sdkIssues: ['SDK bridge not available']
+        })
+        return
+      }
+      try {
+        const status = await sdk.status()
+        set({
+          sdkReady: status.ready,
+          sdkIssues: status.issues,
+          sdkChecked: true
+        })
+      } catch (err) {
+        append({
+          stream: 'error',
+          text: `[sdk] status failed: ${(err as Error).message}`,
+          t: Date.now()
+        })
+        set({ sdkChecked: true })
+      }
+    },
+
+    async installSdk() {
+      const sdk = api().sdk
+      if (!sdk) {
+        const msg = 'SDK bridge unavailable (preload not exposing window.daisy.sdk)'
+        append({ stream: 'error', text: `[sdk] ${msg}`, t: Date.now() })
+        set({ sdkInstallError: msg })
+        return
+      }
+      if (get().sdkInstalling) return
+      set({ sdkInstalling: true, sdkInstallError: null, logPanelOpen: true })
+      append({ stream: 'sdk', text: '[sdk] install started', t: Date.now() })
+      try {
+        await sdk.install()
+        append({ stream: 'sdk', text: '[sdk] install complete', t: Date.now() })
+        await get().refreshSdkStatus()
+      } catch (err) {
+        const msg = (err as Error).message || String(err)
+        append({
+          stream: 'error',
+          text: `[sdk] install failed: ${msg}`,
+          t: Date.now()
+        })
+        set({ sdkInstallError: msg })
+      } finally {
+        set({ sdkInstalling: false })
+      }
+    },
+
+    /* ---------- compile ---------- */
+
+    async build() {
+      const compile = api().compile
+      if (!compile) {
+        append({ stream: 'error', text: '[compile] bridge unavailable', t: Date.now() })
+        set({ lastBuildSuccess: false, logPanelOpen: true })
+        return
+      }
+      if (get().building) return
+
+      set({ building: true, lastBuildSuccess: null })
+
+      // Codegen: run generateProject against the current graph, pipe warnings
+      // into the log as [codegen] info lines. Failure here is fatal before
+      // even spawning make.
+      const graph = useEditorStore.getState().graph
+      const hardware = useEditorStore.getState().hardware
+      const target = useEditorStore.getState().target
+      let project: { projectName: string; files: Record<string, string>; warnings: string[] }
+      try {
+        project = generateProject(graph, hardware, undefined, target)
+      } catch (err) {
+        append({
+          stream: 'error',
+          text: `[codegen] failed: ${(err as Error).message}`,
+          t: Date.now()
+        })
+        set({ building: false, lastBuildSuccess: false, logPanelOpen: true })
+        return
+      }
+
+      for (const w of project.warnings) {
+        append({ stream: 'info', text: `[codegen] ${w}`, t: Date.now() })
+      }
+
+      append({
+        stream: 'build',
+        text: `[build] starting ${project.projectName}`,
+        t: Date.now()
+      })
+
+      try {
+        const result = await compile.build({
+          projectName: project.projectName,
+          files: project.files,
+          target
+        })
+        const now = Date.now()
+        if (result.success) {
+          set({
+            lastBuildSuccess: true,
+            lastBuildFlashUntilMs: now + 1500,
+            lastBinaryPath: result.binaryPath ?? null
+          })
+          append({
+            stream: 'build',
+            text: `[build] ok (${result.binarySize ?? '?'}B, ${result.durationMs}ms)`,
+            t: now
+          })
+        } else {
+          set({
+            lastBuildSuccess: false,
+            lastBuildFlashUntilMs: now + 1500,
+            lastBinaryPath: null,
+            logPanelOpen: true
+          })
+          append({
+            stream: 'error',
+            text: `[build] failed after ${result.durationMs}ms`,
+            t: now
+          })
+        }
+      } catch (err) {
+        const now = Date.now()
+        set({
+          lastBuildSuccess: false,
+          lastBuildFlashUntilMs: now + 1500,
+          logPanelOpen: true
+        })
+        append({
+          stream: 'error',
+          text: `[build] ${(err as Error).message}`,
+          t: now
+        })
+      } finally {
+        set({ building: false })
+      }
+    },
+
+    /* ---------- flash ---------- */
+
+    async detectDevice() {
+      const flash = api().flash
+      if (!flash) {
+        set({ deviceAvailable: false, deviceLabel: null })
+        return
+      }
+      const target = useEditorStore.getState().target
+      try {
+        const res = await flash.detect(target)
+        if (target === 'esp32_s3') {
+          const ports = res.esp32Ports ?? []
+          const first = ports[0]
+          set({
+            deviceAvailable: ports.length > 0,
+            deviceLabel: first ? `ESP32 \u00B7 ${first.replace(/^\/dev\//, '')}` : null
+          })
+        } else {
+          const devices = res.devices ?? []
+          set({
+            deviceAvailable: devices.length > 0,
+            deviceLabel: devices.length > 0 ? 'Daisy Seed \u00B7 DFU' : null
+          })
+        }
+      } catch {
+        set({ deviceAvailable: false, deviceLabel: null })
+      }
+    },
+
+    async flash() {
+      const flash = api().flash
+      const binary = get().lastBinaryPath
+      if (!binary) {
+        append({
+          stream: 'error',
+          text: '[flash] no binary — run Compile first',
+          t: Date.now()
+        })
+        set({ logPanelOpen: true })
+        return
+      }
+      if (!flash) {
+        append({ stream: 'error', text: '[flash] bridge unavailable', t: Date.now() })
+        return
+      }
+      if (get().flashing) return
+
+      set({ flashing: true, lastFlashSuccess: null })
+      append({ stream: 'flash', text: `[flash] ${binary}`, t: Date.now() })
+
+      try {
+        const target = useEditorStore.getState().target
+        const result = await flash.run(binary, target)
+        const now = Date.now()
+        if (result.success) {
+          set({
+            lastFlashSuccess: true,
+            lastFlashUntilMs: now + 1500
+          })
+          append({
+            stream: 'flash',
+            text: `[flash] ok (${result.durationMs}ms)`,
+            t: now
+          })
+        } else {
+          set({
+            lastFlashSuccess: false,
+            lastFlashUntilMs: now + 1500,
+            logPanelOpen: true
+          })
+          append({
+            stream: 'error',
+            text: `[flash] failed after ${result.durationMs}ms`,
+            t: now
+          })
+        }
+      } catch (err) {
+        const now = Date.now()
+        set({
+          lastFlashSuccess: false,
+          lastFlashUntilMs: now + 1500,
+          logPanelOpen: true
+        })
+        append({
+          stream: 'error',
+          text: `[flash] ${(err as Error).message}`,
+          t: now
+        })
+      } finally {
+        set({ flashing: false })
+      }
+    }
+  }
+})

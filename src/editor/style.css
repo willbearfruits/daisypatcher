@@ -1,0 +1,38 @@
+/*
+ * Global Rete overrides. The editor lives inside CanvasShell; this file
+ * normalises Rete's default backgrounds and selection rectangles so the
+ * theme can fully drive appearance.
+ */
+
+.dp-rete-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--dp-bg);
+  background-image:
+    linear-gradient(var(--dp-bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--dp-bg-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--dp-text);
+  font-family: var(--dp-font-sans);
+}
+
+.dp-rete-root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--dp-canvas-overlay);
+}
+
+/* Rete injects its internal markup inline; force transparent backgrounds. */
+.dp-rete-root > div {
+  background: transparent !important;
+}
+
+/* The rete-area-plugin selection rectangle. */
+.dp-rete-root .selection-area,
+.dp-rete-root [data-testid='selection'] {
+  background: var(--dp-accent-muted);
+  border: 1px solid var(--dp-accent);
+}

@@ -1,0 +1,40 @@
+/*
+ * Custom Rete connection renderer — Signal Lab cable.
+ * Stroke color comes from the source socket's signal-kind variable.
+ */
+
+.svg {
+  overflow: visible !important;
+  position: absolute;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+.path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--dp-cable-width);
+  opacity: var(--dp-cable-opacity);
+  pointer-events: auto;
+  filter: url(#dp-cable-glow);
+  transition: stroke-width var(--dp-motion-fast) var(--dp-ease);
+}
+
+.path:hover {
+  stroke-width: calc(var(--dp-cable-width) * 1.25);
+}
+
+.path-invalid {
+  stroke: var(--dp-danger);
+  animation: dp-cable-flash var(--dp-motion-normal) var(--dp-ease) infinite alternate;
+}
+
+@keyframes dp-cable-flash {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}

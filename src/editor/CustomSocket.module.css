@@ -1,0 +1,46 @@
+/*
+ * Custom socket renderer. Hand-built to replace rete-react-plugin's default
+ * pastel socket. This element is the click/drag target the connection plugin
+ * hooks into — never set pointer-events: none on it.
+ *
+ * All colors come from --dp-* variables. The visible disc is 12px with a 2px
+ * ring; the hit area is 14px via padding.
+ */
+
+.socket {
+  box-sizing: border-box;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  padding: 1px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  line-height: 0;
+  color: var(--dp-signal-audio); /* default; overridden per kind below */
+  transition: filter var(--dp-motion-fast) var(--dp-ease),
+    box-shadow var(--dp-motion-fast) var(--dp-ease);
+}
+
+.disc {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: inset 0 0 0 2px var(--dp-border-strong);
+  transition: box-shadow var(--dp-motion-fast) var(--dp-ease);
+}
+
+.socket:hover {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.socket:hover .disc {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.signal-audio { color: var(--dp-signal-audio); }
+.signal-cv    { color: var(--dp-signal-cv); }
+.signal-gate  { color: var(--dp-signal-gate); }
+.signal-clock { color: var(--dp-signal-clock); }

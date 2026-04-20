@@ -1,0 +1,112 @@
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(var(--dp-bg-grid) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, var(--dp-bg-grid) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--dp-bg);
+}
+
+.svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.emptyHint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8%;
+  pointer-events: none;
+}
+
+.emptyHint > span {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  background: var(--dp-surface-sunken);
+  padding: 6px 14px;
+  border-radius: var(--dp-radius-sm);
+  border: 1px solid var(--dp-border);
+}
+
+.card {
+  position: absolute;
+  min-width: 120px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--dp-space-2);
+  background: var(--dp-surface-elevated);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  pointer-events: auto;
+  cursor: grab;
+  user-select: none;
+  transition:
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    box-shadow var(--dp-motion-normal) var(--dp-ease);
+}
+
+.card:hover {
+  border-color: var(--dp-accent);
+}
+
+.card:active {
+  cursor: grabbing;
+}
+
+.cardSelected {
+  border-color: var(--dp-accent);
+  box-shadow: var(--dp-shadow-glow);
+}
+
+.cardIcon {
+  color: var(--dp-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardLabel {
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text);
+  text-align: center;
+  line-height: var(--dp-lh-tight);
+}
+
+.cardStatus {
+  font-family: var(--dp-font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  padding: 1px 5px;
+  border-radius: var(--dp-radius-xs);
+}
+
+.cardStatus[data-status='ok'] {
+  color: var(--dp-success);
+  background: color-mix(in srgb, var(--dp-success) 12%, transparent);
+}
+
+.cardStatus[data-status='warn'] {
+  color: var(--dp-warning);
+  background: color-mix(in srgb, var(--dp-warning) 14%, transparent);
+}

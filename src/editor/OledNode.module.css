@@ -1,0 +1,273 @@
+/*
+ * OLED node shell. Shares the Signal Lab node look with CustomNode /
+ * VisualNode. All colors come from --dp-* tokens; the preview pixels use
+ * --dp-signal-audio deliberately to echo the physical display's tint.
+ */
+
+.node {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 280px;
+  background: var(--dp-node-bg);
+  border: 1px solid var(--dp-node-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  color: var(--dp-text);
+  font-family: var(--dp-font-sans);
+  user-select: none;
+  overflow: hidden;
+  transition: box-shadow var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.node.selected {
+  box-shadow: inset 0 0 0 1px var(--dp-node-selected-ring), var(--dp-shadow-glow),
+    var(--dp-shadow-md);
+  border-color: var(--dp-node-selected-ring);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2) var(--dp-space-3) var(--dp-space-2)
+    calc(var(--dp-space-3) + 4px);
+  background: var(--dp-node-header-bg);
+  border-bottom: 1px solid var(--dp-node-border);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dp-node-header-text);
+  min-height: 28px;
+}
+
+.headerLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headerSummary {
+  flex: 0 0 auto;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  letter-spacing: 0.12em;
+  text-transform: none;
+  padding: 0 var(--dp-space-1);
+}
+
+.collapsed .body {
+  display: none;
+}
+
+.headerSocketsLeft,
+.headerSocketsRight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.headerSocketsLeft {
+  left: -11px;
+}
+
+.headerSocketsRight {
+  right: -11px;
+}
+
+.headerSocketCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--dp-signal-gate);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--dp-space-2) 0;
+  gap: var(--dp-space-1);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-height: 20px;
+  padding: 0 var(--dp-space-3);
+}
+
+.row-input {
+  justify-content: flex-start;
+}
+
+.socketCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.row-input .socketCell {
+  margin-left: -11px;
+}
+
+.socketLabel {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.displayWrap {
+  padding: var(--dp-space-2) var(--dp-space-3);
+  display: flex;
+  justify-content: center;
+}
+
+.displayCanvas {
+  display: block;
+  background: var(--dp-bg);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: 2px;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px var(--dp-space-3);
+  border-top: 1px solid var(--dp-border);
+}
+
+.toolBtn {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  padding: 2px 6px;
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: 3px;
+  color: var(--dp-text);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.toolBtn:hover {
+  border-color: var(--dp-border-strong);
+  color: var(--dp-text);
+}
+
+.toolBtn:active {
+  background: var(--dp-node-bg);
+}
+
+.toolBtnDanger {
+  color: var(--dp-signal-cv);
+}
+
+.list {
+  max-height: 120px;
+  overflow-y: auto;
+  border-top: 1px solid var(--dp-border);
+  padding: 2px 0;
+}
+
+.listRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px var(--dp-space-3);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  cursor: pointer;
+  color: var(--dp-text-muted);
+  border-left: 2px solid transparent;
+}
+
+.listRow:hover {
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text);
+}
+
+.listRowSelected {
+  color: var(--dp-text);
+  border-left-color: var(--dp-signal-audio);
+  background: var(--dp-surface-sunken);
+}
+
+.listEmpty {
+  padding: 6px var(--dp-space-3);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  font-style: italic;
+}
+
+.inspector {
+  border-top: 1px solid var(--dp-border);
+  padding: var(--dp-space-2) var(--dp-space-3);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 8px;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  align-items: center;
+}
+
+.inspector label {
+  color: var(--dp-text-muted);
+}
+
+.inspector input[type='text'],
+.inspector input[type='number'],
+.inspector select {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text);
+  border: 1px solid var(--dp-border);
+  border-radius: 2px;
+  padding: 2px 4px;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+}
+
+.inspector input[type='checkbox'] {
+  margin: 0;
+}
+
+.inspectorRow {
+  display: contents;
+}
+
+.hint {
+  padding: 4px var(--dp-space-3);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  font-style: italic;
+  border-top: 1px solid var(--dp-border);
+}

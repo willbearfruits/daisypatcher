@@ -1,0 +1,98 @@
+/* ------------------------------------------------------------------
+   Daisypatcher — global styles
+   Only baseline reset + app-frame layout lives here. Every component
+   reads from --dp-* tokens injected by ThemeProvider.
+   ------------------------------------------------------------------ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-fs-md);
+  line-height: var(--dp-lh);
+  color: var(--dp-text);
+  background: var(--dp-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 1px solid var(--dp-accent);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--dp-border-strong); background-clip: padding-box; }
+
+/* App frame --------------------------------------------------------- */
+
+.dp-app {
+  display: grid;
+  grid-template-rows: var(--dp-topbar-h) 1fr var(--dp-statusbar-h);
+  height: 100vh;
+  background: var(--dp-bg);
+}
+
+.dp-main {
+  display: grid;
+  grid-template-columns: var(--dp-panel-w) 1fr var(--dp-inspector-w);
+  min-height: 0;
+  min-width: 0;
+  border-top: 1px solid var(--dp-border);
+  border-bottom: 1px solid var(--dp-border);
+}
+
+.dp-panel {
+  background: var(--dp-surface);
+  border-right: 1px solid var(--dp-border);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dp-inspector {
+  background: var(--dp-surface);
+  border-left: 1px solid var(--dp-border);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dp-canvas-shell {
+  position: relative;
+  overflow: hidden;
+  background: var(--dp-bg);
+  min-width: 0;
+  min-height: 0;
+}

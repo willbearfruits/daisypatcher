@@ -1,0 +1,272 @@
+.root {
+  height: var(--dp-topbar-h);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 var(--dp-space-4);
+  background: var(--dp-surface);
+  color: var(--dp-text);
+  gap: var(--dp-space-4);
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-width: 0;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-accent);
+  box-shadow: 0 0 8px var(--dp-accent);
+}
+
+.wordmark {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+  letter-spacing: 0.18em;
+  color: var(--dp-text-muted);
+  text-transform: uppercase;
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--dp-border);
+  margin: 0 var(--dp-space-1);
+}
+
+.iconBtn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--dp-radius-sm);
+  color: var(--dp-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.iconBtn:hover:not(:disabled) {
+  color: var(--dp-text);
+  border-color: var(--dp-border);
+  background: var(--dp-surface-sunken);
+}
+
+.iconBtn:disabled {
+  color: var(--dp-text-dim);
+  cursor: not-allowed;
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--dp-space-4);
+  min-width: 0;
+}
+
+.viewSwitch {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.viewSeg {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  background: transparent;
+  border: 0;
+  padding: 4px 10px 6px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color var(--dp-motion-fast) var(--dp-ease), border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.viewSeg:hover {
+  color: var(--dp-text);
+}
+
+.viewSegActive {
+  color: var(--dp-text);
+  border-bottom-color: var(--dp-accent);
+}
+
+.filename {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.dirty {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dp-accent);
+  box-shadow: 0 0 6px var(--dp-accent);
+}
+
+.right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--dp-space-3);
+  min-width: 0;
+}
+
+.select {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 4px var(--dp-space-2);
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.select:hover {
+  border-color: var(--dp-border-strong);
+  color: var(--dp-text);
+}
+
+.play {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text-muted);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-md);
+  line-height: 1;
+  transition:
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    color var(--dp-motion-fast) var(--dp-ease),
+    box-shadow var(--dp-motion-normal) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.play:hover {
+  border-color: var(--dp-accent);
+  color: var(--dp-text);
+}
+
+.playActive {
+  color: var(--dp-accent);
+  border-color: var(--dp-accent);
+  background: var(--dp-accent-muted);
+  box-shadow: var(--dp-shadow-glow);
+}
+
+/* ---------- big-mood compile / flash buttons ---------- */
+
+.bigBtn {
+  position: relative;
+  width: 32px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text-muted);
+  transition:
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease),
+    box-shadow var(--dp-motion-normal) var(--dp-ease);
+}
+
+.bigBtn:hover:not(:disabled) {
+  color: var(--dp-text);
+  border-color: var(--dp-accent);
+}
+
+.bigBtn:disabled {
+  color: var(--dp-text-dim);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bigBtnIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.busyRing {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  animation: dp-spin 0.9s linear infinite;
+  color: currentColor;
+  pointer-events: none;
+}
+
+@keyframes dp-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Compile busy: magenta/CV pulse. */
+.busyCompile {
+  color: var(--dp-signal-cv);
+  border-color: var(--dp-signal-cv);
+  animation: dp-pulse-cv 1.2s ease-in-out infinite;
+}
+
+@keyframes dp-pulse-cv {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--dp-signal-cv) 45%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--dp-signal-cv) 8%, transparent); }
+}
+
+/* Flash busy: amber/gate pulse. */
+.busyFlash {
+  color: var(--dp-signal-gate);
+  border-color: var(--dp-signal-gate);
+  animation: dp-pulse-gate 1.2s ease-in-out infinite;
+}
+
+@keyframes dp-pulse-gate {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--dp-signal-gate) 45%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--dp-signal-gate) 8%, transparent); }
+}
+
+.glowSuccess {
+  border-color: var(--dp-success);
+  color: var(--dp-success);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--dp-success) 45%, transparent);
+}
+
+.glowDanger {
+  border-color: var(--dp-danger);
+  color: var(--dp-danger);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--dp-danger) 45%, transparent);
+}

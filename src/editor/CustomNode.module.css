@@ -1,0 +1,221 @@
+/*
+ * Custom Rete node renderer — Signal Lab aesthetic.
+ * All color and shape values come from theme CSS variables (--dp-*).
+ *
+ * The socket circles themselves are drawn by `CustomSocket`; this file only
+ * handles the node body, header, and row layout.
+ *
+ * Collapse: adding `.collapsed` hides the `.body` element and re-positions
+ * the sockets onto the header strip. The height transition is a pure CSS
+ * fold — the body has `max-height: 0` when collapsed; when expanded it
+ * restores to its natural height via a large max-height upper bound.
+ */
+
+.node {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 180px;
+  background: var(--dp-node-bg);
+  border: 1px solid var(--dp-node-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  color: var(--dp-text);
+  font-family: var(--dp-font-sans);
+  user-select: none;
+  overflow: hidden;
+  transition: box-shadow var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.node.selected {
+  box-shadow: inset 0 0 0 1px var(--dp-node-selected-ring), var(--dp-shadow-glow),
+    var(--dp-shadow-md);
+  border-color: var(--dp-node-selected-ring);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2) var(--dp-space-3) var(--dp-space-2)
+    calc(var(--dp-space-3) + 4px);
+  background: var(--dp-node-header-bg);
+  border-bottom: 1px solid var(--dp-node-border);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dp-node-header-text);
+  min-height: 28px;
+}
+
+.headerLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headerSummary {
+  flex: 0 0 auto;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  letter-spacing: 0.12em;
+  text-transform: none;
+  padding: 0 var(--dp-space-1);
+}
+
+.collapseBtn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--dp-node-header-text);
+  cursor: pointer;
+  opacity: 0.65;
+  border-radius: 2px;
+  transition: opacity var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.collapseBtn:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--dp-node-header-text) 12%, transparent);
+}
+
+.chevron {
+  transition: transform 120ms var(--dp-ease);
+  display: block;
+}
+
+.accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+
+.accent-source {
+  background: var(--dp-signal-audio);
+}
+
+.accent-process {
+  background: var(--dp-signal-cv);
+}
+
+.accent-io {
+  background: var(--dp-signal-gate);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--dp-space-2) 0;
+  gap: var(--dp-space-1);
+  transition: max-height 180ms var(--dp-ease), padding 180ms var(--dp-ease),
+    opacity 120ms var(--dp-ease);
+  max-height: 2000px;
+}
+
+.collapsed .body {
+  max-height: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-height: 20px;
+  padding: 0 var(--dp-space-3);
+}
+
+.row-input {
+  justify-content: flex-start;
+}
+
+.row-output {
+  justify-content: flex-end;
+}
+
+/*
+ * Pure layout cell around RefSocket — no background, no border, no padding
+ * other than what lets the socket sit flush against the node edge. The
+ * socket itself (CustomSocket) handles visuals and hit area.
+ */
+.socketCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.row-input .socketCell {
+  margin-left: -11px;
+}
+
+.row-output .socketCell {
+  margin-right: -11px;
+}
+
+.socketLabel {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.placeholder {
+  padding: var(--dp-space-2) var(--dp-space-3);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  font-style: italic;
+}
+
+/* -----------------------------------------------------------------------
+ * Collapsed-mode edge sockets. The header is `position: relative`, so these
+ * stacks sit absolutely anchored to the left/right edges of the header bar
+ * and let the RefSocket DOM elements keep producing valid bounding rects
+ * for the cable layer. When multiple inputs/outputs exist they distribute
+ * evenly along the vertical axis of the header.
+ * --------------------------------------------------------------------- */
+
+.headerSocketsLeft,
+.headerSocketsRight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.headerSocketsLeft {
+  left: -11px;
+}
+
+.headerSocketsRight {
+  right: -11px;
+}
+
+.headerSocketCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}

@@ -1,0 +1,60 @@
+/*
+ * Resize handle — 4px invisible-until-hover grip bar.
+ *
+ * The outer `.handle` has a wider hit area than the visible `.line` so
+ * users don't have to pixel-hunt. While dragging we keep the line solid
+ * at the accent color for unambiguous feedback.
+ */
+
+.handle {
+  position: relative;
+  z-index: 2;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  flex: 0 0 auto;
+  transition: background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.vertical {
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.horizontal {
+  width: 100%;
+  height: 4px;
+  cursor: row-resize;
+}
+
+.line {
+  background: transparent;
+  transition:
+    background var(--dp-motion-fast) var(--dp-ease),
+    box-shadow var(--dp-motion-fast) var(--dp-ease);
+  pointer-events: none;
+}
+
+.vertical .line {
+  width: 1px;
+  height: 100%;
+}
+
+.horizontal .line {
+  width: 100%;
+  height: 1px;
+}
+
+.handle:hover .line {
+  background: var(--dp-border-strong);
+}
+
+.handle.dragging .line,
+.handle:active .line {
+  background: var(--dp-accent);
+  box-shadow: 0 0 6px var(--dp-accent);
+}

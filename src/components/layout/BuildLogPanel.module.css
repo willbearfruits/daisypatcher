@@ -1,0 +1,147 @@
+.panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--dp-statusbar-h);
+  /* `height` is written inline from the store — the clamps in setBuildLogH
+     keep it in the 120..70vh band, so no hard CSS min/max are needed. */
+  height: 220px;
+  background: #03050a;
+  border-top: 1px solid var(--dp-border);
+  box-shadow: var(--dp-shadow-md);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 180ms var(--dp-ease-out);
+  z-index: var(--dp-z-chrome, 10);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.panelOpen {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.header {
+  height: 28px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 var(--dp-space-3);
+  background: var(--dp-surface);
+  border-bottom: 1px solid var(--dp-border);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  gap: var(--dp-space-3);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-width: 0;
+}
+
+.headerCenter {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--dp-text-dim);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.headerRight {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.stateDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--dp-text-dim);
+}
+
+.dotIdle  { background: var(--dp-text-dim); }
+.dotBuild { background: var(--dp-signal-cv); box-shadow: 0 0 6px var(--dp-signal-cv); }
+.dotFlash { background: var(--dp-signal-gate); box-shadow: 0 0 6px var(--dp-signal-gate); }
+.dotSdk   { background: var(--dp-accent); box-shadow: 0 0 6px var(--dp-accent); }
+
+.headerBtn {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  background: transparent;
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 2px var(--dp-space-2);
+  cursor: pointer;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.headerBtn:hover {
+  color: var(--dp-text);
+  border-color: var(--dp-border-strong);
+  background: var(--dp-surface-sunken);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: var(--dp-space-2) var(--dp-space-3);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.5;
+  background: #03050a;
+  color: var(--dp-text);
+  outline: none;
+}
+
+.empty {
+  color: var(--dp-text-dim);
+  font-style: italic;
+}
+
+.row {
+  display: flex;
+  gap: var(--dp-space-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.channel {
+  flex: 0 0 auto;
+  width: 44px;
+  color: var(--dp-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.text { flex: 1 1 auto; min-width: 0; }
+
+.rowBuild .text { color: var(--dp-text); }
+.rowError .text { color: var(--dp-danger); }
+.rowFlash .text { color: var(--dp-signal-gate); }
+.rowSdk   .text { color: var(--dp-signal-cv); }
+.rowInfo  .text { color: var(--dp-text-muted); }

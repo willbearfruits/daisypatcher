@@ -1,0 +1,151 @@
+/*
+ * Visual-node shell. Mirrors CustomNode.module.css so the scope/vu/spectrum
+ * nodes feel like a native part of the Signal Lab aesthetic. Only values
+ * come from `--dp-*` tokens; nothing hardcoded.
+ */
+
+.node {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 180px;
+  background: var(--dp-node-bg);
+  border: 1px solid var(--dp-node-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  color: var(--dp-text);
+  font-family: var(--dp-font-sans);
+  user-select: none;
+  overflow: hidden;
+  transition: box-shadow var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.node.selected {
+  box-shadow: inset 0 0 0 1px var(--dp-node-selected-ring), var(--dp-shadow-glow),
+    var(--dp-shadow-md);
+  border-color: var(--dp-node-selected-ring);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2) var(--dp-space-3) var(--dp-space-2)
+    calc(var(--dp-space-3) + 4px);
+  background: var(--dp-node-header-bg);
+  border-bottom: 1px solid var(--dp-node-border);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dp-node-header-text);
+  min-height: 28px;
+}
+
+.headerLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headerSummary {
+  flex: 0 0 auto;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  letter-spacing: 0.12em;
+  text-transform: none;
+  padding: 0 var(--dp-space-1);
+}
+
+.collapsed .body {
+  display: none;
+}
+
+.headerSocketsLeft,
+.headerSocketsRight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.headerSocketsLeft {
+  left: -11px;
+}
+
+.headerSocketsRight {
+  right: -11px;
+}
+
+.headerSocketCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--dp-signal-audio);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--dp-space-2) 0;
+  gap: var(--dp-space-1);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-height: 20px;
+  padding: 0 var(--dp-space-3);
+}
+
+.row-input { justify-content: flex-start; }
+.row-output { justify-content: flex-end; }
+
+.socketCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.row-input .socketCell { margin-left: -11px; }
+.row-output .socketCell { margin-right: -11px; }
+
+.socketLabel {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.canvasWrap {
+  padding: var(--dp-space-2) var(--dp-space-3);
+  display: flex;
+  justify-content: center;
+}
+
+.canvas {
+  display: block;
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: calc(var(--dp-radius-md) - 4px);
+}

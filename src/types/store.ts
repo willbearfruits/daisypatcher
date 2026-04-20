@@ -1,0 +1,210 @@
+/**
+ * Store + engine interfaces. Defined here so the layout shell, Rete.js
+ * integration, and audio engine can be built in parallel against stable
+ * contracts — each agent implements one side of these interfaces.
+ */
+
+import type { AudioGraph, Connection, NodeInstance, NodeKind } from './graph'
+import type { BoardPin, HardwareKind, HardwareLayout } from './hardware'
+
+/**
+ * Compile target selected in the TopBar. Drives codegen, build-command
+ * dispatch, and device detection.
+ */
+export type BoardTarget = 'daisy_seed' | 'esp32_s3'
+
+export interface HistoryState {
+  /**
+   * Per-entry snapshot of BOTH graph and hardware layout. Keeping them
+   * paired means undoing across a cross-domain edit (e.g. a hardware drag
+   * that triggered a graph rename) restores both halves atomically.
+   */
+  past: HistorySnapshot[]
+  future: HistorySnapshot[]
+}
+
+export interface HistorySnapshot {
+  graph: AudioGraph
+  hardware: HardwareLayout
+}
+
+export interface Clipboard {
+  nodes: NodeInstance[]
+  connections: Connection[]
+}
+
+export type SelectMode = 'replace' | 'add' | 'toggle'
+
+/**
+ * UI-preference-only layout sizes. Kept outside `history` so resize gestures
+ * never pollute undo with view-state churn. Persisted through `.dpatch` when
+ * a patch is saved so the next open restores the user's shell.
+ */
+export interface LayoutSizes {
+  /** Left palette rail width in px. */
+  paletteW: number
+  /** Right inspector rail width in px. */
+  inspectorW: number
+  /** Bottom build-log panel height in px (applied only while open). */
+  buildLogH: number
+  /** Bottom-right serial-monitor panel height in px (applied only while open). */
+  serialMonitorH: number
+}
+
+export interface EditorStoreState {
+  graph: AudioGraph
+  /** Kept for back-compat: mirrors `selection` when it has exactly one id. */
+  selectedNodeId: string | null
+  /** Authoritative multi-selection. `selectedNodeId` is derived from this. */
+  selection: Set<string>
+  history: HistoryState
+  clipboard: Clipboard | null
+  /** True when the graph has unsaved changes since last save/open/reset. */
+  isDirty: boolean
+  /** Last on-disk path the current graph was saved to / loaded from. */
+  filePath: string | null
+  isPlaying: boolean
+  status: { kind: 'idle' | 'info' | 'warn' | 'error'; message: string }
+
+  /** Parallel layout describing physical components wired to Seed pins. */
+  hardware: HardwareLayout
+  /** Which canvas is currently visible. */
+  view: 'patch' | 'hardware'
+  /** Currently-selected placed-component id, or null. */
+  selectedHardwareId: string | null
+
+  /**
+   * Shell panel sizes. Not history-tracked — resizing a rail is a UI
+   * preference, not a patch edit. Serialised into `.dpatch` so preferred
+   * layout travels with a patch.
+   */
+  layout: LayoutSizes
+
+  /**
+   * Currently-selected compile target. Defaults to 'daisy_seed' so
+   * existing patches behave identically to the single-target era.
+   */
+  target: BoardTarget
+}
+
+export interface EditorStoreActions {
+  addNode(kind: NodeKind, position: { x: number; y: number }): string
+  removeNode(id: string): void
+  moveNode(id: string, position: { x: number; y: number }): void
+  updateNode(id: string, patch: Partial<NodeInstance>): void
+  setParam(id: string, paramId: string, value: number | string): void
+
+  connect(from: Connection['from'], to: Connection['to']): string | null
+  disconnect(connId: string): void
+
+  selectNode(id: string | null): void
+  select(ids: string[] | string | null, mode?: SelectMode): void
+  setPlaying(playing: boolean): void
+  setStatus(status: EditorStoreState['status']): void
+
+  loadGraph(graph: AudioGraph, filePath?: string | null, hardware?: HardwareLayout): void
+  resetGraph(): void
+
+  /* hardware view */
+  setView(view: 'patch' | 'hardware'): void
+  addHardware(kind: HardwareKind, position: { x: number; y: number }): string
+  removeHardware(id: string): void
+  moveHardware(id: string, position: { x: number; y: number }): void
+  renameHardware(id: string, label: string): void
+  setHardwarePin(id: string, role: string, pin: BoardPin | null): void
+  setHardwareConfig(id: string, key: string, value: number | string | boolean): void
+  selectHardware(id: string | null): void
+  resetHardware(): void
+
+  /* history */
+  undo(): void
+  redo(): void
+  canUndo(): boolean
+  canRedo(): boolean
+  /**
+   * Drag-gesture coalescing. Rete calls `beginTransaction()` at drag start
+   * and `endTransaction()` at drag end. Between them, graph mutations do
+   * NOT push onto the history stack — only `endTransaction` commits a
+   * single entry representing the whole drag. Same mechanism is used by
+   * slider drags in the Inspector (pointerdown / pointerup).
+   */
+  beginTransaction(): void
+  endTransaction(): void
+
+  /* clipboard / multi-select ops */
+  copySelection(): void
+  cutSelection(): void
+  paste(position?: { x: number; y: number }): void
+  deleteSelection(): void
+  selectAll(): void
+
+  /* file meta */
+  setFilePath(path: string | null): void
+  markClean(): void
+
+  /* layout (UI sizes — not history-tracked) */
+  setPaletteW(px: number): void
+  setInspectorW(px: number): void
+  setBuildLogH(px: number): void
+  setSerialMonitorH(px: number): void
+  /** Replace layout wholesale (used when loading a `.dpatch`). */
+  setLayout(layout: Partial<LayoutSizes>): void
+
+  /* per-node view state — collapse chevron on a Rete node */
+  toggleCollapsed(id: string): void
+  setCollapsed(ids: string[], collapsed: boolean): void
+
+  /**
+   * Switch compile target. Also updates the hardware layout's `board`
+   * field so saved patches remember their target. Pin assignments stay
+   * intact — the HardwareView flags any that are invalid on the new
+   * board instead of clearing them.
+   */
+  setTarget(target: BoardTarget): void
+}
+
+export type EditorStore = EditorStoreState & EditorStoreActions
+
+export type EngineState = 'stopped' | 'starting' | 'running' | 'error'
+
+/**
+ * A single frame pulled off a tap's `AnalyserNode`. `timeDomain` is always
+ * populated (length 256, -1..1). `frequency` is only produced when the tap
+ * was created with `wantFrequency: true`; values are normalised to 0..1.
+ */
+export interface ScopeFrame {
+  timeDomain: Float32Array
+  frequency?: Float32Array
+}
+
+/**
+ * Handle returned by {@link AudioEngine.tap}. Call `stop()` to disconnect the
+ * analyser, remove the frame-callback from the global rAF loop, and release
+ * queued requests for nodes that never came live.
+ */
+export interface Tap {
+  stop: () => void
+}
+
+export interface AudioEngine {
+  readonly state: EngineState
+  start(): Promise<void>
+  stop(): Promise<void>
+  setGraph(graph: AudioGraph): void
+  updateParam(nodeId: string, paramId: string, value: number | string): void
+  onStateChange(listener: (state: EngineState, error?: Error) => void): () => void
+  /**
+   * Fork the first output of the node identified by `nodeId` into an
+   * `AnalyserNode` and invoke `onFrame` on every animation frame with the
+   * latest time-domain (and optionally frequency) data. The original signal
+   * flow is NOT disrupted — the analyser sits as a branch.
+   *
+   * If the node is not currently live (engine stopped or graph hasn't been
+   * applied yet) the tap is queued and attaches when the node is created.
+   */
+  tap(
+    nodeId: string,
+    onFrame: (f: ScopeFrame) => void,
+    opts?: { wantFrequency?: boolean }
+  ): Tap
+}
