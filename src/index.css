@@ -22,7 +22,19 @@ body {
   background: var(--dp-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scope the no-select rule to the graph canvas only — users still need to
+   be able to copy text from log panels, inspector labels, error messages
+   etc. The canvas itself is a drag surface where accidental text selection
+   breaks Rete's pan/select gestures. */
+.dp-canvas-shell {
   user-select: none;
+}
+.dp-canvas-shell input,
+.dp-canvas-shell textarea,
+.dp-canvas-shell [contenteditable] {
+  user-select: text;
 }
 
 button {

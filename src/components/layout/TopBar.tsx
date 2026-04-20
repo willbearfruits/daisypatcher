@@ -8,12 +8,13 @@
  * the Signal Lab aesthetic rewards restraint.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '@/theme'
 import { THEMES } from '@/theme'
 import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { newPatch, openPatch, savePatch } from '@/state/patchFile'
+import type { DaisyFlashMode } from '@/types/store'
 import { UpdateBadge, UpdateMenu } from './UpdateBadge'
 import styles from './TopBar.module.css'
 
@@ -172,6 +173,7 @@ export function TopBar() {
             </option>
           ))}
         </select>
+        <FlashModePicker />
         <span className={styles.divider} aria-hidden />
         <CompileButton />
         <FlashButton />
@@ -473,5 +475,87 @@ function IconButton({ label, onClick, disabled, children }: IconButtonProps) {
     >
       {children}
     </button>
+  )
+}
+
+/* ---------- flash-mode picker ----------
+ *
+ * Daisy-only segmented control. Sets `daisyFlashMode` in the editor
+ * store which drives BOTH the generated Makefile's `APP_TYPE` AND the
+ * DFU target address. Hidden when the target is ESP32. Shares the
+ * `.viewSwitch` scaffolding so it reads as a sibling of the PATCH /
+ * HARDWARE + SEED / ESP32 segmented controls.
+ *
+ * Bootloader warning: if the user picks 'internal' while the detected
+ * DfuSe interface name looks like the Daisy Bootloader ("Flash "), a
+ * one-shot toast fires through `setStatus`. Persistent warnings would
+ * be nag-ware; a single advisory is enough.
+ */
+const FLASH_MODE_META: Record<DaisyFlashMode, { label: string; tip: string }> = {
+  internal: {
+    label: 'INT',
+    tip:
+      'Internal flash @ 0x08000000 (128 KB) \u2014 requires system DFU on a Seed without the Daisy Bootloader.'
+  },
+  qspi: {
+    label: 'QSPI',
+    tip:
+      'QSPI flash @ 0x90040000 (8 MB) \u2014 default for factory Daisy Seeds with the Daisy Bootloader.'
+  },
+  sram: {
+    label: 'SRAM',
+    tip: 'SRAM @ 0x24000000 (512 KB) \u2014 fast iterate; app is volatile across reboots.'
+  }
+}
+
+function FlashModePicker() {
+  const target = useEditorStore((s) => s.target)
+  const mode = useEditorStore((s) => s.daisyFlashMode)
+  const setMode = useEditorStore((s) => s.setDaisyFlashMode)
+  const setStatus = useEditorStore((s) => s.setStatus)
+  const deviceDetails = useCompileStore((s) => s.deviceDetails)
+  const warnedRef = useRef(false)
+
+  if (target !== 'daisy_seed') return null
+
+  const choose = (next: DaisyFlashMode): void => {
+    if (next === mode) return
+    setMode(next)
+    // One-shot advisory: if user picks INT while the Daisy Bootloader
+    // appears to be installed, surface a status-line warning so they
+    // aren't surprised when the flash fails with "not writeable".
+    if (next === 'internal' && !warnedRef.current) {
+      const dfuse = (deviceDetails ?? [])
+        .find((d) => d.kind === 'dfu' && d.dfuseInterfaceName)?.dfuseInterfaceName
+      if (dfuse && /^flash\s*$/i.test(dfuse)) {
+        warnedRef.current = true
+        setStatus({
+          kind: 'warn',
+          message:
+            'Daisy Bootloader detected \u2014 internal mode will fail unless the Seed is in system DFU.'
+        })
+      }
+    }
+  }
+
+  const modes: DaisyFlashMode[] = ['internal', 'qspi', 'sram']
+
+  return (
+    <div className={styles.viewSwitch} role="tablist" aria-label="Flash mode">
+      <span className={styles.flashModeTag}>FLASH</span>
+      {modes.map((m) => (
+        <button
+          key={m}
+          type="button"
+          role="tab"
+          aria-selected={mode === m}
+          className={`${styles.viewSeg} ${mode === m ? styles.viewSegActive : ''}`}
+          onClick={() => choose(m)}
+          title={FLASH_MODE_META[m].tip}
+        >
+          {FLASH_MODE_META[m].label}
+        </button>
+      ))}
+    </div>
   )
 }

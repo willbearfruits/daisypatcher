@@ -20,7 +20,19 @@ import { create } from 'zustand'
 import { generateProject } from '@/codegen/generateProject'
 import { useEditorStore } from '@/state/store'
 import { getTarget } from '@/codegen/targets'
-import type { BoardTarget } from '@/types/store'
+import type { BoardTarget, DaisyFlashMode } from '@/types/store'
+
+/** Addresses for the three Daisy flash modes — also used for log output. */
+const DAISY_FLASH_ADDRS: Record<DaisyFlashMode, string> = {
+  internal: '0x08000000',
+  qspi: '0x90040000',
+  sram: '0x24000000'
+}
+const DAISY_APP_TYPE: Record<DaisyFlashMode, string> = {
+  internal: 'BOOT_NONE',
+  qspi: 'BOOT_QSPI',
+  sram: 'BOOT_SRAM'
+}
 
 /* ---------- local IPC types (mirror main-process spec) ----------------- */
 
@@ -59,6 +71,29 @@ export interface FlashDetectResult {
   dfuDevices?: unknown[]
 }
 
+/**
+ * Shape of a single device row surfaced to the StatusBar popover. Mirrors
+ * the main-process `FlashDevice` / `FlashSerialInfo`. Kept intentionally
+ * loose so the renderer stays buildable if the preload surface drifts.
+ */
+export interface DeviceDetail {
+  kind: 'dfu' | 'serial'
+  busId?: string
+  serial?: string
+  altName?: string
+  alt?: number
+  path?: string
+  devnum?: number
+  cfg?: number
+  intf?: number
+  bcdDevice?: string
+  dfuseInterfaceName?: string
+  portPath?: string
+  vendorId?: string
+  productId?: string
+  manufacturer?: string
+}
+
 export interface FlashResult {
   success: boolean
   durationMs: number
@@ -78,16 +113,41 @@ interface CompileApi {
   onProgress(cb: (line: string) => void): Unsub
 }
 
+interface RawDfuDevice {
+  busId?: string
+  serial?: string
+  altName?: string
+  alt?: number
+  devnum?: number
+  cfg?: number
+  intf?: number
+  path?: string
+  bcdDevice?: string
+  dfuseInterfaceName?: string
+}
+
+interface RawSerialInfo {
+  path?: string
+  manufacturer?: string
+  vendorId?: string
+  productId?: string
+}
+
 interface RawFlashStatus {
   dfuUtilInstalled?: boolean
-  devices?: unknown[]
+  devices?: RawDfuDevice[]
   esp32Ports?: string[]
+  serialPorts?: RawSerialInfo[]
   target?: BoardTarget
 }
 
 interface FlashApi {
   detect(target?: BoardTarget): Promise<RawFlashStatus>
-  run(binaryPath: string, target?: BoardTarget): Promise<FlashResult>
+  run(
+    binaryPath: string,
+    target?: BoardTarget,
+    daisyFlashMode?: DaisyFlashMode
+  ): Promise<FlashResult>
   onProgress(cb: (line: string) => void): Unsub
 }
 
@@ -147,6 +207,13 @@ export interface CompileState {
   lastBinaryPath: string | null
   deviceAvailable: boolean
   deviceLabel: string | null
+  /**
+   * Raw per-device details (DFU alts + nearby serial ports) from the
+   * latest detect() tick. Consumed by the StatusBar popover to render
+   * "Bootloader / VID:PID / serial / USB path / alt names / DFU ver".
+   * `null` until the first successful poll.
+   */
+  deviceDetails: DeviceDetail[] | null
   /**
    * Cross-target presence flags, updated by `detectBoards()`. Independent
    * of `deviceAvailable` (which is scoped to the current target) so the
@@ -244,6 +311,7 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
     lastBinaryPath: null,
     deviceAvailable: false,
     deviceLabel: null,
+    deviceDetails: null,
     seedAvailable: false,
     esp32Available: false,
     log: [],
@@ -390,9 +458,22 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
       const graph = useEditorStore.getState().graph
       const hardware = useEditorStore.getState().hardware
       const target = useEditorStore.getState().target
+      const daisyFlashMode = useEditorStore.getState().daisyFlashMode
+
+      if (target === 'daisy_seed') {
+        append({
+          stream: 'build',
+          text:
+            `[build] mode=${daisyFlashMode} ` +
+            `(APP_TYPE=${DAISY_APP_TYPE[daisyFlashMode]}, ` +
+            `addr=${DAISY_FLASH_ADDRS[daisyFlashMode]})`,
+          t: Date.now()
+        })
+      }
+
       let project: { projectName: string; files: Record<string, string>; warnings: string[] }
       try {
-        project = generateProject(graph, hardware, undefined, target)
+        project = generateProject(graph, hardware, undefined, target, { daisyFlashMode })
       } catch (err) {
         append({
           stream: 'error',
@@ -466,28 +547,52 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
     async detectDevice() {
       const flash = api().flash
       if (!flash) {
-        set({ deviceAvailable: false, deviceLabel: null })
+        set({ deviceAvailable: false, deviceLabel: null, deviceDetails: null })
         return
       }
       const target = useEditorStore.getState().target
       try {
         const res = await flash.detect(target)
+        const dfuDevices: DeviceDetail[] = (res.devices ?? []).map((d) => ({
+          kind: 'dfu',
+          busId: d.busId,
+          serial: d.serial,
+          altName: d.altName,
+          alt: d.alt,
+          path: d.path,
+          devnum: d.devnum,
+          cfg: d.cfg,
+          intf: d.intf,
+          bcdDevice: d.bcdDevice,
+          dfuseInterfaceName: d.dfuseInterfaceName
+        }))
+        const serialDevices: DeviceDetail[] = (res.serialPorts ?? []).map((p) => ({
+          kind: 'serial',
+          portPath: p.path,
+          manufacturer: p.manufacturer,
+          vendorId: p.vendorId,
+          productId: p.productId
+        }))
+        const deviceDetails: DeviceDetail[] = [...dfuDevices, ...serialDevices]
+
         if (target === 'esp32_s3') {
           const ports = res.esp32Ports ?? []
           const first = ports[0]
           set({
             deviceAvailable: ports.length > 0,
-            deviceLabel: first ? `ESP32 \u00B7 ${first.replace(/^\/dev\//, '')}` : null
+            deviceLabel: first ? `ESP32 \u00B7 ${first.replace(/^\/dev\//, '')}` : null,
+            deviceDetails: deviceDetails.length > 0 ? deviceDetails : null
           })
         } else {
           const devices = res.devices ?? []
           set({
             deviceAvailable: devices.length > 0,
-            deviceLabel: devices.length > 0 ? 'Daisy Seed \u00B7 DFU' : null
+            deviceLabel: devices.length > 0 ? 'Daisy Seed \u00B7 DFU' : null,
+            deviceDetails: deviceDetails.length > 0 ? deviceDetails : null
           })
         }
       } catch {
-        set({ deviceAvailable: false, deviceLabel: null })
+        set({ deviceAvailable: false, deviceLabel: null, deviceDetails: null })
       }
     },
 
@@ -563,7 +668,8 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
 
       try {
         const target = useEditorStore.getState().target
-        const result = await flash.run(binary, target)
+        const daisyFlashMode = useEditorStore.getState().daisyFlashMode
+        const result = await flash.run(binary, target, daisyFlashMode)
         const now = Date.now()
         if (result.success) {
           set({

@@ -7,6 +7,13 @@
   background: var(--dp-surface);
   color: var(--dp-text);
   gap: var(--dp-space-4);
+  /*
+   * Establish a stacking context above `.dp-main` so dropdowns rendered
+   * INSIDE the TopBar (target switcher, update popover, flash-mode menu)
+   * don't get painted over by the canvas or its neighbours.
+   */
+  position: relative;
+  z-index: var(--dp-z-chrome, 20);
 }
 
 .left {
@@ -103,6 +110,20 @@
 .viewSegActive {
   color: var(--dp-text);
   border-bottom-color: var(--dp-accent);
+}
+
+/*
+ * Flash-mode segmented control — leading "FLASH" tag anchors the trio
+ * so it doesn't read as just "INT/QSPI/SRAM" in isolation.
+ */
+.flashModeTag {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0 6px 0 0;
+  align-self: center;
 }
 
 /* Autodetect-status dot sitting adjacent to the TargetSwitcher. */

@@ -22,6 +22,22 @@ export type PaletteFilterMode = 'all' | 'available' | 'native'
  */
 export type BoardTarget = 'daisy_seed' | 'esp32_s3'
 
+/**
+ * Daisy-only flash mode. Controls the linker script libDaisy emits
+ * (via `APP_TYPE` in the Makefile) AND the DFU target address.
+ *   - 'internal' — BOOT_NONE, internal flash at 0x08000000 (128 KB).
+ *                  Works only when the Daisy Bootloader is NOT present;
+ *                  device must be in system DFU mode.
+ *   - 'qspi'     — BOOT_QSPI, QSPI flash at 0x90040000 (8 MB). Factory
+ *                  default for Daisy Seeds shipped with the Electro-Smith
+ *                  Daisy Bootloader (the common case).
+ *   - 'sram'     — BOOT_SRAM, SRAM at 0x24000000 (512 KB). Fast iterate;
+ *                  app is volatile across reboots.
+ *
+ * Ignored by the ESP32 target.
+ */
+export type DaisyFlashMode = 'internal' | 'qspi' | 'sram'
+
 export interface HistoryState {
   /**
    * Per-entry snapshot of BOTH graph and hardware layout. Keeping them
@@ -129,6 +145,14 @@ export interface EditorStoreState {
    * present (ambiguous — user must pick manually).
    */
   detectedBoard: BoardTarget | null
+
+  /**
+   * Daisy-only — selected flash mode (internal / qspi / sram). Drives
+   * both the generated Makefile's `APP_TYPE` and the DFU target address
+   * used by the flash service. Default `'qspi'` matches the factory
+   * Daisy-Bootloader default for stock Seeds. Persisted to `.dpatch`.
+   */
+  daisyFlashMode: DaisyFlashMode
 }
 
 export interface EditorStoreActions {
@@ -235,6 +259,13 @@ export interface EditorStoreActions {
 
   /** Mirror the current autodetection result. Called by `detectBoards()`. */
   setDetectedBoard(board: BoardTarget | null): void
+
+  /**
+   * Daisy-only flash mode picker. Writes into the same store slot used
+   * by both the TopBar segmented control and the StatusBar popover —
+   * keeps both UIs in sync through one store field.
+   */
+  setDaisyFlashMode(mode: DaisyFlashMode): void
 }
 
 export type EditorStore = EditorStoreState & EditorStoreActions

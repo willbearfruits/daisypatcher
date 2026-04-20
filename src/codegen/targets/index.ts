@@ -6,7 +6,7 @@
  */
 import type { AudioGraph } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
-import type { GeneratedProject } from '../generateProject'
+import type { GenerateOptions, GeneratedProject } from '../generateProject'
 import { daisySeedTarget } from './daisySeed'
 import { esp32S3Target } from './esp32s3'
 
@@ -23,11 +23,16 @@ export interface TargetBackend {
   id: BoardTarget
   label: string
   description: string
-  /** Pure function: graph + hardware → project files. */
+  /**
+   * Pure function: graph + hardware → project files. `options` carries
+   * target-specific knobs (e.g. Daisy's flash mode); targets ignore
+   * fields they don't care about.
+   */
   generate(
     graph: AudioGraph,
     hardware: HardwareLayout,
-    projectName?: string
+    projectName?: string,
+    options?: GenerateOptions
   ): GeneratedProject
   /** Command the build service will run. */
   buildCommand(): { bin: string; args: string[]; env?: Record<string, string> }

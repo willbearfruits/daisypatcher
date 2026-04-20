@@ -133,13 +133,22 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     'flash:run',
-    async (evt, payload: { binaryPath: string; target?: 'daisy_seed' | 'esp32_s3' }) => {
+    async (
+      evt,
+      payload: {
+        binaryPath: string
+        target?: 'daisy_seed' | 'esp32_s3'
+        daisyFlashMode?: 'internal' | 'qspi' | 'sram'
+      }
+    ) => {
       const emit = emitter('flash:progress', evt)
       // Back-compat: accept a bare string as the Daisy path for callers
       // that haven't adopted the new payload yet.
       const binaryPath = typeof payload === 'string' ? payload : payload.binaryPath
       const target: 'daisy_seed' | 'esp32_s3' =
         typeof payload === 'string' ? 'daisy_seed' : payload.target ?? 'daisy_seed'
+      const daisyFlashMode: 'internal' | 'qspi' | 'sram' =
+        typeof payload === 'string' ? 'qspi' : payload.daisyFlashMode ?? 'qspi'
 
       // Defense in depth: refuse to flash anything outside WORKSPACE. Stops
       // a compromised renderer from asking us to spawn dfu-util against an
@@ -150,7 +159,7 @@ function registerIpcHandlers(): void {
         throw new Error(`refusing to flash outside workspace: ${binaryPath}`)
       }
 
-      return await flashBinary(binaryPath, emit, target)
+      return await flashBinary(binaryPath, emit, target, daisyFlashMode)
     }
   )
 

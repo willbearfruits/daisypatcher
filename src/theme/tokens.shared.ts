@@ -40,7 +40,9 @@ export const shared: SharedTokens = {
   statusbarH: '26px',
 
   zCanvas: 1,
-  zChrome: 10,
+  // Chrome bars (TopBar / StatusBar) sit above the canvas so their
+  // dropdowns / popovers don't get painted over by the canvas grid track.
+  zChrome: 20,
   zOverlay: 100,
   zModal: 1000
 }

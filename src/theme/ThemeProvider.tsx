@@ -100,7 +100,15 @@ function sharedToCssVars() {
     '--dp-panel-w': shared.panelW,
     '--dp-inspector-w': shared.inspectorW,
     '--dp-topbar-h': shared.topbarH,
-    '--dp-statusbar-h': shared.statusbarH
+    '--dp-statusbar-h': shared.statusbarH,
+
+    // Stacking order. Chrome (TopBar / StatusBar) sits above the canvas so
+    // dropdowns and popovers anchored to those bars don't get painted over
+    // by adjacent grid tracks. Overlay + modal track the classic pattern.
+    '--dp-z-canvas': String(shared.zCanvas),
+    '--dp-z-chrome': String(shared.zChrome),
+    '--dp-z-overlay': String(shared.zOverlay),
+    '--dp-z-modal': String(shared.zModal)
   }
 }
 

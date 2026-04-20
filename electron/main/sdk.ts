@@ -93,6 +93,16 @@ export async function getSdkStatus(): Promise<SdkStatus> {
     ((await exists(join(LIBDAISY_PATH, 'build', 'libdaisy.a'))) ||
       (await exists(join(LIBDAISY_PATH, 'build', 'libDaisy.a'))))
 
+  // DaisySP ships two libs — the core (libdaisysp.a, from DaisySP/Makefile)
+  // and the LGPL subset (libdaisysp-lgpl.a, from DaisySP/DaisySP-LGPL/Makefile).
+  // Our generated Makefile uses `USE_DAISYSP_LGPL = 1` which links BOTH, so
+  // both must exist or the link step fails with `cannot find -ldaisysp`.
+  const daisySPBuilt =
+    daisySPDir && (await exists(join(DAISYSP_PATH, 'build', 'libdaisysp.a')))
+  const daisySPLgplBuilt =
+    daisySPDir &&
+    (await exists(join(DAISYSP_PATH, 'DaisySP-LGPL', 'build', 'libdaisysp-lgpl.a')))
+
   const issues: string[] = []
   if (!gcc) issues.push('arm-none-eabi-gcc not found on PATH')
   if (!make) issues.push('make not found on PATH')
@@ -100,6 +110,8 @@ export async function getSdkStatus(): Promise<SdkStatus> {
   if (!libDaisyDir) issues.push('libDaisy not cloned')
   if (!daisySPDir) issues.push('DaisySP not cloned')
   if (libDaisyDir && !libDaisyBuilt) issues.push('libDaisy not built')
+  if (daisySPDir && !daisySPBuilt) issues.push('DaisySP not built (libdaisysp.a)')
+  if (daisySPDir && !daisySPLgplBuilt) issues.push('DaisySP-LGPL not built (libdaisysp-lgpl.a)')
 
   // ESP32 issues are surfaced separately — the renderer picks them up
   // via `esp32Ready` + the filtered-by-keyword "pio" items in `issues`.
@@ -108,7 +120,8 @@ export async function getSdkStatus(): Promise<SdkStatus> {
 
   const toolchain = { gcc, make, dfuUtil, pio, python3 }
   const ready =
-    gcc && make && dfuUtil && libDaisyDir && daisySPDir && libDaisyBuilt
+    gcc && make && dfuUtil && libDaisyDir && daisySPDir &&
+    libDaisyBuilt && daisySPBuilt && daisySPLgplBuilt
   const esp32Ready = pio && python3
 
   return {
@@ -248,6 +261,27 @@ export async function installSdk(emit: (msg: string) => void): Promise<void> {
   await runStreamed(
     'make',
     ['-C', LIBDAISY_PATH],
+    { timeoutMs: remaining() },
+    emit
+  )
+
+  // DaisySP has its own Makefile producing libdaisysp.a. Without this the
+  // final link step fails with `cannot find -ldaisysp`.
+  emit('[sdk] building DaisySP')
+  await runStreamed(
+    'make',
+    ['-C', DAISYSP_PATH],
+    { timeoutMs: remaining() },
+    emit
+  )
+
+  // DaisySP-LGPL is a separate sub-library (Moog ladder, ReverbSc, etc.).
+  // Our generated Makefile sets `USE_DAISYSP_LGPL = 1` so we always need
+  // libdaisysp-lgpl.a too.
+  emit('[sdk] building DaisySP-LGPL')
+  await runStreamed(
+    'make',
+    ['-C', join(DAISYSP_PATH, 'DaisySP-LGPL')],
     { timeoutMs: remaining() },
     emit
   )

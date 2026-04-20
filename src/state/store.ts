@@ -19,7 +19,7 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 
-import type { BoardTarget, EditorStore, HistorySnapshot, LayoutSizes } from '@/types/store'
+import type { BoardTarget, DaisyFlashMode, EditorStore, HistorySnapshot, LayoutSizes } from '@/types/store'
 import type { AudioGraph, Connection, NodeInstance, NodeKind } from '@/types/graph'
 import { emptyGraph } from '@/types/graph'
 import type { BoardPin, HardwareKind, HardwareLayout, PlacedComponent } from '@/types/hardware'
@@ -256,6 +256,10 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     target: 'daisy_seed' as BoardTarget,
     targetLockedByUser: false,
     detectedBoard: null,
+    // Default to QSPI — safe for factory-default Seeds shipped with the
+    // Electro-Smith Daisy Bootloader. Users with a bootloader-less Seed
+    // switch to 'internal' via the TopBar / StatusBar popover.
+    daisyFlashMode: 'qspi' as DaisyFlashMode,
 
     addNode(kind, position) {
       const id = nanoid(8)
@@ -818,6 +822,11 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     setDetectedBoard(board) {
       if (get().detectedBoard === board) return
       set({ detectedBoard: board })
+    },
+
+    setDaisyFlashMode(mode) {
+      if (get().daisyFlashMode === mode) return
+      set({ daisyFlashMode: mode })
     }
   }
 

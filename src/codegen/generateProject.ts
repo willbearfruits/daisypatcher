@@ -12,6 +12,7 @@
 import type { AudioGraph } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
 import { emptyHardwareLayout } from '@/types/hardware'
+import type { DaisyFlashMode } from '@/types/store'
 import { TARGETS, type BoardTarget } from './targets'
 
 /**
@@ -28,11 +29,23 @@ export interface GeneratedProject {
   warnings: string[]
 }
 
+/**
+ * Target-agnostic options bag. Each target backend picks out the fields
+ * it cares about; unknown fields are ignored. Keeping this loose lets us
+ * add new knobs (e.g. ESP32 partition table) without churning the
+ * TargetBackend contract for every implementation.
+ */
+export interface GenerateOptions {
+  /** Daisy-only — flash mode selected in the TopBar / StatusBar popover. */
+  daisyFlashMode?: DaisyFlashMode
+}
+
 export function generateProject(
   graph: AudioGraph,
   hardware: HardwareLayout = emptyHardwareLayout(),
   projectName?: string,
-  target: BoardTarget = 'daisy_seed'
+  target: BoardTarget = 'daisy_seed',
+  options: GenerateOptions = {}
 ): GeneratedProject {
-  return TARGETS[target].generate(graph, hardware, projectName)
+  return TARGETS[target].generate(graph, hardware, projectName, options)
 }

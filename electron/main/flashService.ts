@@ -1,8 +1,24 @@
 import { execFile, spawn } from 'node:child_process'
 import { readdir } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
+import { listSerialPorts } from './serialService'
 
 export type FlashTarget = 'daisy_seed' | 'esp32_s3'
+
+/**
+ * Daisy-only flash mode (mirror of `DaisyFlashMode` in the renderer's
+ * store types — kept local so the main process doesn't pull from `src/`).
+ *   - 'internal' — BOOT_NONE / internal flash @ 0x08000000.
+ *   - 'qspi'     — BOOT_QSPI / QSPI flash    @ 0x90040000 (default; Daisy Bootloader).
+ *   - 'sram'     — BOOT_SRAM / SRAM          @ 0x24000000 (volatile).
+ */
+export type DaisyFlashMode = 'internal' | 'qspi' | 'sram'
+
+export const DAISY_FLASH_ADDRS: Record<DaisyFlashMode, string> = {
+  internal: '0x08000000',
+  qspi: '0x90040000',
+  sram: '0x24000000'
+}
 
 /**
  * DFU flashing for the Daisy Seed. Seed sits on the STM32H7 bootloader
@@ -27,6 +43,33 @@ export interface FlashDevice {
   busId: string
   serial?: string
   altName?: string
+  /** Alt-setting number (`alt=0`, `alt=1`, ...). */
+  alt?: number
+  /** libusb device number — stable per-connection, not across unplug. */
+  devnum?: number
+  /** DFU config index (`cfg=1`). */
+  cfg?: number
+  /** DFU interface index (`intf=0`). */
+  intf?: number
+  /** USB topology path (`path="1-2"`). */
+  path?: string
+  /** Raw DFU version (`ver=0x011a`). Some builds print `ver=011a`. */
+  bcdDevice?: string
+  /**
+   * DfuSe interface-name string (`DfuSe interface name: "Flash "`).
+   * Used to distinguish the Electro-Smith Daisy Bootloader ("Flash ")
+   * from STMicro's system bootloader ("Internal Flash"). Populated by
+   * a secondary `dfu-util -l -v` capture.
+   */
+  dfuseInterfaceName?: string
+}
+
+/** Extra detail to include alongside the pure DFU device list. */
+export interface FlashSerialInfo {
+  path: string
+  manufacturer?: string
+  vendorId?: string
+  productId?: string
 }
 
 export interface FlashStatus {
@@ -34,6 +77,12 @@ export interface FlashStatus {
   devices: FlashDevice[]
   /** Serial ports where an ESP32 would enumerate (ttyACM*, ttyUSB*, cu.usbserial*). */
   esp32Ports: string[]
+  /**
+   * Richer serial-port enumeration — populated on both targets so the
+   * StatusBar popover can show the ESP32's `/dev/ttyACM*` VID:PID, and
+   * so the Daisy popover can surface any co-present STMicro CDC.
+   */
+  serialPorts?: FlashSerialInfo[]
   /** Which target the renderer asked about (echoed for label logic). */
   target?: FlashTarget
 }
@@ -48,24 +97,77 @@ function whichBin(name: string): Promise<boolean> {
   })
 }
 
+/**
+ * Parse a full `dfu-util -l` (optionally `-v`) capture into a list of
+ * per-alt devices. A typical line looks like:
+ *
+ *   Found DFU: [0483:df11] ver=0200, devnum=42, cfg=1, intf=0, path="1-2", \
+ *     alt=0, name="@Internal Flash /0x08000000/16*128Kg", serial="3866364F3432"
+ *
+ * We also scan for the companion `DfuSe interface name: "<value>"` line
+ * — dfu-util emits it when run verbosely. It's what tells us apart the
+ * Daisy Bootloader ("Flash ") from STMicro's system bootloader
+ * ("Internal Flash") without having to parse the `name=...` heuristically.
+ */
 function parseDfuList(output: string): FlashDevice[] {
   const devices: FlashDevice[] = []
   const seen = new Set<string>()
-  // Prefer the `Found DFU:` lines.
-  const re =
-    /\[([0-9a-f]{4}:[0-9a-f]{4})\][^]*?(?:alt=\d+,\s*name="([^"]*)")?(?:[^]*?serial="([^"]*)")?/gi
-  for (const line of output.split(/\r?\n/)) {
+
+  // Last-seen DfuSe interface name, applied to the next device entry.
+  // dfu-util -v prints the banner immediately before the matching
+  // `Found DFU` line, so "last seen wins" is correct here.
+  let pendingDfuseName: string | undefined
+
+  const lines = output.split(/\r?\n/)
+  const pick = (source: string, key: string): string | undefined => {
+    // Non-greedy value between the key and either a comma-followed-by-key
+    // or end-of-line. Works for both `key=value` and `key="value"` forms.
+    const re = new RegExp(`${key}=("([^"]*)"|([^,\\s]+))`, 'i')
+    const m = re.exec(source)
+    return m ? (m[2] ?? m[3]) : undefined
+  }
+
+  for (const line of lines) {
+    const dfuseMatch = /DfuSe interface name:\s*"([^"]*)"/i.exec(line)
+    if (dfuseMatch) {
+      pendingDfuseName = dfuseMatch[1]
+      continue
+    }
+
     if (!/Found DFU/i.test(line)) continue
-    re.lastIndex = 0
-    const m = re.exec(line)
-    if (!m) continue
-    const busId = m[1].toLowerCase()
-    const altName = m[2] || undefined
-    const serial = m[3] || undefined
-    const key = `${busId}|${serial ?? ''}|${altName ?? ''}`
+    const busMatch = /\[([0-9a-f]{4}:[0-9a-f]{4})\]/i.exec(line)
+    if (!busMatch) continue
+    const busId = busMatch[1].toLowerCase()
+
+    const altRaw = pick(line, 'alt')
+    const devnumRaw = pick(line, 'devnum')
+    const cfgRaw = pick(line, 'cfg')
+    const intfRaw = pick(line, 'intf')
+    const path = pick(line, 'path')
+    const bcdDevice = pick(line, 'ver')
+    const altName = pick(line, 'name')
+    const serial = pick(line, 'serial')
+
+    const alt = altRaw !== undefined ? parseInt(altRaw, 10) : undefined
+    const devnum = devnumRaw !== undefined ? parseInt(devnumRaw, 10) : undefined
+    const cfg = cfgRaw !== undefined ? parseInt(cfgRaw, 10) : undefined
+    const intf = intfRaw !== undefined ? parseInt(intfRaw, 10) : undefined
+
+    const key = `${busId}|${serial ?? ''}|${alt ?? ''}|${altName ?? ''}`
     if (seen.has(key)) continue
     seen.add(key)
-    devices.push({ busId, altName, serial })
+    devices.push({
+      busId,
+      altName,
+      serial,
+      alt,
+      devnum,
+      cfg,
+      intf,
+      path,
+      bcdDevice,
+      dfuseInterfaceName: pendingDfuseName
+    })
   }
   return devices
 }
@@ -106,30 +208,57 @@ async function detectEsp32Ports(): Promise<string[]> {
   return out
 }
 
+/**
+ * Enumerate serial ports via the `serialport` module. Kept as a tiny
+ * wrapper so the flash service stays free of a direct serial import
+ * when serial detection fails (e.g. no permissions on a raw TTY).
+ */
+async function enumerateSerialInfo(): Promise<FlashSerialInfo[]> {
+  try {
+    const ports = await listSerialPorts()
+    return ports.map((p) => ({
+      path: p.path,
+      manufacturer: p.manufacturer,
+      vendorId: p.vendorId,
+      productId: p.productId
+    }))
+  } catch {
+    return []
+  }
+}
+
 export async function detectFlashDevices(target: FlashTarget = 'daisy_seed'): Promise<FlashStatus> {
   // ESP32 path — no DFU; look for a serial port instead.
   if (target === 'esp32_s3') {
-    const esp32Ports = await detectEsp32Ports()
+    const [esp32Ports, serialPorts] = await Promise.all([
+      detectEsp32Ports(),
+      enumerateSerialInfo()
+    ])
     return {
       dfuUtilInstalled: await whichBin('dfu-util'),
       devices: [],
       esp32Ports,
+      serialPorts,
       target
     }
   }
 
   const dfuUtilInstalled = await whichBin('dfu-util')
   if (!dfuUtilInstalled) {
-    return { dfuUtilInstalled: false, devices: [], esp32Ports: [], target }
+    const serialPorts = await enumerateSerialInfo()
+    return { dfuUtilInstalled: false, devices: [], esp32Ports: [], serialPorts, target }
   }
 
+  // Prefer verbose output — that's where `DfuSe interface name:` lives,
+  // which we use to distinguish the Daisy Bootloader from STMicro's
+  // system bootloader. Non-zero exit is expected when nothing is
+  // attached; swallow stderr and parse whatever came out.
   const output = await new Promise<string>((resolve) => {
     execFile(
       'dfu-util',
-      ['-l'],
+      ['-l', '-v'],
       { timeout: DETECT_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
       (_err, stdout, stderr) => {
-        // dfu-util returns non-zero when nothing is attached; that's fine.
         resolve(`${stdout ?? ''}\n${stderr ?? ''}`)
       }
     )
@@ -138,13 +267,15 @@ export async function detectFlashDevices(target: FlashTarget = 'daisy_seed'): Pr
   const all = parseDfuList(output)
   // Daisy Seed specifically: STM32 DFU vendor/product.
   const devices = all.filter((d) => d.busId === '0483:df11')
-  return { dfuUtilInstalled: true, devices, esp32Ports: [], target }
+  const serialPorts = await enumerateSerialInfo()
+  return { dfuUtilInstalled: true, devices, esp32Ports: [], serialPorts, target }
 }
 
 export async function flashBinary(
   binaryPath: string,
   emit: (line: string) => void,
-  target: FlashTarget = 'daisy_seed'
+  target: FlashTarget = 'daisy_seed',
+  daisyFlashMode: DaisyFlashMode = 'qspi'
 ): Promise<{ success: boolean; log: string }> {
   const logLines: string[] = []
   const push = (line: string): void => {
@@ -168,9 +299,14 @@ export async function flashBinary(
     cwd = projectDir
     successRegex = /\b(SUCCESS|Hard resetting via RTS pin|Leaving\.\.\.)/i
   } else {
-    // Daisy: dfu-util with the STM32 DFU leave-and-execute dance.
+    // Daisy: dfu-util with the STM32 DFU leave-and-execute dance. The
+    // target address depends on the flash mode — QSPI (Daisy Bootloader)
+    // is the safe default; INTERNAL requires a boot-loader-less Seed
+    // sitting in STMicro system DFU.
+    const addr = DAISY_FLASH_ADDRS[daisyFlashMode] ?? DAISY_FLASH_ADDRS.qspi
+    push(`[flash] mode=${daisyFlashMode} addr=${addr}`)
     cmd = 'dfu-util'
-    args = ['-a', '0', '-i', '0', '-s', '0x08000000:leave', '-D', binaryPath]
+    args = ['-a', '0', '-i', '0', '-s', `${addr}:leave`, '-D', binaryPath]
     successRegex = /Download done/i
   }
 

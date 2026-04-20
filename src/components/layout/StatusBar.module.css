@@ -10,6 +10,20 @@
   font-family: var(--dp-font-mono);
   font-size: var(--dp-fs-xs);
   letter-spacing: 0.04em;
+  /*
+   * StatusBar sits above the canvas so its popover (anchored to the
+   * device pill, grows upward into the canvas region) renders above
+   * `.dp-main` instead of being clipped by it.
+   */
+  position: relative;
+  z-index: var(--dp-z-chrome, 20);
+}
+
+/* Popover anchor — positioned wrapper around the pill. */
+.pillWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .left {
@@ -231,4 +245,161 @@
   color: var(--dp-text-dim);
   min-width: 2.5em;
   text-align: right;
+}
+
+/* ---------- device info popover ---------- */
+
+.popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  min-width: 320px;
+  max-width: 420px;
+  background: var(--dp-surface-elevated, var(--dp-surface));
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text);
+  z-index: var(--dp-z-overlay, 100);
+  padding: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.popoverHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px var(--dp-space-3);
+  border-bottom: 1px solid var(--dp-border);
+  color: var(--dp-text-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: var(--dp-fs-xs);
+}
+
+.popoverClose {
+  background: transparent;
+  border: 0;
+  color: var(--dp-text-dim);
+  cursor: pointer;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+  line-height: 1;
+  padding: 2px 4px;
+  transition: color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.popoverClose:hover {
+  color: var(--dp-text);
+}
+
+.popoverBody {
+  padding: var(--dp-space-2) var(--dp-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.popoverRow {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: var(--dp-space-2);
+  align-items: baseline;
+}
+
+.popoverLabel {
+  color: var(--dp-text-dim);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.popoverValue {
+  color: var(--dp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popoverValueMono {
+  font-family: var(--dp-font-mono);
+  white-space: normal;
+  word-break: break-all;
+}
+
+.popoverValueDim {
+  color: var(--dp-text-muted);
+}
+
+.popoverDivider {
+  height: 1px;
+  background: var(--dp-border);
+  margin: 6px 0;
+}
+
+.popoverModeRow {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: var(--dp-space-2);
+  align-items: center;
+}
+
+.popoverSelect {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 3px var(--dp-space-2);
+  cursor: pointer;
+}
+
+.popoverSelect:hover {
+  border-color: var(--dp-border-strong);
+}
+
+.popoverSerialRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--dp-space-2);
+}
+
+.popoverSerialPath {
+  color: var(--dp-text);
+}
+
+.popoverSerialMeta {
+  color: var(--dp-text-dim);
+}
+
+.popoverActions {
+  display: flex;
+  gap: var(--dp-space-2);
+  padding: 6px var(--dp-space-3);
+  border-top: 1px solid var(--dp-border);
+}
+
+.popoverAction {
+  flex: 1;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 4px var(--dp-space-2);
+  cursor: pointer;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.popoverAction:hover {
+  color: var(--dp-text);
+  border-color: var(--dp-border-strong);
 }

@@ -9,6 +9,9 @@ import { contextBridge, ipcRenderer } from 'electron'
  */
 export type BoardTarget = 'daisy_seed' | 'esp32_s3'
 
+/** Mirror of the Daisy flash-mode union on the main side. */
+export type DaisyFlashMode = 'internal' | 'qspi' | 'sram'
+
 export interface SdkStatus {
   ready: boolean
   libDaisy: boolean
@@ -38,12 +41,29 @@ export interface FlashDevice {
   busId: string
   serial?: string
   altName?: string
+  alt?: number
+  devnum?: number
+  cfg?: number
+  intf?: number
+  path?: string
+  bcdDevice?: string
+  /** DfuSe interface-name — e.g. "Flash " (Daisy Bootloader) or "Internal Flash". */
+  dfuseInterfaceName?: string
+}
+
+export interface FlashSerialInfo {
+  path: string
+  manufacturer?: string
+  vendorId?: string
+  productId?: string
 }
 
 export interface FlashStatus {
   dfuUtilInstalled: boolean
   devices: FlashDevice[]
   esp32Ports: string[]
+  /** Enriched serial-port enumeration (VID:PID + manufacturer). */
+  serialPorts?: FlashSerialInfo[]
   target?: BoardTarget
 }
 
@@ -151,8 +171,12 @@ const api = {
   flash: {
     detect: (target?: BoardTarget): Promise<FlashStatus> =>
       ipcRenderer.invoke('flash:detect', target),
-    run: (binaryPath: string, target?: BoardTarget): Promise<{ success: boolean; log: string }> =>
-      ipcRenderer.invoke('flash:run', { binaryPath, target }),
+    run: (
+      binaryPath: string,
+      target?: BoardTarget,
+      daisyFlashMode?: DaisyFlashMode
+    ): Promise<{ success: boolean; log: string }> =>
+      ipcRenderer.invoke('flash:run', { binaryPath, target, daisyFlashMode }),
     onProgress: (cb: (line: string) => void): (() => void) =>
       onChannel('flash:progress', cb)
   },

@@ -18,17 +18,27 @@
 import type { AudioGraph, NodeKind } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
 import { emptyHardwareLayout } from '@/types/hardware'
-import type { LayoutSizes, PaletteFilterMode } from '@/types/store'
+import type { DaisyFlashMode, LayoutSizes, PaletteFilterMode } from '@/types/store'
 import { useEditorStore } from './store'
 
 type Store = typeof useEditorStore
+
+/**
+ * Layout section of the `.dpatch` envelope. Carries UI preferences
+ * (rail/panel sizes, palette prefs) AND `daisyFlashMode` so the user's
+ * flash-mode choice travels with a patch. Older saves may omit
+ * `daisyFlashMode`; the store falls back to the default `'qspi'`.
+ */
+interface DpatchLayoutSection extends Partial<LayoutSizes> {
+  daisyFlashMode?: DaisyFlashMode
+}
 
 interface DpatchEnvelope {
   dpatch: 2
   graph: AudioGraph
   hardware: HardwareLayout
   /** Optional — absent on older saves; the store falls back to defaults. */
-  layout?: Partial<LayoutSizes>
+  layout?: DpatchLayoutSection
 }
 
 function basename(p: string): string {
@@ -67,9 +77,9 @@ function validateHardware(data: unknown): data is HardwareLayout {
  * Lenient shape check for the optional layout block. Any missing fields fall
  * through to the store's defaults; non-number values are dropped.
  */
-function extractLayout(raw: unknown): Partial<LayoutSizes> | undefined {
+function extractLayout(raw: unknown): DpatchLayoutSection | undefined {
   if (!isObject(raw)) return undefined
-  const out: Partial<LayoutSizes> = {}
+  const out: DpatchLayoutSection = {}
   const src = raw as Record<string, unknown>
   if (typeof src.paletteW === 'number') out.paletteW = src.paletteW
   if (typeof src.inspectorW === 'number') out.inspectorW = src.inspectorW
@@ -94,6 +104,13 @@ function extractLayout(raw: unknown): Partial<LayoutSizes> | undefined {
       (k): k is NodeKind => typeof k === 'string'
     )
   }
+  if (
+    src.daisyFlashMode === 'internal' ||
+    src.daisyFlashMode === 'qspi' ||
+    src.daisyFlashMode === 'sram'
+  ) {
+    out.daisyFlashMode = src.daisyFlashMode
+  }
   return Object.keys(out).length ? out : undefined
 }
 
@@ -101,7 +118,7 @@ function extractLayout(raw: unknown): Partial<LayoutSizes> | undefined {
 function parseDpatch(parsed: unknown): {
   graph: AudioGraph
   hardware: HardwareLayout
-  layout?: Partial<LayoutSizes>
+  layout?: DpatchLayoutSection
 } | null {
   if (!isObject(parsed)) return null
   // v2 envelope — either a `dpatch` version marker OR a top-level `graph` field.
@@ -140,7 +157,9 @@ export async function savePatch(
     hardware: hardwareToSave,
     // Persist the user's preferred rail/panel sizes so reopening the patch
     // restores their shell. Safe to omit on load (store falls back to default).
-    layout: { ...s.layout }
+    // `daisyFlashMode` rides in the same section so a patch remembers its
+    // intended flash target across saves.
+    layout: { ...s.layout, daisyFlashMode: s.daisyFlashMode }
   }
   try {
     await window.daisy.fs.writeFile(path, JSON.stringify(envelope, null, 2))
@@ -186,7 +205,13 @@ export async function openPatch(
       meta: { ...loaded.hardware.meta, name }
     }
     s.loadGraph(graph, path, hardware)
-    if (loaded.layout) s.setLayout(loaded.layout)
+    if (loaded.layout) {
+      const { daisyFlashMode, ...layoutRest } = loaded.layout
+      s.setLayout(layoutRest)
+      // Flash-mode lives outside LayoutSizes on the store; apply it
+      // separately so older files that omit the field keep the default.
+      if (daisyFlashMode) s.setDaisyFlashMode(daisyFlashMode)
+    }
     s.setStatus({ kind: 'info', message: `opened ${basename(path)}` })
     return { loaded: true, path }
   } catch (err) {
