@@ -77,6 +77,9 @@ export interface PinCapabilities {
   strapping?: boolean
   /** ESP32-S3: pin is reserved by the on-board USB CDC / JTAG peripheral. */
   usbReserved?: boolean
+  /** Underlying MCU pin, e.g. "PB12" on STM32H750 (Daisy Seed). Present for
+   *  Seed entries so codegen can reference the true pin identifier. */
+  stm32Pin?: string
   label?: string     // e.g. "ADC_0"
 }
 
