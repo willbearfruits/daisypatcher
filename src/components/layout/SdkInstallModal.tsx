@@ -29,6 +29,7 @@ export function SdkInstallModal() {
   const issues = useCompileStore((s) => s.sdkIssues)
   const log = useCompileStore((s) => s.log)
   const installSdk = useCompileStore((s) => s.installSdk)
+  const installEsp32Toolchain = useCompileStore((s) => s.installEsp32Toolchain)
   const target = useEditorStore((s) => s.target)
   const isEsp32 = target === 'esp32_s3'
 
@@ -90,11 +91,15 @@ export function SdkInstallModal() {
         <p className={styles.body}>
           {isEsp32 ? (
             <>
-              Daisypatcher uses PlatformIO to build for the ESP32-S3.
-              PlatformIO manages its own toolchain; you only need the
-              commands listed below on your PATH. Run the suggested
-              install commands in a terminal — Daisypatcher will NOT
-              install Python packages for you.
+              Daisypatcher uses PlatformIO to build for the ESP32-S3. Click
+              Install and we&rsquo;ll pull PlatformIO via your Python
+              (pipx preferred, <code>pip&nbsp;--user</code> fallback) and
+              pre-download the ESP32-S3 toolchain so the first compile
+              doesn&rsquo;t stall. <strong>This takes 5&ndash;15 minutes</strong>{' '}
+              on first run and needs about <strong>300&nbsp;MB</strong> of
+              disk. Python 3 must already be on your PATH &mdash; install
+              from <code>python.org</code> (Windows) or your package
+              manager (macOS/Linux) first if missing.
             </>
           ) : (
             <>
@@ -158,19 +163,19 @@ export function SdkInstallModal() {
             onClick={() => setDismissed(true)}
             disabled={sdkInstalling}
           >
-            {isEsp32 ? 'Close' : 'Skip'}
+            Skip
           </button>
-          {isEsp32 ? null : (
-            <button
-              type="button"
-              className={styles.btnPrimary}
-              onClick={() => void installSdk()}
-              disabled={sdkInstalling}
-              aria-busy={sdkInstalling || undefined}
-            >
+          <button
+            type="button"
+            className={styles.btnPrimary}
+            onClick={() =>
+              void (isEsp32 ? installEsp32Toolchain() : installSdk())
+            }
+            disabled={sdkInstalling}
+            aria-busy={sdkInstalling || undefined}
+          >
               {sdkInstalling ? 'Installing\u2026' : 'Install'}
-            </button>
-          )}
+          </button>
         </div>
       </div>
     </div>

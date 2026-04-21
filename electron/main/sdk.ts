@@ -288,3 +288,145 @@ export async function installSdk(emit: (msg: string) => void): Promise<void> {
 
   emit('[sdk] done')
 }
+
+/* -------------------------------------------------------------------------
+ * ESP32-S3 toolchain installer
+ *
+ * PlatformIO is a Python package. Unlike the libDaisy flow (git clone + make)
+ * we rely on the user's Python for install. Strategy, per platform:
+ *   1. Prefer `pipx install platformio` — isolated venv, user-level, no sudo.
+ *   2. Fall back to `<python> -m pip install --user platformio`.
+ *   3. Detect Python via common executable names; on Windows, try `py` first
+ *      (Python Launcher) which handles multi-version selection cleanly.
+ *
+ * After install we also run `pio platform install espressif32` so the first
+ * compile doesn't stall downloading ~250 MB of toolchain inside make. The
+ * `resolvePioCommand` helper locates `pio` even when the user's shell PATH
+ * hasn't been reloaded yet (pipx / pip --user deposit to ~/.local/bin or
+ * %APPDATA%\Python\...\Scripts, neither of which is guaranteed in the
+ * running Electron process environment).
+ * --------------------------------------------------------------------- */
+
+interface PythonInstaller {
+  cmd: string
+  args: string[]
+  kind: 'pipx' | 'pip-user'
+}
+
+async function findPythonInstaller(): Promise<PythonInstaller | null> {
+  // pipx is the cleanest install path — it creates an isolated venv, exposes
+  // `pio` as a shim, and won't pollute the user's global site-packages.
+  if (await whichBin('pipx')) {
+    return { cmd: 'pipx', args: ['install', 'platformio'], kind: 'pipx' }
+  }
+  const isWin = process.platform === 'win32'
+  // On Windows the Python Launcher (`py`) is preferred — it picks the
+  // highest installed version automatically and is always on PATH when
+  // Python was installed from python.org.
+  const pyCandidates = isWin
+    ? ['py', 'python', 'python3']
+    : ['python3', 'python']
+  for (const py of pyCandidates) {
+    if (await whichBin(py)) {
+      return {
+        cmd: py,
+        args: ['-m', 'pip', 'install', '--user', 'platformio'],
+        kind: 'pip-user'
+      }
+    }
+  }
+  return null
+}
+
+async function resolvePioCommand(): Promise<string | null> {
+  if (await whichBin('pio')) return 'pio'
+  // When pipx / pip --user deposits the pio shim into a user-local bin dir
+  // that isn't on the currently-running process's PATH, search the common
+  // locations directly. Restarting the app normally picks up the new PATH,
+  // but walking the fs lets us finish the install in this same session.
+  const home = process.env.HOME ?? process.env.USERPROFILE
+  if (!home) return null
+  const isWin = process.platform === 'win32'
+  const candidates = isWin
+    ? [
+        // pipx on Windows
+        join(home, '.local', 'bin', 'pio.exe'),
+        join(home, 'pipx', 'venvs', 'platformio', 'Scripts', 'pio.exe'),
+        // py -m pip install --user — Scripts dir varies by Python version
+        join(home, 'AppData', 'Roaming', 'Python', 'Python313', 'Scripts', 'pio.exe'),
+        join(home, 'AppData', 'Roaming', 'Python', 'Python312', 'Scripts', 'pio.exe'),
+        join(home, 'AppData', 'Roaming', 'Python', 'Python311', 'Scripts', 'pio.exe'),
+        join(home, 'AppData', 'Roaming', 'Python', 'Python310', 'Scripts', 'pio.exe')
+      ]
+    : [
+        join(home, '.local', 'bin', 'pio'),
+        '/usr/local/bin/pio',
+        '/opt/homebrew/bin/pio'
+      ]
+  for (const c of candidates) {
+    if (await exists(c)) return c
+  }
+  return null
+}
+
+export async function installEsp32Toolchain(
+  emit: (line: string) => void
+): Promise<void> {
+  emit('[esp32] detecting Python…')
+  const installer = await findPythonInstaller()
+  if (!installer) {
+    throw new Error(
+      process.platform === 'win32'
+        ? 'No Python detected. Install Python 3 from python.org (check "Add to PATH") and try again.'
+        : 'No Python detected on PATH. Install python3 via your package manager (apt/brew/dnf) and try again.'
+    )
+  }
+  emit(`[esp32] using ${installer.kind} via ${installer.cmd}`)
+
+  // If pio already exists we don't reinstall — only top up the platform.
+  const preExisting = await resolvePioCommand()
+  if (preExisting) {
+    emit('[esp32] platformio already present, skipping install step')
+  } else {
+    emit('[esp32] installing platformio (3–5 min on a fresh system)')
+    await runStreamed(
+      installer.cmd,
+      installer.args,
+      { timeoutMs: 15 * 60 * 1000 },
+      emit
+    )
+    if (installer.kind === 'pipx') {
+      // Permanently add pipx's bin dir to the user's shell PATH. Harmless
+      // if already present; swallow failure because some pipx variants
+      // don't ship this subcommand.
+      try {
+        await runStreamed(
+          'pipx',
+          ['ensurepath'],
+          { timeoutMs: 60 * 1000 },
+          emit
+        )
+      } catch {
+        emit('[esp32] pipx ensurepath skipped (non-fatal)')
+      }
+    }
+  }
+
+  const pio = await resolvePioCommand()
+  if (!pio) {
+    throw new Error(
+      'platformio installed but the `pio` command is not yet on PATH. ' +
+        'Restart Daisypatcher (or log out/in on Windows) and re-run the install.'
+    )
+  }
+
+  emit('[esp32] downloading ESP32-S3 platform (~250 MB, 5–15 min on first run)')
+  await runStreamed(
+    pio,
+    ['platform', 'install', 'espressif32'],
+    { timeoutMs: 30 * 60 * 1000 },
+    emit
+  )
+
+  emit('[esp32] done')
+}

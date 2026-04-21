@@ -108,6 +108,10 @@ interface SdkApi {
   onProgress(cb: (line: string) => void): Unsub
 }
 
+interface Esp32Api {
+  install(): Promise<{ success: boolean }>
+}
+
 interface CompileApi {
   build(input: BuildInput): Promise<BuildResult>
   onProgress(cb: (line: string) => void): Unsub
@@ -169,6 +173,7 @@ interface DeviceApi {
 
 interface MaybeDaisyApi {
   sdk?: SdkApi
+  esp32?: Esp32Api
   compile?: CompileApi
   flash?: FlashApi
   device?: DeviceApi
@@ -236,6 +241,14 @@ export interface CompileActions {
 
   refreshSdkStatus(): Promise<void>
   installSdk(): Promise<void>
+  /**
+   * ESP32-S3 toolchain installer — shells out via IPC to the main process,
+   * which uses pipx (preferred) or `python -m pip install --user` to fetch
+   * platformio, then pre-installs the espressif32 platform so the first
+   * compile doesn't stall on a ~250 MB download inside `pio run`. Progress
+   * is streamed over the same `sdk` log channel.
+   */
+  installEsp32Toolchain(): Promise<void>
   build(): Promise<void>
   detectDevice(): Promise<void>
   /**
@@ -431,6 +444,39 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
         append({
           stream: 'error',
           text: `[sdk] install failed: ${msg}`,
+          t: Date.now()
+        })
+        set({ sdkInstallError: msg })
+      } finally {
+        set({ sdkInstalling: false })
+      }
+    },
+
+    /**
+     * Shares `sdkInstalling` / `sdkInstallError` state with the libDaisy flow.
+     * The modal already keys off those flags — target-awareness lives in the
+     * modal, not here — so the same busy / error UI works for both paths.
+     */
+    async installEsp32Toolchain() {
+      const esp32 = api().esp32
+      if (!esp32) {
+        const msg = 'ESP32 bridge unavailable (preload missing window.daisy.esp32)'
+        append({ stream: 'error', text: `[esp32] ${msg}`, t: Date.now() })
+        set({ sdkInstallError: msg })
+        return
+      }
+      if (get().sdkInstalling) return
+      set({ sdkInstalling: true, sdkInstallError: null, logPanelOpen: true })
+      append({ stream: 'sdk', text: '[esp32] install started', t: Date.now() })
+      try {
+        await esp32.install()
+        append({ stream: 'sdk', text: '[esp32] install complete', t: Date.now() })
+        await get().refreshSdkStatus()
+      } catch (err) {
+        const msg = (err as Error).message || String(err)
+        append({
+          stream: 'error',
+          text: `[esp32] install failed: ${msg}`,
           t: Date.now()
         })
         set({ sdkInstallError: msg })

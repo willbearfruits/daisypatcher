@@ -162,6 +162,11 @@ const api = {
     onProgress: (cb: (line: string) => void): (() => void) =>
       onChannel('sdk:progress', cb)
   },
+  esp32: {
+    // Progress streams over the same `sdk:progress` channel — see main.
+    install: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('esp32:install')
+  },
   compile: {
     build: (input: BuildInput): Promise<BuildResult> =>
       ipcRenderer.invoke('build:run', input),

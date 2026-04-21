@@ -14,18 +14,18 @@ import type { WorkletEntry } from './registry'
 export const VISUAL_REGISTRY: Partial<Record<NodeKind, WorkletEntry>> = {
   scope: {
     processorName: 'dp-scope',
-    moduleUrl: new URL('./scope.worklet.ts', import.meta.url)
+    moduleUrl: new URL('./scope.worklet.js', import.meta.url)
   },
   vu: {
     processorName: 'dp-vu',
-    moduleUrl: new URL('./vu.worklet.ts', import.meta.url)
+    moduleUrl: new URL('./vu.worklet.js', import.meta.url)
   },
   spectrum_scope: {
     processorName: 'dp-spectrum-scope',
-    moduleUrl: new URL('./spectrum_scope.worklet.ts', import.meta.url)
+    moduleUrl: new URL('./spectrum_scope.worklet.js', import.meta.url)
   },
   oled: {
     processorName: 'dp-oled',
-    moduleUrl: new URL('./oled.worklet.ts', import.meta.url)
+    moduleUrl: new URL('./oled.worklet.js', import.meta.url)
   }
 }

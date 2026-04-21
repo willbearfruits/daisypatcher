@@ -1,22 +1,25 @@
 {
   "name": "daisypatcher",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Visual node-based patcher for the Electro-Smith Daisy Seed — emulate, compile, flash.",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
+    "build:worklets": "node scripts/build-worklets.mjs",
+    "predev": "npm run build:worklets",
+    "prebuild": "npm run build:worklets",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "dist": "electron-vite build && electron-builder",
-    "dist:linux": "electron-vite build && electron-builder --linux",
-    "dist:win": "electron-vite build && electron-builder --win",
-    "dist:all": "electron-vite build && electron-builder -lw",
-    "publish": "electron-vite build && electron-builder --publish always"
+    "dist": "npm run build:worklets && electron-vite build && electron-builder",
+    "dist:linux": "npm run build:worklets && electron-vite build && electron-builder --linux",
+    "dist:win": "npm run build:worklets && electron-vite build && electron-builder --win",
+    "dist:all": "npm run build:worklets && electron-vite build && electron-builder -lw",
+    "publish": "npm run build:worklets && electron-vite build && electron-builder --publish always"
   },
   "build": {
     "appId": "io.daisypatcher.app",
@@ -31,8 +34,19 @@
     ],
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64", "arm64"] },
-        { "target": "flatpak", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "flatpak",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "category": "AudioVideo;Audio",
       "synopsis": "Visual node-based patcher for Daisy Seed and ESP32-S3",
@@ -56,8 +70,18 @@
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -104,6 +128,7 @@
     "electron": "^33.2.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^2.3.0",
+    "esbuild": "^0.28.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.7.2",

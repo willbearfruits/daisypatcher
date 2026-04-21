@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { getSdkStatus, installSdk, WORKSPACE } from './sdk'
+import { getSdkStatus, installSdk, installEsp32Toolchain, WORKSPACE } from './sdk'
 import { buildProject, isInside, type BuildInput } from './buildService'
 import { detectFlashDevices, flashBinary } from './flashService'
 import { detectAllBoards } from './deviceDetection'
@@ -109,6 +109,20 @@ function registerIpcHandlers(): void {
       // Re-throw so ipcRenderer.invoke rejects and the renderer's
       // `catch` sees a real error. Previously we returned {success:false}
       // silently which made the modal look like nothing happened.
+      throw new Error(msg)
+    }
+  })
+
+  // ESP32 toolchain install reuses the sdk:progress channel so the modal's
+  // existing log-tail UI picks up output without a second subscription path.
+  ipcMain.handle('esp32:install', async (evt) => {
+    const emit = emitter('sdk:progress', evt)
+    try {
+      await installEsp32Toolchain(emit)
+      return { success: true }
+    } catch (err) {
+      const msg = (err as Error).message || String(err)
+      emit(`[error] ${msg}`)
       throw new Error(msg)
     }
   })
