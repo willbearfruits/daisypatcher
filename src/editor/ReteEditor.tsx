@@ -58,9 +58,32 @@ type AreaExtra = ReactArea2D<Schemes>
 
 /* ---------- public API ---------- */
 
+/** Lightweight snapshot of the area-plugin transform, consumed by the minimap. */
+export interface AreaTransformSnapshot {
+  /** Translation in container (screen) pixels. */
+  x: number
+  y: number
+  /** Zoom factor (1 = 100%). */
+  k: number
+  /** Current container (viewport) size in CSS pixels. */
+  containerW: number
+  containerH: number
+}
+
 export interface ReteEditorHandle {
   /** Convert a palette drop at (clientX, clientY) into an `addNode` call. */
   onDropNode: (kind: NodeKind, clientX: number, clientY: number) => void
+  /**
+   * Subscribe to pan/zoom/resize changes. The callback fires immediately with
+   * the current transform and again on every subsequent translate/zoom.
+   * Returns an unsubscribe function.
+   */
+  subscribeTransform: (cb: (t: AreaTransformSnapshot) => void) => () => void
+  /**
+   * Pan the area so that the given world coordinate is at the container
+   * center. Used by the minimap's click-to-jump.
+   */
+  centerOn: (worldX: number, worldY: number) => void
 }
 
 export interface ReteEditorProps {
@@ -144,6 +167,13 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
   /** Last graph we successfully mirrored into Rete. Used by the diff. */
   const lastGraphRef = useRef<AudioGraph | null>(null)
 
+  /**
+   * Transform-change subscribers (minimap, etc). Populated via the handle's
+   * `subscribeTransform`; fired from the area pipe on translate/zoom and
+   * from a ResizeObserver when the container itself changes size.
+   */
+  const transformListenersRef = useRef<Set<(t: AreaTransformSnapshot) => void>>(new Set())
+
   /* ----- mount / teardown ----- */
   useEffect(() => {
     const container = containerRef.current
@@ -216,6 +246,26 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
     accumulatorRef.current = accumulator
     AreaExtensions.simpleNodesOrder(area)
 
+    /* ----- transform-change plumbing for external consumers (minimap) ----- */
+    const readTransform = (): AreaTransformSnapshot => {
+      const t = area.area.transform
+      const rect = container.getBoundingClientRect()
+      return { x: t.x, y: t.y, k: t.k, containerW: rect.width, containerH: rect.height }
+    }
+    const emitTransform = (): void => {
+      if (transformListenersRef.current.size === 0) return
+      const snap = readTransform()
+      for (const cb of transformListenersRef.current) {
+        try {
+          cb(snap)
+        } catch {
+          /* subscriber errors must not break the pipe */
+        }
+      }
+    }
+    const resizeObserver = new ResizeObserver(() => emitTransform())
+    resizeObserver.observe(container)
+
     /* ----- Rete -> store wiring ----- */
 
     // Track node translations. Also open/close the store transaction on
@@ -252,6 +302,10 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
           useEditorStore.getState().endTransaction()
           dragOpenRef.current = false
         }
+      }
+
+      if (ctx.type === 'translated' || ctx.type === 'zoomed') {
+        emitTransform()
       }
 
       if (ctx.type === 'pointerdown') {
@@ -371,6 +425,27 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
       onDropNode: (kind, clientX, clientY) => {
         const pos = clientToCanvas(container, area.area.transform, clientX, clientY)
         useEditorStore.getState().addNode(kind, pos)
+      },
+      subscribeTransform: (cb) => {
+        transformListenersRef.current.add(cb)
+        // Fire immediately so the caller gets the current transform on mount.
+        try {
+          cb(readTransform())
+        } catch {
+          /* ignore */
+        }
+        return () => {
+          transformListenersRef.current.delete(cb)
+        }
+      },
+      centerOn: (worldX, worldY) => {
+        const rect = container.getBoundingClientRect()
+        const k = area.area.transform.k
+        // container -> world: world = (screen - t) / k, so for world to land
+        // at center, translate = center - world * k.
+        const tx = rect.width / 2 - worldX * k
+        const ty = rect.height / 2 - worldY * k
+        void area.area.translate(tx, ty)
       }
     }
     if (onReady) onReady(handle)
@@ -385,6 +460,8 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
         dragOpenRef.current = false
       }
       unsubscribe()
+      resizeObserver.disconnect()
+      transformListenersRef.current.clear()
       accumulatorRef.current?.destroy()
       area.destroy()
       editorRef.current = null
@@ -401,7 +478,10 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
   useImperativeHandle(
     ref,
     (): ReteEditorHandle => ({
-      onDropNode: (kind, x, y) => currentHandleRef.current?.onDropNode(kind, x, y)
+      onDropNode: (kind, x, y) => currentHandleRef.current?.onDropNode(kind, x, y),
+      subscribeTransform: (cb) =>
+        currentHandleRef.current?.subscribeTransform(cb) ?? (() => undefined),
+      centerOn: (x, y) => currentHandleRef.current?.centerOn(x, y)
     }),
     []
   )

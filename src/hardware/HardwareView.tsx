@@ -54,6 +54,13 @@ import type { BoardPhysicalPinPosition, BoardPinout } from './boardPinout'
 import { HARDWARE_DRAG_MIME } from './HardwarePalette'
 import { HARDWARE_ICON } from './hardwareIcons'
 import styles from './HardwareView.module.css'
+import activityStyles from './HardwareActivity.module.css'
+import {
+  HardwareActivityProvider,
+  useHardwareActivity,
+  type ActivityFrame
+} from './HardwareActivity'
+import { BindingLabels } from './BindingLabels'
 
 /* =====================================================================
  * Canvas geometry (SVG user units).
@@ -266,12 +273,21 @@ interface WiringDrag {
  * ===================================================================== */
 
 export function HardwareView() {
+  return (
+    <HardwareActivityProvider>
+      <HardwareViewInner />
+    </HardwareActivityProvider>
+  )
+}
+
+function HardwareViewInner() {
   const components = useEditorStore((s) => s.hardware.components)
   const board = useEditorStore((s) => s.hardware.board)
   const selectedId = useEditorStore((s) => s.selectedHardwareId)
   const selectHardware = useEditorStore((s) => s.selectHardware)
   const addHardware = useEditorStore((s) => s.addHardware)
   const setHardwarePin = useEditorStore((s) => s.setHardwarePin)
+  const [showLabels, setShowLabels] = useState(true)
 
   const rootRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -473,8 +489,22 @@ export function HardwareView() {
           pinCoordMap={pinCoordMap}
         />
 
+        {showLabels ? (
+          <BindingLabels
+            components={components}
+            pinCoordMap={pinCoordMap}
+            boardX={BOARD_X}
+            boardW={BOARD_W}
+          />
+        ) : null}
+
         {drag ? <WiringPreview drag={drag} pinCoordMap={pinCoordMap} /> : null}
       </svg>
+
+      <HardwareToolbar
+        showLabels={showLabels}
+        onToggleLabels={() => setShowLabels((v) => !v)}
+      />
 
       <div className={styles.overlay}>
         {components.map((c) => (
@@ -498,6 +528,45 @@ export function HardwareView() {
           <span>drag a component from the left onto the board</span>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/* =====================================================================
+ * Toolbar (top-right floating). Currently hosts the "binding labels"
+ * toggle. Kept minimal — future buttons (grid, zoom reset, etc.) slot in.
+ * ===================================================================== */
+
+function HardwareToolbar({
+  showLabels,
+  onToggleLabels
+}: {
+  showLabels: boolean
+  onToggleLabels: () => void
+}) {
+  return (
+    <div className={activityStyles.toolbar}>
+      <button
+        type="button"
+        className={activityStyles.toolbarButton}
+        data-active={showLabels ? 'true' : 'false'}
+        onClick={onToggleLabels}
+        title={showLabels ? 'Hide binding labels' : 'Show binding labels'}
+      >
+        <svg
+          className={activityStyles.toolbarIcon}
+          viewBox="0 0 16 16"
+          aria-hidden
+        >
+          <path
+            d="M2 4h5l2 2h5v6H2z"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          <line x1="5" y1="9" x2="11" y2="9" strokeLinecap="round" />
+        </svg>
+        <span>labels</span>
+      </button>
     </div>
   )
 }
@@ -1348,6 +1417,24 @@ function HardwareCard({
     [comp.position, onSelect]
   )
 
+  // Per-frame activity hook. Mutates CSS variables directly on the card
+  // root so no render churn happens per frame. Decays the flash ring over
+  // ~200ms after a rising edge.
+  const activityFlashUntilRef = useRef<number>(0)
+  useHardwareActivity(comp.id, (frame: ActivityFrame) => {
+    const el = rootRef.current
+    if (!el) return
+    const level = frame.level
+    el.style.setProperty('--hw-activity-level', level.toFixed(3))
+    if (frame.risingEdge) {
+      activityFlashUntilRef.current = frame.tMs + 220
+    }
+    const now = frame.tMs
+    const until = activityFlashUntilRef.current
+    const flash = until > now ? Math.max(0, (until - now) / 220) : 0
+    el.style.setProperty('--hw-activity-flash', flash.toFixed(3))
+  })
+
   // Convert CANVAS-space position to client pixels via the SVG's CTM so
   // the card always lines up with the SVG's letterboxed viewport regardless
   // of container size. Recompute on mount / resize / position change.
@@ -1388,7 +1475,7 @@ function HardwareCard({
   return (
     <div
       ref={rootRef}
-      className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
+      className={`${styles.card} ${activityStyles.card} ${selected ? styles.cardSelected : ''}`}
       style={{
         left: `${screen.left}px`,
         top: `${screen.top}px`,
@@ -1397,6 +1484,22 @@ function HardwareCard({
       }}
       onMouseDown={onMouseDown}
     >
+      {/* Live-activity overlays, per kind. Driven by CSS custom props
+          set via useHardwareActivity. Pointer-events stay off so drags/
+          popovers continue to work through these layers. */}
+      {comp.kind === 'led' ? (
+        <>
+          <span className={activityStyles.ledGlow} aria-hidden />
+          <span className={activityStyles.ledEmitter} aria-hidden />
+        </>
+      ) : null}
+      {comp.kind === 'button' || comp.kind === 'gate_jack' ? (
+        <span className={activityStyles.buttonPressed} aria-hidden />
+      ) : null}
+      {comp.kind === 'midi_jack' || comp.kind === 'i2s_codec' ? (
+        <span className={activityStyles.jackActivity} aria-hidden />
+      ) : null}
+
       <span className={styles.cardIcon}>
         <Icon />
       </span>

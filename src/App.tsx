@@ -28,6 +28,8 @@ import { useSerialStore } from '@/state/serialState'
 // first-paint work are captured even before any UI subscribes.
 import '@/state/updateState'
 import { ReteEditor, type ReteEditorHandle } from '@/editor/ReteEditor'
+import { SignalLegend } from '@/editor/SignalLegend'
+import { Minimap } from '@/editor/Minimap'
 import { createAudioEngine } from '@/audio'
 import { AudioEngineProvider } from '@/audio/AudioEngineContext'
 import { useGlobalKeybindings } from '@/hooks/useGlobalKeybindings'
@@ -205,6 +207,8 @@ function MainShell({ reteRef }: { reteRef: React.RefObject<ReteEditorHandle | nu
               }
             >
               <ReteEditor ref={reteRef} />
+              <Minimap reteRef={reteRef} />
+              <SignalLegend />
             </CanvasShell>
           </div>
           {/* Hardware canvas — fresh mount each time; its state lives in the store. */}

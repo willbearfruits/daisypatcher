@@ -1,0 +1,90 @@
+/*
+ * Signal-type color legend. Lives in the bottom-left corner of the canvas,
+ * above the status bar. Tokenized — no hex values here.
+ */
+
+.root {
+  position: absolute;
+  bottom: var(--dp-space-3);
+  right: var(--dp-space-3);
+  z-index: 2;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-1) var(--dp-space-2);
+  background: color-mix(in srgb, var(--dp-surface-elevated) 88%, transparent);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-sm);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  letter-spacing: 0.04em;
+  user-select: none;
+  transition: opacity var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.root.collapsed {
+  padding: var(--dp-space-1);
+  gap: var(--dp-space-1);
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dp-space-1);
+  padding: 0 var(--dp-space-1);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  flex: 0 0 auto;
+}
+
+.item.audio  { color: var(--dp-signal-audio); }
+.item.cv     { color: var(--dp-signal-cv); }
+.item.gate   { color: var(--dp-signal-gate); }
+.item.clock  { color: var(--dp-signal-clock); }
+
+.label {
+  color: var(--dp-text-muted);
+  text-transform: lowercase;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: var(--dp-space-1);
+  background: transparent;
+  color: var(--dp-text-dim);
+  border: none;
+  border-radius: var(--dp-radius-xs);
+  cursor: pointer;
+  transition: color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.toggle:hover {
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+}
+
+.toggle svg {
+  width: 10px;
+  height: 10px;
+  transition: transform var(--dp-motion-fast) var(--dp-ease);
+}
+
+.root.collapsed .toggle svg {
+  transform: rotate(180deg);
+}

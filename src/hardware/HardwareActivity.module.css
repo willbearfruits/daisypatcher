@@ -1,0 +1,165 @@
+/*
+ * Per-component activity visuals driven by CSS custom properties the
+ * HardwareActivity hooks set imperatively per frame. None of these rules
+ * use React state; they just respond to `--hw-activity-level` (0..1) and
+ * `--hw-activity-flash` (0 or 1, used for rising-edge blinks).
+ */
+
+.card {
+  position: relative;
+  /* Fallback values so the card looks correct even without activity. */
+  --hw-activity-level: 0;
+  --hw-activity-flash: 0;
+}
+
+/* --- LED glow. `.activityLed` is an additional layer sitting under the
+ *     card icon. The alpha + blur both scale with the activity level so
+ *     bright signals bloom, silent signals sit at a dim idle. -------- */
+
+.ledGlow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 50% 36%,
+    color-mix(
+      in srgb,
+      var(--dp-signal-audio) calc(var(--hw-activity-level) * 80% + 8%),
+      transparent
+    ) 0%,
+    transparent 55%
+  );
+  filter: blur(calc(var(--hw-activity-level) * 6px));
+  opacity: calc(0.35 + var(--hw-activity-level) * 0.65);
+  transition: opacity var(--dp-motion-fast) var(--dp-ease);
+}
+
+/* Emitter dot pulses for LEDs — sits on top of the icon for that
+   in-your-face "I'm blinking" feel. */
+.ledEmitter {
+  position: absolute;
+  top: calc(var(--dp-space-2) + 2px);
+  right: calc(var(--dp-space-2) + 2px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(
+    in srgb,
+    var(--dp-signal-audio) calc(30% + var(--hw-activity-level) * 70%),
+    var(--dp-surface-sunken)
+  );
+  box-shadow: 0 0 calc(2px + var(--hw-activity-level) * 12px)
+    color-mix(in srgb, var(--dp-signal-audio) 80%, transparent);
+  pointer-events: none;
+}
+
+/* --- Button / gate flash. On a rising edge we set --hw-activity-flash=1
+ *     and CSS animates a brief ring. ---------------------------------- */
+
+.buttonPressed {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--dp-signal-gate) calc(var(--hw-activity-flash) * 70%), transparent)
+    inset;
+  transition: box-shadow var(--dp-motion-fast) var(--dp-ease);
+}
+
+/* --- MIDI / I2S jack activity indicator. Tiny dot on the card corner. */
+
+.jackActivity {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(
+    in srgb,
+    var(--dp-signal-gate) calc(20% + var(--hw-activity-flash) * 80%),
+    var(--dp-surface-sunken)
+  );
+  box-shadow: 0 0 calc(1px + var(--hw-activity-flash) * 8px)
+    color-mix(in srgb, var(--dp-signal-gate) 70%, transparent);
+  pointer-events: none;
+  transition:
+    background var(--dp-motion-fast) var(--dp-ease),
+    box-shadow var(--dp-motion-fast) var(--dp-ease);
+}
+
+/* --- Knob rotation. The indicator needle is a DIV we rotate via a
+ *     CSS variable set on the card. 0..1 -> -135deg..+135deg. ------- */
+
+.knobIndicator {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 18px;
+  background: var(--dp-accent);
+  border-radius: 2px;
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -100%)
+    rotate(calc((var(--hw-activity-level) - 0.5) * 270deg));
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* --- Toolbar: show/hide labels button etc. -------------------------- */
+
+.toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--dp-surface-elevated) 85%, transparent);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  box-shadow: var(--dp-shadow-sm);
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.toolbarButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--dp-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--dp-radius-xs);
+  cursor: pointer;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.toolbarButton:hover {
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+}
+
+.toolbarButton[data-active='true'] {
+  color: var(--dp-accent);
+  border-color: color-mix(in srgb, var(--dp-accent) 50%, transparent);
+  background: color-mix(in srgb, var(--dp-accent) 10%, transparent);
+}
+
+.toolbarIcon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+}

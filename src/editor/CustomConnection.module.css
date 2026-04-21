@@ -38,3 +38,15 @@
     opacity: 1;
   }
 }
+
+/*
+ * Clock-cable traveling dot. Rendered as a tiny circle whose position is
+ * driven by an <animateMotion> child; color inherits from the cable stroke
+ * via `currentColor` so it picks up the signal-kind variable automatically.
+ */
+.clockDot {
+  fill: currentColor;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px currentColor);
+  opacity: 0.95;
+}
