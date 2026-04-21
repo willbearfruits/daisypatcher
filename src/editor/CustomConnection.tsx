@@ -40,8 +40,6 @@ type Props<S extends ClassicScheme> = {
 /** Baseline (idle) cable opacity — matches the skin token default visually. */
 const AUDIO_BASE_OPACITY = 0.55
 const AUDIO_PEAK_OPACITY = 1.0
-const AUDIO_BASE_BLUR = 1.5
-const AUDIO_PEAK_BLUR = 4
 
 /** Gate pulse duration (ms) once a rising edge is detected. */
 const GATE_PULSE_MS = 180
@@ -105,7 +103,6 @@ export function CustomConnection<S extends ClassicScheme>(
   // re-renders. Keeping React out of the animation loop is important —
   // every connection would otherwise re-render at rAF rate.
   const mainPathRef = React.useRef<SVGPathElement | null>(null)
-  const blurRef = React.useRef<SVGFEGaussianBlurElement | null>(null)
   const clockDotRef = React.useRef<SVGCircleElement | null>(null)
   const animateMotionRef = React.useRef<SVGAnimateMotionElement | null>(null)
   const animRef = React.useRef<AnimState>(initialAnim())
@@ -141,9 +138,7 @@ export function CustomConnection<S extends ClassicScheme>(
 
         const t = Math.min(1, anim.rmsSmoothed * 2.2)
         const opacity = AUDIO_BASE_OPACITY + (AUDIO_PEAK_OPACITY - AUDIO_BASE_OPACITY) * t
-        const blur = AUDIO_BASE_BLUR + (AUDIO_PEAK_BLUR - AUDIO_BASE_BLUR) * t
         if (mainPathRef.current) mainPathRef.current.style.opacity = String(opacity)
-        if (blurRef.current) blurRef.current.setAttribute('stdDeviation', blur.toFixed(2))
       } else if (signal === 'gate') {
         // Edge detect: look for any sample that crosses 0.5 upward in the
         // frame. We scan forward from the prev-last sample.
@@ -163,9 +158,7 @@ export function CustomConnection<S extends ClassicScheme>(
         const t = dt < GATE_PULSE_MS ? 1 - dt / GATE_PULSE_MS : 0
         anim.gatePulse = t
         const opacity = AUDIO_BASE_OPACITY + (AUDIO_PEAK_OPACITY - AUDIO_BASE_OPACITY) * t
-        const blur = AUDIO_BASE_BLUR + (AUDIO_PEAK_BLUR - AUDIO_BASE_BLUR) * t
         if (mainPathRef.current) mainPathRef.current.style.opacity = String(opacity)
-        if (blurRef.current) blurRef.current.setAttribute('stdDeviation', blur.toFixed(2))
       } else if (signal === 'clock') {
         // Detect rising edges and update the period estimate.
         let prev = anim.prevSample
@@ -205,7 +198,6 @@ export function CustomConnection<S extends ClassicScheme>(
       tap.stop()
       // Reset any live-mutated attributes so the cable snaps back to baseline.
       if (mainPathRef.current) mainPathRef.current.style.opacity = ''
-      if (blurRef.current) blurRef.current.setAttribute('stdDeviation', '2')
       animRef.current = initialAnim()
     }
   }, [engine, sourceId, signal, isPseudo])
@@ -219,24 +211,17 @@ export function CustomConnection<S extends ClassicScheme>(
   const strokeColor = signal ? signalColorVar(signal) : 'var(--dp-text-muted)'
   const showClockDot = signal === 'clock' && !isPseudo
 
-  // Stable per-cable filter id so multiple cables don't collide on a global
-  // `#dp-cable-glow`. That matters because different cables want different
-  // stdDeviation values driven by their own tap state.
-  const filterId = React.useMemo(
-    () => `dp-cable-glow-${Math.random().toString(36).slice(2, 10)}`,
-    []
-  )
-
   return (
     <svg className={styles.svg} data-testid="connection">
       <defs>
-        <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur
-            ref={blurRef}
-            in="SourceGraphic"
-            stdDeviation="2"
-            result="blur"
-          />
+        {/*
+         * Single shared filter id matching the CSS rule in CustomConnection.module.css.
+         * Each connection's SVG has its own copy; filter-url resolution is scoped to
+         * the containing SVG so there's no cross-cable bleed. We don't per-cable
+         * animate blur any more — only opacity — so a fixed id is sufficient.
+         */}
+        <filter id="dp-cable-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
@@ -247,7 +232,7 @@ export function CustomConnection<S extends ClassicScheme>(
         ref={mainPathRef}
         className={`${styles.path} ${isPseudo ? styles['path-pseudo'] : ''}`}
         d={d}
-        style={{ color: strokeColor, filter: `url(#${filterId})` }}
+        style={{ color: strokeColor }}
       />
       {showClockDot ? (
         <circle
