@@ -1,6 +1,6 @@
 {
   "name": "daisypatcher",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Visual node-based patcher for the Electro-Smith Daisy Seed — emulate, compile, flash.",
   "private": true,
   "type": "module",
