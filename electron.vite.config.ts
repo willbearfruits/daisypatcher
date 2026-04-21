@@ -51,6 +51,16 @@ export default defineConfig({
     plugins: [react()],
     build: {
       outDir: 'out/renderer',
+      // By default Vite inlines assets under 4 KB as base64 data: URLs. For
+      // AudioWorklet files that's a production-breaking bug: Chromium
+      // enforces `script-src` (not `worker-src`) on `audioWorklet.addModule`
+      // calls, and the CSP below lists `script-src 'self'` — data: URLs are
+      // rejected and every worklet silently fails to register. Force
+      // worklets to be emitted as real hashed .js files that 'self' covers.
+      assetsInlineLimit: (filePath) => {
+        if (filePath.endsWith('.worklet.js')) return false
+        return undefined
+      },
       rollupOptions: {
         input: { index: resolve(__dirname, 'index.html') }
       }
