@@ -263,7 +263,11 @@ ${args.processLines.join('\n')}
 }
 
 int main(void) {
-    hw.Init();
+    // boost=true moves the H7 to 480MHz so the SAI MCLK ratio lands cleanly
+    // on the AK4556's expected bit-clock. Without it the codec DAC can end
+    // up silent or VERY quiet even though the callback runs — validated
+    // with an LED-in-callback test on 2026-04-21.
+    hw.Init(true);
     hw.SetAudioBlockSize(${Math.max(1, args.blockSize | 0) || 48});
     float sr = hw.AudioSampleRate();
     (void)sr;

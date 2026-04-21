@@ -264,7 +264,10 @@ const fm_op: NodeEmitter = {
   }
 }
 
-// Simpler: re-do fm_op without the awkward block. Use static outside.
+// 1:1 port of `src/audio/worklets/fm_op.worklet.ts`. Phase is tracked in
+// RADIANS so modulation and feedback sum cleanly before the sin() call —
+// that matches the worklet (prior version tracked phase in 0..1 which made
+// the mod/feedback contribution the wrong scale and produced harsh noise).
 const fm_op_clean: NodeEmitter = {
   declare: (ctx) => {
     const v = ctx.varName(ctx.node.id)
@@ -281,39 +284,72 @@ const fm_op_clean: NodeEmitter = {
     const amp = numParam(ctx.node, 'amplitude', 0.7)
     const fb = numParam(ctx.node, 'feedback', 0)
     return (
+      `    float ${out};\n` +
       `    {\n` +
+      `        const float TWO_PI = 2.f * (float)M_PI;\n` +
       `        float f = ${freq} * ${ratio} * powf(2.f, ${pitchCv});\n` +
-      `        ${v}_phase += f / sr;\n` +
-      `        if (${v}_phase >= 1.f) ${v}_phase -= 1.f;\n` +
-      `        float ph = ${v}_phase + (${mod}) + ${v}_last * ${fb};\n` +
-      `        ${v}_last = sinf(ph * 2.f * (float)M_PI);\n` +
-      `    }\n` +
-      `    float ${out} = ${v}_last * ${amp};\n`
+      `        if (f < 0.f) f = 0.f;\n` +
+      `        float nyq = sr * 0.5f;\n` +
+      `        if (f > nyq) f = nyq;\n` +
+      `        float inc = TWO_PI * f / sr;\n` +
+      `        float y = sinf(${v}_phase + (${mod}) + ${fb} * ${v}_last) * ${amp};\n` +
+      `        if (!isfinite(y)) y = 0.f;\n` +
+      `        if (y > 1.f) y = 1.f; else if (y < -1.f) y = -1.f;\n` +
+      `        ${v}_last = y;\n` +
+      `        ${v}_phase += inc;\n` +
+      `        if (${v}_phase >= TWO_PI) ${v}_phase -= TWO_PI;\n` +
+      `        else if (${v}_phase < 0.f) ${v}_phase += TWO_PI;\n` +
+      `        ${out} = y;\n` +
+      `    }\n`
     )
   }
 }
 
+// 1:1 port of `src/audio/worklets/fm2.worklet.ts`. Two sine operators: a
+// modulator phase-modulates the carrier. Carrier phase, mod phase kept as
+// file-scope float state so they persist across callback invocations.
+// (DaisySP's Fm2 was previously used here but produced audible noise for
+// the user — porting the worklet math directly removes that surprise.)
 const fm2: NodeEmitter = {
-  declare: (ctx) => `Fm2 ${ctx.varName(ctx.node.id)};`,
-  init: (ctx) => {
+  declare: (ctx) => {
     const v = ctx.varName(ctx.node.id)
-    return [
-      `    ${v}.Init(sr);`,
-      `    ${v}.SetFrequency(${numParam(ctx.node, 'frequency', 220)});`,
-      `    ${v}.SetRatio(${numParam(ctx.node, 'mod_ratio', 2)});`,
-      `    ${v}.SetIndex(${numParam(ctx.node, 'mod_index', 3)});`
-    ].join('\n')
+    return `float ${v}_carrier_phase = 0.f;\nfloat ${v}_mod_phase = 0.f;`
   },
+  init: () => '',
   process: (ctx) => {
     const v = ctx.varName(ctx.node.id)
     const out = ctx.outputVar(ctx.node.id, 'out')
     const pitchCv = ctx.inputExpr(ctx.node.id, 'pitch_cv', '0.f')
     const ampCv = ctx.inputExpr(ctx.node.id, 'amp_cv', '1.f')
     const freq = numParam(ctx.node, 'frequency', 220)
+    const modRatio = numParam(ctx.node, 'mod_ratio', 2)
+    const modIndex = numParam(ctx.node, 'mod_index', 3)
     const amp = numParam(ctx.node, 'carrier_amp', 0.7)
     return (
-      `    ${v}.SetFrequency(${freq} * powf(2.f, ${pitchCv}));\n` +
-      `    float ${out} = ${v}.Process() * ${amp} * ${ampCv};\n`
+      `    float ${out};\n` +
+      `    {\n` +
+      `        const float TWO_PI = 2.f * (float)M_PI;\n` +
+      `        float cvPitch = ${pitchCv};\n` +
+      `        float carrierFreq = ${freq} * powf(2.f, cvPitch);\n` +
+      `        if (carrierFreq < 0.f) carrierFreq = 0.f;\n` +
+      `        float nyq = sr * 0.5f;\n` +
+      `        if (carrierFreq > nyq) carrierFreq = nyq;\n` +
+      `        float modFreq = carrierFreq * ${modRatio};\n` +
+      `        if (modFreq > nyq) modFreq = nyq;\n` +
+      `        float cInc = TWO_PI * carrierFreq / sr;\n` +
+      `        float mInc = TWO_PI * modFreq / sr;\n` +
+      `        float mod = sinf(${v}_mod_phase) * ${modIndex};\n` +
+      `        float y = sinf(${v}_carrier_phase + mod) * (${amp}) * (${ampCv});\n` +
+      `        if (!isfinite(y)) y = 0.f;\n` +
+      `        if (y > 1.f) y = 1.f; else if (y < -1.f) y = -1.f;\n` +
+      `        ${v}_carrier_phase += cInc;\n` +
+      `        if (${v}_carrier_phase >= TWO_PI) ${v}_carrier_phase -= TWO_PI;\n` +
+      `        else if (${v}_carrier_phase < 0.f) ${v}_carrier_phase += TWO_PI;\n` +
+      `        ${v}_mod_phase += mInc;\n` +
+      `        if (${v}_mod_phase >= TWO_PI) ${v}_mod_phase -= TWO_PI;\n` +
+      `        else if (${v}_mod_phase < 0.f) ${v}_mod_phase += TWO_PI;\n` +
+      `        ${out} = y;\n` +
+      `    }\n`
     )
   }
 }
@@ -329,8 +365,11 @@ const wavetable: NodeEmitter = {
     const freq = numParam(ctx.node, 'frequency', 220)
     const amp = numParam(ctx.node, 'amplitude', 0.5)
     const morph = numParam(ctx.node, 'morph', 0)
-    // Four tables represented as mixes of harmonics.
+    // Four tables represented as mixes of harmonics. Declare `${out}`
+    // at callback scope (not inside the block) so downstream nodes can
+    // reference it.
     return (
+      `    float ${out};\n` +
       `    {\n` +
       `        float f = ${freq} * powf(2.f, ${pitchCv});\n` +
       `        ${v}_phase += f / sr;\n` +
@@ -347,8 +386,9 @@ const wavetable: NodeEmitter = {
       `        float frac = seg - (float)i;\n` +
       `        float a = (i <= 0) ? t0 : (i == 1) ? t1 : (i == 2) ? t2 : t3;\n` +
       `        float b = (i <= 0) ? t1 : (i == 1) ? t2 : t3;\n` +
-      `        float ${out} = (a + (b - a) * frac) * ${amp};\n`
-    ) + `    }\n`
+      `        ${out} = (a + (b - a) * frac) * ${amp};\n` +
+      `    }\n`
+    )
   }
 }
 
@@ -361,14 +401,16 @@ function drumEmitter(klass: string, template: '<>' | '' = ''): NodeEmitter {
       const out = ctx.outputVar(ctx.node.id, 'out')
       const trig = ctx.inputExpr(ctx.node.id, 'trigger', '0.f')
       const prev = `${v}_prev_trig`
+      // DaisySP drum voices expose `Trig()` (level-independent edge), not
+      // `SetTrigger(bool)`. We detect the rising edge of the input gate and
+      // call Trig() once per edge — matches the JS worklet's behavior.
       return (
         `    static float ${prev} = 0.f;\n` +
         `    float ${v}_tin = ${trig};\n` +
-        `    bool ${v}_edge = (${v}_tin > 0.5f) && (${prev} <= 0.5f);\n` +
+        `    bool ${v}_edge = (${v}_tin >= 0.5f) && (${prev} < 0.5f);\n` +
         `    ${prev} = ${v}_tin;\n` +
-        `    ${v}.SetSustain(0);\n` +
-        `    ${v}.SetTrigger(${v}_edge);\n` +
-        `    float ${out} = ${v}.Process(${v}_edge);\n`
+        `    if (${v}_edge) ${v}.Trig();\n` +
+        `    float ${out} = ${v}.Process(false);\n`
       )
     }
   }
@@ -964,7 +1006,7 @@ const randomNode: NodeEmitter = {
     return (
       `    {\n` +
       `        float ci = ${clk};\n` +
-      `        if (ci > 0.5f && ${v}_prev_clk <= 0.5f) ${v}_val = (${v}_rng.NextFloat() * 2.f - 1.f) * ${range};\n` +
+      `        if (ci > 0.5f && ${v}_prev_clk <= 0.5f) ${v}_val = (${v}_rng.GetFloat() * 2.f - 1.f) * ${range};\n` +
       `        ${v}_prev_clk = ci;\n` +
       `    }\n` +
       `    float ${out} = ${v}_val;\n`
@@ -982,11 +1024,11 @@ const dust: NodeEmitter = {
     return (
       `    {\n` +
       `        float p = ${density} / sr;\n` +
-      `        float r = ${v}_rng.NextFloat();\n` +
+      `        float r = ${v}_rng.GetFloat();\n` +
       `        float ${out} = (r < p) ? 1.f : 0.f;\n` +
       `        (void)${out};\n` +
       `    }\n` +
-      `    float ${out} = ((${v}_rng.NextFloat()) < (${density} / sr)) ? 1.f : 0.f;\n`
+      `    float ${out} = ((${v}_rng.GetFloat()) < (${density} / sr)) ? 1.f : 0.f;\n`
     )
   }
 }
@@ -999,7 +1041,7 @@ const dustClean: NodeEmitter = {
     const v = ctx.varName(ctx.node.id)
     const out = ctx.outputVar(ctx.node.id, 'out')
     const density = numParam(ctx.node, 'density', 5)
-    return `    float ${out} = (${v}_rng.NextFloat() < (${density} / sr)) ? 1.f : 0.f;\n`
+    return `    float ${out} = (${v}_rng.GetFloat() < (${density} / sr)) ? 1.f : 0.f;\n`
   }
 }
 
@@ -1363,6 +1405,116 @@ const freezeClean: NodeEmitter = {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Granulator — 1:1 port of `src/audio/worklets/granulator.worklet.ts`.
+// A ~4s circular capture buffer in SDRAM; at `density` Hz spawns a new
+// Hann-windowed grain reading back from a random-ish offset at a
+// pitch-shifted rate. Up to 8 simultaneous grains. Wet mixed with dry.
+// ---------------------------------------------------------------------------
+const granulator: NodeEmitter = {
+  declare: (ctx) => {
+    const v = ctx.varName(ctx.node.id)
+    // 4s @ 48kHz = 192000 floats = ~770 KB — comfortably in SDRAM.
+    return (
+      `constexpr size_t ${v}_BUF = 192000;\n` +
+      `constexpr size_t ${v}_MAX_GRAINS = 8;\n` +
+      `float ${v}_buf[${v}_BUF] DSY_SDRAM_BSS;\n` +
+      `size_t ${v}_w = 0;\n` +
+      `float ${v}_spawn_cd = 0.f;\n` +
+      `uint32_t ${v}_rng_state = 0x9e3779b9u;\n` +
+      `struct ${v}_Grain {\n` +
+      `    bool  active;\n` +
+      `    float pos;\n` +
+      `    float start;\n` +
+      `    float len;\n` +
+      `    float rate;\n` +
+      `};\n` +
+      `${v}_Grain ${v}_grains[${v}_MAX_GRAINS] = {};`
+    )
+  },
+  init: (ctx) => {
+    const v = ctx.varName(ctx.node.id)
+    return (
+      `    for (size_t zi = 0; zi < ${v}_BUF; zi++) ${v}_buf[zi] = 0.f;\n` +
+      `    for (size_t gi = 0; gi < ${v}_MAX_GRAINS; gi++) ${v}_grains[gi].active = false;`
+    )
+  },
+  process: (ctx) => {
+    const v = ctx.varName(ctx.node.id)
+    const out = ctx.outputVar(ctx.node.id, 'out')
+    const inExpr = ctx.inputExpr(ctx.node.id, 'in', '0.f')
+    const grainMs = numParam(ctx.node, 'grain_size', 80)
+    const density = numParam(ctx.node, 'density', 8)
+    const pitch = numParam(ctx.node, 'pitch', 0)
+    const jitter = numParam(ctx.node, 'jitter', 0.3)
+    const mix = numParam(ctx.node, 'mix', 1)
+    return (
+      `    float ${out};\n` +
+      `    {\n` +
+      `        const float TWO_PI = 2.f * (float)M_PI;\n` +
+      `        float x = ${inExpr};\n` +
+      `        // write into circular buffer\n` +
+      `        ${v}_buf[${v}_w] = x;\n` +
+      `        ${v}_w = (${v}_w + 1) % ${v}_BUF;\n` +
+      `        float grainSamples = (${grainMs} * 0.001f) * sr;\n` +
+      `        if (grainSamples < 1.f) grainSamples = 1.f;\n` +
+      `        float spawnInterval = sr / ((${density}) > 0.001f ? (${density}) : 0.001f);\n` +
+      `        ${v}_spawn_cd -= 1.f;\n` +
+      `        if (${v}_spawn_cd <= 0.f) {\n` +
+      `            // xorshift32 for cheap PRNG — not calling daisy::Random here\n` +
+      `            // because grain spawn runs at audio rate.\n` +
+      `            ${v}_rng_state ^= ${v}_rng_state << 13;\n` +
+      `            ${v}_rng_state ^= ${v}_rng_state >> 17;\n` +
+      `            ${v}_rng_state ^= ${v}_rng_state << 5;\n` +
+      `            float r0 = (float)${v}_rng_state * (1.f / 4294967296.f); // [0,1)\n` +
+      `            ${v}_rng_state ^= ${v}_rng_state << 13;\n` +
+      `            ${v}_rng_state ^= ${v}_rng_state >> 17;\n` +
+      `            ${v}_rng_state ^= ${v}_rng_state << 5;\n` +
+      `            float r1 = (float)${v}_rng_state * (1.f / 4294967296.f);\n` +
+      `            int slot = -1;\n` +
+      `            for (int s = 0; s < (int)${v}_MAX_GRAINS; s++) {\n` +
+      `                if (!${v}_grains[s].active) { slot = s; break; }\n` +
+      `            }\n` +
+      `            if (slot >= 0) {\n` +
+      `                float jit = (r0 * 2.f - 1.f) * (${jitter});\n` +
+      `                float back = grainSamples * (1.f + 2.f * (${jitter})) + r1 * (${jitter}) * (float)(${v}_BUF - (size_t)grainSamples - 2);\n` +
+      `                float start = (float)${v}_w - grainSamples - back;\n` +
+      `                while (start < 0.f) start += (float)${v}_BUF;\n` +
+      `                while (start >= (float)${v}_BUF) start -= (float)${v}_BUF;\n` +
+      `                float pitchJit = (${pitch}) + jit * 2.f;\n` +
+      `                float rate = powf(2.f, pitchJit / 12.f);\n` +
+      `                ${v}_grains[slot].active = true;\n` +
+      `                ${v}_grains[slot].pos = 0.f;\n` +
+      `                ${v}_grains[slot].start = start;\n` +
+      `                ${v}_grains[slot].len = grainSamples;\n` +
+      `                ${v}_grains[slot].rate = rate;\n` +
+      `            }\n` +
+      `            ${v}_spawn_cd += spawnInterval;\n` +
+      `        }\n` +
+      `        float wet = 0.f;\n` +
+      `        for (size_t s = 0; s < ${v}_MAX_GRAINS; s++) {\n` +
+      `            if (!${v}_grains[s].active) continue;\n` +
+      `            float pos = ${v}_grains[s].pos;\n` +
+      `            float len = ${v}_grains[s].len;\n` +
+      `            if (pos >= len) { ${v}_grains[s].active = false; continue; }\n` +
+      `            float readPos = ${v}_grains[s].start + pos;\n` +
+      `            while (readPos >= (float)${v}_BUF) readPos -= (float)${v}_BUF;\n` +
+      `            while (readPos < 0.f) readPos += (float)${v}_BUF;\n` +
+      `            size_t ri0 = (size_t)readPos;\n` +
+      `            float frac = readPos - (float)ri0;\n` +
+      `            size_t ri1 = (ri0 + 1) % ${v}_BUF;\n` +
+      `            float sample = ${v}_buf[ri0] * (1.f - frac) + ${v}_buf[ri1] * frac;\n` +
+      `            float env = 0.5f - 0.5f * cosf((TWO_PI * pos) / len);\n` +
+      `            wet += sample * env;\n` +
+      `            ${v}_grains[s].pos = pos + ${v}_grains[s].rate;\n` +
+      `        }\n` +
+      `        if (!isfinite(wet)) wet = 0.f;\n` +
+      `        ${out} = x * (1.f - (${mix})) + wet * (${mix});\n` +
+      `    }\n`
+    )
+  }
+}
+
 const pitch_shifter: NodeEmitter = {
   declare: (ctx) => `PitchShifter ${ctx.varName(ctx.node.id)};`,
   init: (ctx) => {
@@ -1587,6 +1739,9 @@ const oled: NodeEmitter = {
   declare: (ctx) => {
     const v = ctx.varName(ctx.node.id)
     const lines: string[] = []
+    // daisy_seed.h pulls in OledDisplay<> but not the SSD130x driver
+    // header — bring it in at file scope so the template arg resolves.
+    lines.push(`#include "dev/oled_ssd130x.h"`)
     lines.push(`using ${v}_Type = OledDisplay<SSD130xI2c128x64Driver>;`)
     lines.push(`${v}_Type ${v};`)
     for (const sock of OLED_INPUT_SOCKETS) {
@@ -1975,15 +2130,39 @@ function midiChannelNum(node: NodeInstance): number {
   return n - 1
 }
 
+// Shared prelude for any MIDI node — declares the USB MIDI handler and the
+// latched note/CC state used by _in_note and _in_cc. Any of the three MIDI
+// kinds may emit this; the #ifndef guard ensures one definition only.
+const MIDI_SHARED_DECL =
+  '#ifndef DP_MIDI_SHARED_DECL\n' +
+  '#define DP_MIDI_SHARED_DECL 1\n' +
+  'MidiUsbHandler midi;\n' +
+  '// MIDI note-in latched state (channel-filtered in main loop).\n' +
+  'volatile int midi_latched_note = -1;\n' +
+  'volatile float midi_latched_vel = 0.f;\n' +
+  'volatile float midi_latched_gate = 0.f;\n' +
+  '// MIDI CC table — written by the USB MIDI dispatcher.\n' +
+  'float midi_cc_table[128] = {0};\n' +
+  'bool midi_cc_received = false;\n' +
+  '#endif'
+
+// MidiHandler<>::Init() requires a Config argument. Build a default one
+// and call StartReceive() to begin accepting USB packets. Guarded so that
+// patches with multiple MIDI nodes don't double-init.
+const MIDI_SHARED_INIT =
+  '    {\n' +
+  '        static bool midi_inited = false;\n' +
+  '        if (!midi_inited) {\n' +
+  '            MidiUsbHandler::Config midi_cfg;\n' +
+  '            midi.Init(midi_cfg);\n' +
+  '            midi.StartReceive();\n' +
+  '            midi_inited = true;\n' +
+  '        }\n' +
+  '    }'
+
 const midi_in_note: NodeEmitter = {
-  declare: () => [
-    'MidiUsbHandler midi;',
-    '// MIDI note-in latched state (channel-filtered in main loop).',
-    'volatile int midi_latched_note = -1;',
-    'volatile float midi_latched_vel = 0.f;',
-    'volatile float midi_latched_gate = 0.f;'
-  ].join('\n'),
-  init: () => '    midi.Init();\n    midi.StartReceive();',
+  declare: () => MIDI_SHARED_DECL,
+  init: () => MIDI_SHARED_INIT,
   process: (ctx) => {
     const pitchOut = ctx.outputVar(ctx.node.id, 'pitch')
     const gateOut = ctx.outputVar(ctx.node.id, 'gate')
@@ -2000,10 +2179,8 @@ const midi_in_note: NodeEmitter = {
 }
 
 const midi_in_cc: NodeEmitter = {
-  declare: () =>
-    'static float midi_cc_table[128] = {0};\n' +
-    'static bool midi_cc_received = false;',
-  init: () => '',
+  declare: () => MIDI_SHARED_DECL,
+  init: () => MIDI_SHARED_INIT,
   process: (ctx) => {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const ccIdx = Math.max(0, Math.min(127, rawNum(ctx.node, 'cc', 1) | 0))
@@ -2016,9 +2193,10 @@ const midi_in_cc: NodeEmitter = {
 
 const midi_out_note: NodeEmitter = {
   declare: (ctx) =>
+    MIDI_SHARED_DECL + '\n' +
     `static uint32_t ${ctx.varName(ctx.node.id)}_last_gate = 0;\n` +
     `static int ${ctx.varName(ctx.node.id)}_active_note = -1;`,
-  init: () => '',
+  init: () => MIDI_SHARED_INIT,
   process: (ctx) => {
     const v = ctx.varName(ctx.node.id)
     const ch = midiChannelNum(ctx.node)
@@ -2315,7 +2493,7 @@ export const NODE_EMITTERS: Partial<Record<NodeKind, NodeEmitter>> = {
   ping_pong,
   stereo_widener,
   freeze: freezeClean,
-  granulator: makePassthrough('granulator not yet supported in codegen — passthrough'),
+  granulator,
   pitch_shifter,
   tremolo,
   vibrato,
@@ -2352,3 +2530,4 @@ void fm_op
 void dust
 void freeze
 void NOOP
+void makePassthrough

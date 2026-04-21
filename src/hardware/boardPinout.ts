@@ -30,9 +30,14 @@ import type { Esp32PhysicalPinPosition } from './esp32s3Pinout'
 /** Unified physical-pin-position shape. */
 export interface BoardPhysicalPinPosition {
   pin: string
-  side: 'left' | 'right'
+  /** `left`/`right` for the two main header columns; `bottom` for
+   *  off-header test pads (e.g. Daisy Seed D0 / Seed 2 DFM D31). */
+  side: 'left' | 'right' | 'bottom'
   index: number
   label: string
+  /** Physical pin number on the board header as silkscreened (1..40 on
+   *  Seed). Only present on Seed rows today; optional per-board. */
+  pinNumber?: number
 }
 
 export interface BoardPinout {

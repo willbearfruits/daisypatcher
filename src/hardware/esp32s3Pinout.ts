@@ -113,9 +113,10 @@ export function esp32AdcChannelOf(pin: string): number {
  */
 export interface Esp32PhysicalPinPosition {
   pin: Esp32Pin | 'VIN' | '3V3' | 'GND' | 'EN' | 'USB_DP' | 'USB_DM' | 'TX0' | 'RX0'
-  side: 'left' | 'right'
+  side: 'left' | 'right' | 'bottom'
   index: number
   label: string
+  pinNumber?: number
 }
 
 /**
