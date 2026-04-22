@@ -24,6 +24,14 @@ export type HardwareKind =
   | 'oled_ssd1306' // 128x64 I2C OLED
   | 'i2s_codec'    // external I2S DAC/ADC (e.g. PCM5102)
   | 'encoder'      // rotary encoder with optional push
+  | 'slider'         // linear fader (ADC)
+  | 'touch_ribbon'   // SoftPot / capacitive touch strip (ADC)
+  | 'ldr'            // light-dependent resistor / photoresistor (ADC)
+  | 'gyroscope'      // I2C IMU (MPU-6050 / ICM-20948 / LSM6DSO)
+  | 'magnetometer'   // I2C compass (HMC5883L / QMC5883L / LIS3MDL)
+  | 'tof'            // time-of-flight distance sensor (VL53L0X / VL53L1X)
+  | 'electret'       // electret mic capsule + preamp (ADC)
+  | 'piezo'          // piezo disc — input (knock) or output (buzzer)
 
 /**
  * Pin identifier on the Daisy Seed. We key by the Seed's published
@@ -144,5 +152,13 @@ export const KIND_ROLES: Record<HardwareKind, string[]> = {
   midi_jack:    ['rx'],
   oled_ssd1306: ['sda', 'scl'],
   i2s_codec:    ['sck', 'ws', 'sd_in', 'sd_out', 'mclk'],
-  encoder:      ['a', 'b', 'sw']
+  encoder:      ['a', 'b', 'sw'],
+  slider:       ['wiper'],
+  touch_ribbon: ['wiper'],
+  ldr:          ['signal'],
+  gyroscope:    ['sda', 'scl', 'int'],
+  magnetometer: ['sda', 'scl'],
+  tof:          ['sda', 'scl', 'xshut'],
+  electret:     ['signal'],
+  piezo:        ['signal']
 }

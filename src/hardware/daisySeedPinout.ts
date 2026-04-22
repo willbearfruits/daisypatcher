@@ -375,7 +375,15 @@ export function pinsForRole(
     switch (kind) {
       case 'pot':
       case 'cv_jack':
+      case 'slider':
+      case 'touch_ribbon':
+      case 'ldr':
+      case 'electret':
         return cap.adc
+      case 'piezo':
+        // Direction lives in config; allow any ADC- or DAC-capable pin so
+        // the user can wire as input (ADC) or output (DAC/PWM).
+        return cap.adc || cap.dac || cap.pwm
       case 'button':
       case 'switch_3way':
       case 'gate_jack':
@@ -384,8 +392,13 @@ export function pinsForRole(
       case 'led':
         return cap.gpio
       case 'oled_ssd1306':
-        if (r === 'sda') return cap.i2c === 'sda'
-        if (r === 'scl') return cap.i2c === 'scl'
+      case 'gyroscope':
+      case 'magnetometer':
+      case 'tof':
+        if (r === 'sda')   return cap.i2c === 'sda'
+        if (r === 'scl')   return cap.i2c === 'scl'
+        if (r === 'int')   return cap.gpio
+        if (r === 'xshut') return cap.gpio
         return !!cap.i2c
       case 'i2s_codec':
         if (r === 'sck')   return cap.i2s === 'sck'

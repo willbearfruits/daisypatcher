@@ -2,57 +2,45 @@
  * HardwareView — full-canvas hardware layout editor. Replaces the patch-
  * graph Rete canvas when `store.view === 'hardware'`.
  *
- * Visual design (2026-04-21 rewrite):
- *   - Portrait canvas (SVG viewBox 1100 x 1500), modelled on the Electro-
- *     smith "DAISY PINOUT" poster but with USB at the TOP so the board
- *     reads the same way most users will install it in a case.
- *   - Two flanking pin rails. Each row has a pin-name pill nearest the
- *     board, then the poster's color-coded peripheral tokens cascading
- *     outward. Every row-rect is a single hit target that covers the pin
- *     pad + all of its pills — users can start a wire drop anywhere on
- *     the row, not just the tiny pin dot.
- *   - Board silhouette in the center column with a USB-C at the top,
- *     STM32H750IB QFP in the upper-middle, SDRAM below it, AK4556 codec
- *     near the bottom, status LED, pin-1 corner mark, and the silver
- *     solder-pad halo next to each header pin.
+ * Rewrite (2026-04-21, SVG-only):
+ *   Every visible element — board silhouette, pin rows, placed components,
+ *   role badges, wires, binding labels — renders INSIDE the same <svg>
+ *   element in the same coordinate system. There is no HTML DOM overlay
+ *   for placed components. Because components and wires share the SVG's
+ *   viewBox, wires cannot visually drift from the shapes they terminate
+ *   at; pan and zoom are pure viewBox updates that move everything
+ *   together.
  *
- * Interaction (the part that was broken in the prior three passes):
- *   1. Each placed component gets one role badge per entry in
- *      KIND_ROLES[kind]. Badges are pointerdown + dragable.
- *   2. On pointerdown the badge captures the pointer AND we attach
- *      window-level pointermove/pointerup listeners. Earlier code relied
- *      only on React synthetic events which the SVG pin rows swallowed.
- *   3. During the drag a dashed preview line is drawn in SVG (world
- *      coords), compatible pins light up, incompatible pins dim to 0.35.
- *   4. Hit test is row-rect (big target) not pin-dot. Rects are indexed
- *      into a ref-map keyed by pin id and read via `document.elementFrom
- *      Point` + `data-pin-row` attributes, so the hit test works even
- *      when the drag started elsewhere on the DOM.
- *   5. Esc or release-in-empty-space cancels.
- *   6. Right-click clears a binding; single tap opens the same pin
- *      dropdown the Inspector uses.
- *
- * Constraints (from CLAUDE.md):
- *   - All colors via `--dp-*` tokens.
- *   - Inline SVG icons only, no emoji.
- *   - Keep `HardwarePalette` / `HardwareInspector` / codegen untouched.
+ *   Only input-space math crosses coordinate systems — the `toCanvas`
+ *   helper uses `svg.getScreenCTM().inverse()` to map client events onto
+ *   the canvas, never for rendering.
  */
 
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState
 } from 'react'
 import { useEditorStore } from '@/state/store'
 import { KIND_ROLES } from '@/types/hardware'
-import type { BoardPin, PinCapabilities, PlacedComponent } from '@/types/hardware'
+import type {
+  BoardPin,
+  HardwareKind,
+  PinCapabilities,
+  PlacedComponent
+} from '@/types/hardware'
 import { getBoardPinout } from './boardPinout'
 import type { BoardPhysicalPinPosition, BoardPinout } from './boardPinout'
 import { HARDWARE_DRAG_MIME } from './HardwarePalette'
-import { HARDWARE_ICON } from './hardwareIcons'
+import {
+  MM_PER_UNIT,
+  nextRotation,
+  renderComponentShape,
+  rotationOf,
+  shapeSizeCanvas
+} from './componentShapes'
 import styles from './HardwareView.module.css'
 import activityStyles from './HardwareActivity.module.css'
 import {
@@ -63,45 +51,61 @@ import {
 import { BindingLabels } from './BindingLabels'
 
 /* =====================================================================
- * Canvas geometry (SVG user units).
- * The canvas is intentionally portrait (tall) to match the poster feel.
+ * Constants.
  * ===================================================================== */
 
 const CANVAS_W = 1400
 const CANVAS_H = 1500
 
-/** Board silhouette (centered horizontally; USB at the top). */
+/** Board silhouette box. */
 const BOARD_W = 260
 const BOARD_H = 1000
 const BOARD_X = (CANVAS_W - BOARD_W) / 2
 const BOARD_Y = 240
 
-/** Each side has 20 rows; pin spacing is derived. */
 const ROWS_PER_SIDE = 20
-const PIN_EDGE_INSET = 14 // from the board edge to the pin pad center
+const PIN_EDGE_INSET = 14
 const PIN_ROW_TOP_MARGIN = 30
 const PIN_ROW_BOTTOM_MARGIN = 30
 const PIN_SPACING =
   (BOARD_H - PIN_ROW_TOP_MARGIN - PIN_ROW_BOTTOM_MARGIN) / (ROWS_PER_SIDE - 1)
 
-/** Pin-name pill (closest to the board). */
 const NAME_PILL_W = 62
 const NAME_PILL_H = 22
 
-/** Alt-function pills. */
 const ALT_PILL_H = 18
 const ALT_PILL_GAP = 4
 const ALT_PILL_PAD_X = 7
-const ALT_PILL_CHAR_W = 6.2 // empirical for the 11px monospace pill font
+const ALT_PILL_CHAR_W = 6.2
 
-/** Horizontal gap between the board edge and the first pill. */
 const ROW_GAP_FROM_BOARD = 12
 
-/** Drag-snap threshold, canvas units. */
+/** Distance (canvas units) within which wire-drag snaps to a pin. */
 const SNAP_PX = 26
 
+/** Grid: 2 mm minor, 10 mm major (canvas units via MM_PER_UNIT=3). */
+const GRID_MINOR_MM = 2
+const GRID_MAJOR_MM = 10
+const GRID_MINOR = GRID_MINOR_MM * MM_PER_UNIT
+const GRID_MAJOR = GRID_MAJOR_MM * MM_PER_UNIT
+
+function snapToGrid(v: number): number {
+  return Math.round(v / GRID_MINOR) * GRID_MINOR
+}
+
+function isTextTarget(t: EventTarget | null): boolean {
+  if (!t || !(t instanceof HTMLElement)) return false
+  const tag = t.tagName
+  return (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    (t as HTMLElement).isContentEditable === true
+  )
+}
+
 /* =====================================================================
- * Pill taxonomy: maps a poster alt-function token to a color category.
+ * Pill taxonomy — maps poster alt-function tokens to a color category.
  * ===================================================================== */
 
 type PillCategory =
@@ -147,7 +151,6 @@ function categorize(token: string): PillCategory {
   return 'misc'
 }
 
-/** Pill fill — all colors resolved from `--dp-*` tokens via color-mix. */
 function pillFill(category: PillCategory): string {
   switch (category) {
     case 'pin':    return 'color-mix(in srgb, var(--dp-accent) 40%, var(--dp-surface-elevated))'
@@ -180,12 +183,6 @@ function pillTextColor(category: PillCategory): string {
   }
 }
 
-/**
- * Convert a PinCapabilities.label (slash-delimited tokens) into pills.
- * The name pill is always first (caller keeps `coord.pin` as the display
- * text so it stays short — e.g. "D15" even if the label says
- * "D15 / PC0 / A0 / ADC_0").
- */
 function pillsFromLabel(label: string | undefined, pin: string): Pill[] {
   const pills: Pill[] = [{ text: pin, category: 'pin' }]
   if (!label) return pills
@@ -193,20 +190,14 @@ function pillsFromLabel(label: string | undefined, pin: string): Pill[] {
   for (const rawTok of label.split('/').map((t) => t.trim()).filter(Boolean)) {
     const up = rawTok.toUpperCase()
     if (seen.has(up)) continue
-    // Collapse `D15` / `PC0` duplicates: skip the pin name if repeated,
-    // and keep the STM32 port + pin as a muted GPIO pill.
     if (/^D\d+$/.test(up)) continue
     seen.add(up)
-    const cat = categorize(rawTok)
-    pills.push({ text: rawTok, category: cat })
+    pills.push({ text: rawTok, category: categorize(rawTok) })
   }
   return pills
 }
 
-/** Decide the primary category for a pill stack so we can brighten the
- *  bound pill when the user has wired that role. */
 function primaryCategoryOf(pills: Pill[]): PillCategory {
-  // Prefer the most specific peripheral over generic GPIO / pin.
   const order: PillCategory[] = ['adc', 'dac', 'i2c', 'spi', 'uart', 'i2s', 'pwm', 'audio', 'usb', 'sd', 'gpio']
   for (const c of order) {
     if (pills.some((p) => p.category === c)) return c
@@ -215,7 +206,7 @@ function primaryCategoryOf(pills: Pill[]): PillCategory {
 }
 
 /* =====================================================================
- * Coordinate helpers.
+ * Pin coord helpers.
  * ===================================================================== */
 
 interface PinCoord {
@@ -225,13 +216,12 @@ interface PinCoord {
   label: string
   x: number
   y: number
-  pillsX: number // x of the name-pill's near edge (outer edge of board)
+  pillsX: number
 }
 
 function computePinCoords(layout: BoardPhysicalPinPosition[]): PinCoord[] {
   return layout.map((p) => {
     if (p.side === 'bottom') {
-      // Off-board chips rendered beneath the silhouette.
       const x = BOARD_X + BOARD_W / 2 + (p.index - 0.5) * 110
       const y = BOARD_Y + BOARD_H + 48
       return { pin: p.pin, side: p.side, index: p.index, label: p.label, x, y, pillsX: x }
@@ -240,8 +230,6 @@ function computePinCoords(layout: BoardPhysicalPinPosition[]): PinCoord[] {
       p.side === 'left'
         ? BOARD_X + PIN_EDGE_INSET
         : BOARD_X + BOARD_W - PIN_EDGE_INSET
-    // Left column rendered bottom-up so the silkscreen pin order matches
-    // the poster when USB sits at the bottom of the silhouette.
     const rowIndex =
       p.side === 'left' ? ROWS_PER_SIDE - 1 - p.index : p.index
     const y = BOARD_Y + PIN_ROW_TOP_MARGIN + rowIndex * PIN_SPACING
@@ -251,25 +239,22 @@ function computePinCoords(layout: BoardPhysicalPinPosition[]): PinCoord[] {
 }
 
 /* =====================================================================
- * Wiring-drag state. A single active drag per view.
+ * Wiring-drag state.
  * ===================================================================== */
 
 interface WiringDrag {
   componentId: string
   role: string
-  kind: string
-  /** Drag source (badge center) in CANVAS coords. */
+  kind: HardwareKind
   sourceX: number
   sourceY: number
-  /** Cursor in CANVAS coords. */
   x: number
   y: number
-  /** If snapped to a compatible pin, its id. */
   snappedPin: string | null
 }
 
 /* =====================================================================
- * Top-level HardwareView component.
+ * Top-level HardwareView.
  * ===================================================================== */
 
 export function HardwareView() {
@@ -287,13 +272,29 @@ function HardwareViewInner() {
   const selectHardware = useEditorStore((s) => s.selectHardware)
   const addHardware = useEditorStore((s) => s.addHardware)
   const setHardwarePin = useEditorStore((s) => s.setHardwarePin)
+  const moveHardware = useEditorStore((s) => s.moveHardware)
+  const setHardwareConfig = useEditorStore((s) => s.setHardwareConfig)
+  const removeHardware = useEditorStore((s) => s.removeHardware)
+
   const [showLabels, setShowLabels] = useState(true)
+  const [showGrid, setShowGrid] = useState(true)
+  const [snap, setSnap] = useState(true)
+
+  const [zoom, setZoom] = useState(1)
+  const [vbOrigin, setVbOrigin] = useState({ x: 0, y: 0 })
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const vbOriginRef = useRef(vbOrigin)
+  vbOriginRef.current = vbOrigin
 
   const rootRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
   const pinout = useMemo(() => getBoardPinout(board), [board])
-  const pinCoords = useMemo(() => computePinCoords(pinout.physicalLayout), [pinout])
+  const pinCoords = useMemo(
+    () => computePinCoords(pinout.physicalLayout),
+    [pinout]
+  )
   const pinCoordMap = useMemo(() => {
     const m = new Map<string, PinCoord>()
     for (const c of pinCoords) m.set(c.pin, c)
@@ -302,26 +303,28 @@ function HardwareViewInner() {
 
   const [drag, setDrag] = useState<WiringDrag | null>(null)
 
-  /** Convert a DOM client-space point into canvas-space coords.
-   *  Uses the SVG's getScreenCTM().inverse() for an exact map (handles
-   *  preserveAspectRatio='xMidYMid meet' correctly, unlike a simple
-   *  bounding-rect scale). */
+  /** Convert client-space point to SVG canvas coords. Only used for input
+   *  events — rendering stays in canvas coords throughout. */
   const toCanvas = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current
     if (!svg) return { x: 0, y: 0 }
     const ctm = svg.getScreenCTM()
     if (!ctm) return { x: 0, y: 0 }
-    const inv = ctm.inverse()
     const pt = svg.createSVGPoint()
     pt.x = clientX
     pt.y = clientY
-    const p = pt.matrixTransform(inv)
+    const p = pt.matrixTransform(ctm.inverse())
     return { x: p.x, y: p.y }
   }, [])
 
-  /** Called by RoleBadge once the user crosses the drag threshold. */
   const beginWireDrag = useCallback(
-    (componentId: string, role: string, kind: string, sx: number, sy: number) => {
+    (
+      componentId: string,
+      role: string,
+      kind: HardwareKind,
+      sx: number,
+      sy: number
+    ) => {
       setDrag({
         componentId,
         role,
@@ -336,20 +339,13 @@ function HardwareViewInner() {
     []
   )
 
-  /* ---- window-level drag tracking ---------------------------------
-   * The RoleBadge fires pointerdown and calls beginWireDrag(); we
-   * attach the pointermove/pointerup listeners here so SVG child
-   * elements can't swallow them. Pointer capture on the badge isn't
-   * enough because the pointer frequently leaves the badge in the
-   * first 3-4px of the drag.
-   * ----------------------------------------------------------------- */
+  /* Window-level listener pair for role-badge wire drags. */
   useEffect(() => {
     if (!drag) return
     const allowed = new Set(pinout.pinsForRole(drag.role, drag.kind))
 
     const onMove = (e: PointerEvent) => {
       const p = toCanvas(e.clientX, e.clientY)
-      // Snap to nearest compatible pin within SNAP_PX (canvas units).
       let best: { pin: string; d2: number } | null = null
       for (const [pin, coord] of pinCoordMap) {
         if (coord.side === 'bottom') continue
@@ -366,10 +362,6 @@ function HardwareViewInner() {
     }
 
     const onUp = (e: PointerEvent) => {
-      // Primary hit-test: the pin-row DOM elements carry `data-pin-row`.
-      // This is more forgiving than a pure distance check because the
-      // user sees a big row they clicked on, not an invisible bounding
-      // circle.
       const els = document.elementsFromPoint(e.clientX, e.clientY)
       let hitPin: string | null = null
       for (const el of els) {
@@ -379,8 +371,6 @@ function HardwareViewInner() {
           break
         }
       }
-      // Fallback: distance check (for when the pointer ended just off-
-      // row but inside the snap ring).
       if (!hitPin) {
         const p = toCanvas(e.clientX, e.clientY)
         let bestD2 = Infinity
@@ -418,7 +408,7 @@ function HardwareViewInner() {
     }
   }, [drag, pinCoordMap, pinout, setHardwarePin, toCanvas])
 
-  /* ---- palette drag / drop ---------------------------------------- */
+  /* Palette drag/drop onto the canvas. */
   const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     if (e.dataTransfer.types.includes(HARDWARE_DRAG_MIME)) {
       e.preventDefault()
@@ -428,44 +418,209 @@ function HardwareViewInner() {
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
-      const kind = e.dataTransfer.getData(HARDWARE_DRAG_MIME)
+      const kind = e.dataTransfer.getData(HARDWARE_DRAG_MIME) as HardwareKind
       if (!kind) return
       e.preventDefault()
       const p = toCanvas(e.clientX, e.clientY)
-      const id = addHardware(kind as PlacedComponent['kind'], { x: p.x, y: p.y })
+      const nat = shapeSizeCanvas(kind)
+      let x = p.x - nat.w / 2
+      let y = p.y - nat.h / 2
+      if (snap) {
+        x = snapToGrid(x)
+        y = snapToGrid(y)
+      }
+      const id = addHardware(kind, { x, y })
       selectHardware(id)
     },
-    [addHardware, selectHardware, toCanvas]
+    [addHardware, selectHardware, toCanvas, snap]
   )
 
-  const onBgClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget) selectHardware(null)
+  /* Pan / zoom. */
+  const fitToBoard = useCallback(() => {
+    setZoom(1)
+    setVbOrigin({ x: 0, y: 0 })
+  }, [])
+
+  const zoomActualSize = useCallback(() => {
+    setZoom(1)
+    setVbOrigin({ x: 0, y: 0 })
+  }, [])
+
+  const toggleGrid = useCallback(() => setShowGrid((v) => !v), [])
+  const toggleSnap = useCallback(() => setSnap((v) => !v), [])
+
+  const onWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const delta = -e.deltaY
+      const factor = Math.exp(delta * 0.0015)
+      const p = toCanvas(e.clientX, e.clientY)
+      const z0 = zoomRef.current
+      const z1 = Math.max(0.3, Math.min(4, z0 * factor))
+      const vb0 = vbOriginRef.current
+      const nx = p.x - (p.x - vb0.x) * (z0 / z1)
+      const ny = p.y - (p.y - vb0.y) * (z0 / z1)
+      setZoom(z1)
+      setVbOrigin({ x: nx, y: ny })
     },
-    [selectHardware]
+    [toCanvas]
   )
 
-  // Set of compatible pins while dragging — used to dim incompatible
-  // rows and to short-circuit the hit-test.
+  /* Space-drag / middle-click pan. */
+  const spaceHeldRef = useRef(false)
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  const panDragRef = useRef<{
+    startClient: { x: number; y: number }
+    startOrigin: { x: number; y: number }
+  } | null>(null)
+  const [isPanning, setIsPanning] = useState(false)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isTextTarget(e.target)) {
+        if (!spaceHeldRef.current) {
+          spaceHeldRef.current = true
+          setSpaceHeld(true)
+        }
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spaceHeldRef.current = false
+        setSpaceHeld(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
+  const onPanStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const isMiddle = e.button === 1
+    const isSpaceLeft = e.button === 0 && spaceHeldRef.current
+    if (!isMiddle && !isSpaceLeft) return
+    e.preventDefault()
+    e.stopPropagation()
+    panDragRef.current = {
+      startClient: { x: e.clientX, y: e.clientY },
+      startOrigin: { ...vbOriginRef.current }
+    }
+    setIsPanning(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isPanning) return
+    const onMove = (e: MouseEvent) => {
+      const st = panDragRef.current
+      if (!st) return
+      const svg = svgRef.current
+      if (!svg) return
+      const ctm = svg.getScreenCTM()
+      if (!ctm) return
+      const scale = 1 / (ctm.a || 1)
+      const dx = (e.clientX - st.startClient.x) * scale
+      const dy = (e.clientY - st.startClient.y) * scale
+      setVbOrigin({ x: st.startOrigin.x - dx, y: st.startOrigin.y - dy })
+    }
+    const onUp = () => {
+      panDragRef.current = null
+      setIsPanning(false)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [isPanning])
+
+  /* Keyboard shortcuts for the selected component. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTextTarget(e.target)) return
+      if (!selectedId) return
+      const step = e.shiftKey ? 10 * MM_PER_UNIT : 1 * MM_PER_UNIT
+      const comp = useEditorStore
+        .getState()
+        .hardware.components.find((c) => c.id === selectedId)
+      if (!comp) return
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        moveHardware(comp.id, { x: comp.position.x - step, y: comp.position.y })
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        moveHardware(comp.id, { x: comp.position.x + step, y: comp.position.y })
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        moveHardware(comp.id, { x: comp.position.x, y: comp.position.y - step })
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        moveHardware(comp.id, { x: comp.position.x, y: comp.position.y + step })
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault()
+        setHardwareConfig(comp.id, 'rotation', nextRotation(rotationOf(comp)))
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        removeHardware(comp.id)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedId, moveHardware, setHardwareConfig, removeHardware])
+
+  /* Deselect on SVG empty-area click. */
+  const onBackgroundClick = useCallback(() => {
+    selectHardware(null)
+  }, [selectHardware])
+
+  /* While dragging a wire, compute allowed pins for highlighting. */
   const allowedPins = useMemo(() => {
     if (!drag) return null
     return new Set(pinout.pinsForRole(drag.role, drag.kind))
   }, [drag, pinout])
 
+  /* viewBox derived from pan + zoom. */
+  const vbW = CANVAS_W / zoom
+  const vbH = CANVAS_H / zoom
+  const vbX = vbOrigin.x
+  const vbY = vbOrigin.y
+
+  const cursorClass = isPanning
+    ? styles.panning
+    : spaceHeld
+      ? styles.panReady
+      : ''
+
   return (
     <div
       ref={rootRef}
-      className={styles.root}
+      className={`${styles.root} ${cursorClass}`}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      onClick={onBgClick}
+      onWheel={onWheel}
+      onMouseDown={onPanStart}
     >
       <svg
         ref={svgRef}
         className={styles.svg}
-        viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
+        viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
         preserveAspectRatio="xMidYMid meet"
+        onMouseDown={(e) => {
+          // Only deselect when the click lands on the SVG background itself,
+          // not on any child. Pan is already handled earlier via the parent
+          // div's onMouseDown with modifier checks.
+          if (e.button !== 0) return
+          if (e.target === e.currentTarget) {
+            onBackgroundClick()
+          }
+        }}
       >
+        {showGrid ? <GridLayer /> : null}
+
         <Caption boardLabel={pinout.label} />
         <Legend cx={CANVAS_W / 2} cy={168} />
 
@@ -485,8 +640,8 @@ function HardwareViewInner() {
 
         <WireOverlay
           components={components}
-          pinout={pinout}
           pinCoordMap={pinCoordMap}
+          zoom={zoom}
         />
 
         {showLabels ? (
@@ -498,30 +653,46 @@ function HardwareViewInner() {
           />
         ) : null}
 
-        {drag ? <WiringPreview drag={drag} pinCoordMap={pinCoordMap} /> : null}
+        {/* Placed components — render AFTER wires so component chrome is
+            on top. Wires still anchor cleanly to component centers because
+            both live in the same SVG coordinate space. */}
+        <g>
+          {components.map((c) => (
+            <PlacedComponentView
+              key={c.id}
+              comp={c}
+              selected={c.id === selectedId}
+              pinout={pinout}
+              onSelect={() => selectHardware(c.id)}
+              onBeginWireDrag={beginWireDrag}
+              toCanvas={toCanvas}
+              zoom={zoom}
+              snap={snap}
+              activeDragRole={
+                drag && drag.componentId === c.id ? drag.role : null
+              }
+            />
+          ))}
+        </g>
+
+        {drag ? (
+          <WiringPreview drag={drag} pinCoordMap={pinCoordMap} zoom={zoom} />
+        ) : null}
       </svg>
 
       <HardwareToolbar
         showLabels={showLabels}
         onToggleLabels={() => setShowLabels((v) => !v)}
+        showGrid={showGrid}
+        onToggleGrid={toggleGrid}
+        snap={snap}
+        onToggleSnap={toggleSnap}
+        zoom={zoom}
+        onFitToBoard={fitToBoard}
+        onZoomActual={zoomActualSize}
+        onZoomIn={() => setZoom((z) => Math.min(4, z * 1.2))}
+        onZoomOut={() => setZoom((z) => Math.max(0.3, z / 1.2))}
       />
-
-      <div className={styles.overlay}>
-        {components.map((c) => (
-          <HardwareCard
-            key={c.id}
-            comp={c}
-            selected={c.id === selectedId}
-            onSelect={() => selectHardware(c.id)}
-            allowedPinsForRole={(role) => new Set(pinout.pinsForRole(role, c.kind))}
-            pinout={pinout}
-            onBeginWireDrag={beginWireDrag}
-            toCanvas={toCanvas}
-            activeDragRole={drag && drag.componentId === c.id ? drag.role : null}
-            svgRef={svgRef}
-          />
-        ))}
-      </div>
 
       {components.length === 0 ? (
         <div className={styles.emptyHint}>
@@ -533,19 +704,104 @@ function HardwareViewInner() {
 }
 
 /* =====================================================================
- * Toolbar (top-right floating). Currently hosts the "binding labels"
- * toggle. Kept minimal — future buttons (grid, zoom reset, etc.) slot in.
+ * Toolbar (top-right floating).
  * ===================================================================== */
 
 function HardwareToolbar({
   showLabels,
-  onToggleLabels
+  onToggleLabels,
+  showGrid,
+  onToggleGrid,
+  snap,
+  onToggleSnap,
+  zoom,
+  onFitToBoard,
+  onZoomActual,
+  onZoomIn,
+  onZoomOut
 }: {
   showLabels: boolean
   onToggleLabels: () => void
+  showGrid: boolean
+  onToggleGrid: () => void
+  snap: boolean
+  onToggleSnap: () => void
+  zoom: number
+  onFitToBoard: () => void
+  onZoomActual: () => void
+  onZoomIn: () => void
+  onZoomOut: () => void
 }) {
   return (
     <div className={activityStyles.toolbar}>
+      <button
+        type="button"
+        className={activityStyles.toolbarButton}
+        onClick={onZoomOut}
+        title="Zoom out"
+      >
+        <svg className={activityStyles.toolbarIcon} viewBox="0 0 16 16" aria-hidden>
+          <line x1="3" y1="8" x2="13" y2="8" strokeLinecap="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={activityStyles.toolbarButton}
+        onClick={onZoomActual}
+        title="Zoom 100%"
+      >
+        <span style={{ minWidth: 38, textAlign: 'center' }}>
+          {Math.round(zoom * 100)}%
+        </span>
+      </button>
+      <button
+        type="button"
+        className={activityStyles.toolbarButton}
+        onClick={onZoomIn}
+        title="Zoom in"
+      >
+        <svg className={activityStyles.toolbarIcon} viewBox="0 0 16 16" aria-hidden>
+          <line x1="3" y1="8" x2="13" y2="8" strokeLinecap="round" />
+          <line x1="8" y1="3" x2="8" y2="13" strokeLinecap="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={activityStyles.toolbarButton}
+        onClick={onFitToBoard}
+        title="Fit to board"
+      >
+        <svg className={activityStyles.toolbarIcon} viewBox="0 0 16 16" aria-hidden>
+          <path d="M3 3h3M3 3v3M13 3h-3M13 3v3M3 13h3M3 13v-3M13 13h-3M13 13v-3" strokeLinecap="round" />
+        </svg>
+        <span>fit</span>
+      </button>
+      <button
+        type="button"
+        className={activityStyles.toolbarButton}
+        data-active={showGrid ? 'true' : 'false'}
+        onClick={onToggleGrid}
+        title={showGrid ? 'Hide grid' : 'Show grid'}
+      >
+        <svg className={activityStyles.toolbarIcon} viewBox="0 0 16 16" aria-hidden>
+          <path d="M3 3h10v10H3z" />
+          <path d="M3 8h10M8 3v10" strokeLinecap="round" opacity="0.5" />
+        </svg>
+        <span>grid</span>
+      </button>
+      <button
+        type="button"
+        className={activityStyles.toolbarButton}
+        data-active={snap ? 'true' : 'false'}
+        onClick={onToggleSnap}
+        title={snap ? 'Snap OFF' : 'Snap ON'}
+      >
+        <svg className={activityStyles.toolbarIcon} viewBox="0 0 16 16" aria-hidden>
+          <circle cx="8" cy="8" r="3" />
+          <path d="M8 2v2M8 12v2M2 8h2M12 8h2" strokeLinecap="round" />
+        </svg>
+        <span>snap</span>
+      </button>
       <button
         type="button"
         className={activityStyles.toolbarButton}
@@ -553,16 +809,8 @@ function HardwareToolbar({
         onClick={onToggleLabels}
         title={showLabels ? 'Hide binding labels' : 'Show binding labels'}
       >
-        <svg
-          className={activityStyles.toolbarIcon}
-          viewBox="0 0 16 16"
-          aria-hidden
-        >
-          <path
-            d="M2 4h5l2 2h5v6H2z"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
+        <svg className={activityStyles.toolbarIcon} viewBox="0 0 16 16" aria-hidden>
+          <path d="M2 4h5l2 2h5v6H2z" strokeLinejoin="round" strokeLinecap="round" />
           <line x1="5" y1="9" x2="11" y2="9" strokeLinecap="round" />
         </svg>
         <span>labels</span>
@@ -572,12 +820,61 @@ function HardwareToolbar({
 }
 
 /* =====================================================================
- * Caption and legend (atop the canvas).
+ * Grid layer.
+ * ===================================================================== */
+
+function GridLayer() {
+  const minorLines: React.ReactNode[] = []
+  const majorLines: React.ReactNode[] = []
+  for (let x = 0; x <= CANVAS_W; x += GRID_MINOR) {
+    const isMajor = x % GRID_MAJOR === 0
+    const line = (
+      <line
+        key={`gx${x}`}
+        x1={x}
+        y1={0}
+        x2={x}
+        y2={CANVAS_H}
+        stroke={isMajor ? 'var(--dp-border)' : 'var(--dp-border-strong)'}
+        strokeWidth={isMajor ? 0.5 : 0.25}
+        opacity={isMajor ? 0.35 : 0.12}
+      />
+    )
+    if (isMajor) majorLines.push(line)
+    else minorLines.push(line)
+  }
+  for (let y = 0; y <= CANVAS_H; y += GRID_MINOR) {
+    const isMajor = y % GRID_MAJOR === 0
+    const line = (
+      <line
+        key={`gy${y}`}
+        x1={0}
+        y1={y}
+        x2={CANVAS_W}
+        y2={y}
+        stroke={isMajor ? 'var(--dp-border)' : 'var(--dp-border-strong)'}
+        strokeWidth={isMajor ? 0.5 : 0.25}
+        opacity={isMajor ? 0.35 : 0.12}
+      />
+    )
+    if (isMajor) majorLines.push(line)
+    else minorLines.push(line)
+  }
+  return (
+    <g pointerEvents="none">
+      {minorLines}
+      {majorLines}
+    </g>
+  )
+}
+
+/* =====================================================================
+ * Caption + legend.
  * ===================================================================== */
 
 function Caption({ boardLabel }: { boardLabel: string }) {
   return (
-    <g>
+    <g pointerEvents="none">
       <text
         x={CANVAS_W / 2}
         y={78}
@@ -624,7 +921,7 @@ function Legend({ cx, cy }: { cx: number; cy: number }) {
   const totalW = entries.length * pillW + (entries.length - 1) * gap
   const startX = cx - totalW / 2
   return (
-    <g>
+    <g pointerEvents="none">
       {entries.map((e, i) => {
         const x = startX + i * (pillW + gap)
         return (
@@ -658,34 +955,29 @@ function Legend({ cx, cy }: { cx: number; cy: number }) {
 }
 
 /* =====================================================================
- * Seed board silhouette.
+ * Seed / ESP32 silhouettes — retained from the prior iteration.
  * ===================================================================== */
 
 function SeedSilhouette() {
-  // A slightly warmer PCB tone so it doesn't blend into the canvas.
   const pcbFill = 'color-mix(in srgb, var(--dp-surface-sunken) 70%, var(--dp-warning) 4%)'
 
-  // STM32H750IB silhouette placement.
   const chipW = 140
   const chipH = 140
   const chipX = BOARD_X + (BOARD_W - chipW) / 2
   const chipY = BOARD_Y + 160
 
-  // SDRAM silhouette.
   const sdramW = 120
   const sdramH = 36
   const sdramX = BOARD_X + (BOARD_W - sdramW) / 2
   const sdramY = chipY + chipH + 40
 
-  // Codec silhouette.
   const codecW = 70
   const codecH = 40
   const codecX = BOARD_X + (BOARD_W - codecW) / 2
   const codecY = BOARD_Y + BOARD_H - 110
 
   return (
-    <g>
-      {/* PCB body */}
+    <g pointerEvents="none">
       <rect
         x={BOARD_X}
         y={BOARD_Y}
@@ -707,12 +999,7 @@ function SeedSilhouette() {
         strokeWidth="1"
         opacity="0.6"
       />
-
-      {/* Pin-1 corner mark (top-left inside the board) */}
       <circle cx={BOARD_X + 12} cy={BOARD_Y + 14} r="3" fill="var(--dp-text-dim)" />
-
-      {/* USB-C connector sticking out the bottom (poster reference has USB
-          at the opposite end from the audio jacks — user confirmed 2026-04-21). */}
       <rect
         x={BOARD_X + BOARD_W / 2 - 36}
         y={BOARD_Y + BOARD_H - 6}
@@ -743,7 +1030,6 @@ function SeedSilhouette() {
         USB
       </text>
 
-      {/* STM32H750IB — QFP silhouette with cardinal pin ticks */}
       <g transform={`translate(${chipX}, ${chipY})`}>
         <rect
           x={0}
@@ -791,7 +1077,6 @@ function SeedSilhouette() {
         </text>
       </g>
 
-      {/* SDRAM below the STM32 */}
       <rect
         x={sdramX}
         y={sdramY}
@@ -814,7 +1099,6 @@ function SeedSilhouette() {
         SDRAM
       </text>
 
-      {/* Codec at the bottom */}
       <rect
         x={codecX}
         y={codecY}
@@ -837,7 +1121,6 @@ function SeedSilhouette() {
         AK4556
       </text>
 
-      {/* Status LED at the bottom-right */}
       <circle
         cx={BOARD_X + BOARD_W - 26}
         cy={BOARD_Y + BOARD_H - 26}
@@ -855,7 +1138,6 @@ function SeedSilhouette() {
         opacity="0.3"
       />
 
-      {/* Reset & boot buttons (decorative) */}
       <rect
         x={BOARD_X + 24}
         y={BOARD_Y + BOARD_H - 46}
@@ -898,8 +1180,6 @@ function SeedSilhouette() {
       >
         BOOT
       </text>
-
-      {/* Wordmark */}
       <text
         x={BOARD_X + BOARD_W / 2}
         y={BOARD_Y + BOARD_H - 14}
@@ -915,15 +1195,9 @@ function SeedSilhouette() {
   )
 }
 
-/* =====================================================================
- * ESP32-S3 placeholder silhouette.
- * TODO: proper ESP32-S3 DevKitC illustration (shield/antenna, USB-C,
- *       CP2102 chip, strapping-pin warnings). Deferred.
- * ===================================================================== */
-
 function Esp32SilhouettePlaceholder() {
   return (
-    <g>
+    <g pointerEvents="none">
       <rect
         x={BOARD_X}
         y={BOARD_Y}
@@ -934,7 +1208,6 @@ function Esp32SilhouettePlaceholder() {
         stroke="var(--dp-border-strong)"
         strokeWidth="1.5"
       />
-      {/* ESP32-S3 module block at the top third */}
       <rect
         x={BOARD_X + 24}
         y={BOARD_Y + 80}
@@ -967,7 +1240,6 @@ function Esp32SilhouettePlaceholder() {
       >
         MODULE
       </text>
-      {/* USB-C at the bottom */}
       <rect
         x={BOARD_X + BOARD_W / 2 - 30}
         y={BOARD_Y + BOARD_H - 6}
@@ -992,7 +1264,7 @@ function Esp32SilhouettePlaceholder() {
 }
 
 /* =====================================================================
- * Pin rows — name pill + alt-function pill stack per pin.
+ * Pin rows.
  * ===================================================================== */
 
 function PinRows({
@@ -1056,7 +1328,6 @@ function PinRow({
 
   const pills: Pill[] = useMemo(() => {
     if (cap?.label) return pillsFromLabel(cap.label, coord.pin)
-    // Power / audio / USB rails: synthesize a single pill.
     const up = coord.pin.toUpperCase()
     const cat: PillCategory =
       up === 'VIN' || up === '3V3' || up === '3V3_A' || up === '3V3_D'
@@ -1071,15 +1342,12 @@ function PinRow({
     return [{ text: coord.label, category: cat }]
   }, [cap?.label, coord.label, coord.pin])
 
-  // Name pill lives immediately outside the board edge. Alt pills cascade
-  // further outward (left grows left, right grows right).
   const nameX = isLeft
     ? BOARD_X - ROW_GAP_FROM_BOARD - NAME_PILL_W
     : BOARD_X + BOARD_W + ROW_GAP_FROM_BOARD
   const y = coord.y
   const nameTop = y - NAME_PILL_H / 2
 
-  // Pre-compute widths so we can size the hit rect.
   const altPills = pills.slice(1)
   const altWidths = altPills.map((p) =>
     Math.max(32, ALT_PILL_PAD_X * 2 + p.text.length * ALT_PILL_CHAR_W)
@@ -1091,17 +1359,13 @@ function PinRow({
     return off
   })
   const totalAltW = altCursor
-  const rowStart = isLeft
-    ? nameX - totalAltW
-    : nameX + NAME_PILL_W
+  const rowStart = isLeft ? nameX - totalAltW : nameX + NAME_PILL_W
   const rowEnd = isLeft
     ? nameX + NAME_PILL_W
     : nameX + NAME_PILL_W + totalAltW
   const rowX = Math.min(rowStart, rowEnd)
   const rowW = Math.abs(rowEnd - rowStart)
-  // Hit rect extends slightly above/below for easier targeting.
   const HIT_PAD = 4
-
   const rowOpacity = dimmed ? 0.25 : 1
   const primaryCat = primaryCategoryOf(pills)
 
@@ -1112,9 +1376,6 @@ function PinRow({
       onPointerLeave={() => setHovered(false)}
       style={{ transition: 'opacity 120ms var(--dp-ease)' }}
     >
-      {/* Full-row hit rect — carries data-pin-row so the drop logic can
-          identify which row the cursor is over. Kept mostly transparent
-          so it doesn't visually clutter. */}
       <rect
         data-pin-row={coord.pin}
         x={rowX - HIT_PAD}
@@ -1125,8 +1386,6 @@ function PinRow({
         rx="10"
         pointerEvents="all"
       />
-
-      {/* Connector stub from the board edge out to the name pill */}
       <line
         x1={isLeft ? BOARD_X : BOARD_X + BOARD_W}
         y1={y}
@@ -1135,8 +1394,6 @@ function PinRow({
         stroke="var(--dp-border)"
         strokeWidth="1"
       />
-
-      {/* Solder-pad halo on the board edge */}
       <circle
         cx={coord.x}
         cy={y}
@@ -1154,8 +1411,6 @@ function PinRow({
         stroke="var(--dp-border-strong)"
         strokeWidth="1"
       />
-
-      {/* Pin-name pill */}
       <rect
         x={nameX}
         y={nameTop}
@@ -1201,8 +1456,6 @@ function PinRow({
           {cap.stm32Pin}
         </text>
       ) : null}
-
-      {/* Alt-function pills */}
       {altPills.map((p, i) => {
         const pillW = altWidths[i]
         const off = altPositions[i]
@@ -1243,49 +1496,53 @@ function PinRow({
 }
 
 /* =====================================================================
- * Wire overlay (bound-role lines) & wiring preview.
+ * Wire overlay — component center → bound pin.
+ * Because both endpoints are in the same SVG coord system, anchors align
+ * trivially. Stroke-width scales with 1/zoom so the wire keeps a constant
+ * perceived weight at any zoom level.
  * ===================================================================== */
 
 function WireOverlay({
   components,
-  pinout,
-  pinCoordMap
+  pinCoordMap,
+  zoom
 }: {
   components: PlacedComponent[]
-  pinout: BoardPinout
   pinCoordMap: Map<string, PinCoord>
+  zoom: number
 }) {
-  // Ignore the unused pinout parameter intentionally: kept so the signature
-  // parallels future overlays that may use target-specific routing rules.
-  void pinout
+  const sw = Math.max(0.5, 1.5 / zoom)
   return (
-    <g>
+    <g pointerEvents="none">
       {components.flatMap((c) => {
-        const cardCx = c.position.x + 70 // CARD_W / 2
-        const cardCy = c.position.y + 50
-        return KIND_ROLES[c.kind]
-          .map((role) => {
-            const pin = c.pins[role]
-            if (!pin) return null
-            const coord = pinCoordMap.get(pin as string)
-            if (!coord || coord.side === 'bottom') return null
-            return (
-              <line
-                key={`${c.id}-${role}`}
-                x1={cardCx}
-                y1={cardCy}
-                x2={coord.x}
-                y2={coord.y}
-                stroke="var(--dp-accent)"
-                strokeWidth="1.5"
-                strokeDasharray="3 5"
-                strokeLinecap="round"
-                opacity="0.85"
-                className={styles.wireFadeIn}
-              />
-            )
-          })
-          .filter(Boolean) as React.ReactNode[]
+        const nat = shapeSizeCanvas(c.kind)
+        // Rotation is about the natural center, so the shape center in
+        // canvas coords is always position + natural/2 (rotation leaves it
+        // invariant).
+        const cx = c.position.x + nat.w / 2
+        const cy = c.position.y + nat.h / 2
+        const nodes: React.ReactNode[] = []
+        for (const role of KIND_ROLES[c.kind]) {
+          const pin = c.pins[role]
+          if (!pin) continue
+          const coord = pinCoordMap.get(pin as string)
+          if (!coord || coord.side === 'bottom') continue
+          nodes.push(
+            <line
+              key={`${c.id}-${role}`}
+              x1={cx}
+              y1={cy}
+              x2={coord.x}
+              y2={coord.y}
+              stroke="var(--dp-accent)"
+              strokeWidth={sw}
+              strokeLinecap="round"
+              opacity="0.85"
+              className={styles.wireFadeIn}
+            />
+          )
+        }
+        return nodes
       })}
     </g>
   )
@@ -1293,14 +1550,17 @@ function WireOverlay({
 
 function WiringPreview({
   drag,
-  pinCoordMap
+  pinCoordMap,
+  zoom
 }: {
   drag: WiringDrag
   pinCoordMap: Map<string, PinCoord>
+  zoom: number
 }) {
   const snapped = drag.snappedPin ? pinCoordMap.get(drag.snappedPin) : null
   const tx = snapped ? snapped.x : drag.x
   const ty = snapped ? snapped.y : drag.y
+  const sw = Math.max(0.75, 2 / zoom)
   return (
     <g pointerEvents="none">
       <line
@@ -1309,18 +1569,18 @@ function WiringPreview({
         x2={tx}
         y2={ty}
         stroke="var(--dp-accent)"
-        strokeWidth="2"
-        strokeDasharray="5 5"
+        strokeWidth={sw}
+        strokeDasharray={`${5 / zoom} ${5 / zoom}`}
         strokeLinecap="round"
         opacity="0.95"
       />
       <circle
         cx={tx}
         cy={ty}
-        r={snapped ? 10 : 5}
+        r={snapped ? 10 / zoom : 5 / zoom}
         fill="none"
         stroke="var(--dp-accent)"
-        strokeWidth="1.75"
+        strokeWidth={Math.max(1, 1.75 / zoom)}
         opacity={snapped ? 1 : 0.6}
       />
     </g>
@@ -1328,64 +1588,84 @@ function WiringPreview({
 }
 
 /* =====================================================================
- * Placed component card (HTML overlay).
+ * Placed component view — fully SVG.
+ * Structure, from outer to inner:
+ *   <g transform="translate(x, y)">                       (position)
+ *     <g transform="rotate(rot, naturalW/2, naturalH/2)"> (rotation)
+ *       <foreignObject or inner SVG> shape artwork         (natural coords)
+ *       <rect> transparent click-catcher                  (drag + select)
+ *       <rect> selection outline                          (when selected)
+ *       <g>    activity overlay                           (LED glow, etc.)
+ *     </g>
+ *     <g> hover chrome (label + status + role dots)       (below the shape)
+ *   </g>
+ *
+ * Shape center in canvas coords always equals (x + naturalW/2, y +
+ * naturalH/2) because the rotation pivots on the natural center — so wire
+ * anchors line up for every rotation.
  * ===================================================================== */
 
-const CARD_W = 140
-const CARD_H = 100
-
-interface HardwareCardProps {
+interface PlacedComponentViewProps {
   comp: PlacedComponent
   selected: boolean
-  onSelect: () => void
-  allowedPinsForRole: (role: string) => Set<string>
   pinout: BoardPinout
-  onBeginWireDrag: (componentId: string, role: string, kind: string, sx: number, sy: number) => void
+  onSelect: () => void
+  onBeginWireDrag: (
+    componentId: string,
+    role: string,
+    kind: HardwareKind,
+    sx: number,
+    sy: number
+  ) => void
   toCanvas: (clientX: number, clientY: number) => { x: number; y: number }
+  zoom: number
+  snap: boolean
   activeDragRole: string | null
-  svgRef: React.RefObject<SVGSVGElement | null>
 }
 
-function HardwareCard({
+function PlacedComponentView({
   comp,
   selected,
-  onSelect,
-  allowedPinsForRole,
   pinout,
+  onSelect,
   onBeginWireDrag,
   toCanvas,
-  activeDragRole,
-  svgRef
-}: HardwareCardProps) {
+  zoom,
+  snap,
+  activeDragRole
+}: PlacedComponentViewProps) {
   const moveHardware = useEditorStore((s) => s.moveHardware)
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rotation = rotationOf(comp)
+  const nat = shapeSizeCanvas(comp.kind)
+  const [hovered, setHovered] = useState(false)
+
+  // Rotated bounds (used for the selection outline).
+  const swap = rotation === 90 || rotation === 270
+  const boundW = swap ? nat.h : nat.w
+  const boundH = swap ? nat.w : nat.h
+
+  const snapRef = useRef(snap)
+  snapRef.current = snap
+
+  /* ----- Component drag (position) — window-level listeners. ----- */
   const dragStateRef = useRef<{
     startClient: { x: number; y: number }
     startPos: { x: number; y: number }
   } | null>(null)
-  const [popoverRole, setPopoverRole] = useState<string | null>(null)
 
-  const Icon = HARDWARE_ICON[comp.kind]
-  const requiredRoles = KIND_ROLES[comp.kind]
-  const bound = requiredRoles.every((r) => {
-    const pin = comp.pins[r]
-    if (!pin) return false
-    return allowedPinsForRole(r).has(pin)
-  })
-
-  // Card drag (position move). Uses window-level listeners so it keeps
-  // moving when the cursor leaves the card or the canvas.
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       const st = dragStateRef.current
       if (!st) return
-      // Canvas coords → delta in canvas space.
       const p0 = toCanvas(st.startClient.x, st.startClient.y)
       const p1 = toCanvas(e.clientX, e.clientY)
-      moveHardware(comp.id, {
-        x: st.startPos.x + (p1.x - p0.x),
-        y: st.startPos.y + (p1.y - p0.y)
-      })
+      let nx = st.startPos.x + (p1.x - p0.x)
+      let ny = st.startPos.y + (p1.y - p0.y)
+      if (snapRef.current && !e.altKey) {
+        nx = snapToGrid(nx)
+        ny = snapToGrid(ny)
+      }
+      moveHardware(comp.id, { x: nx, y: ny })
     }
     const onUp = () => {
       if (dragStateRef.current) {
@@ -1393,19 +1673,17 @@ function HardwareCard({
         dragStateRef.current = null
       }
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
     return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
   }, [comp.id, moveHardware, toCanvas])
 
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const target = e.target as HTMLElement
-      if (target.closest(`.${styles.roleBadge}`)) return
-      if (target.tagName === 'BUTTON' || target.tagName === 'SELECT' || target.tagName === 'OPTION') return
+  const onShapePointerDown = useCallback(
+    (e: React.PointerEvent<SVGRectElement>) => {
+      if (e.button !== 0) return
       e.stopPropagation()
       onSelect()
       useEditorStore.getState().beginTransaction()
@@ -1417,187 +1695,307 @@ function HardwareCard({
     [comp.position, onSelect]
   )
 
-  // Per-frame activity hook. Mutates CSS variables directly on the card
-  // root so no render churn happens per frame. Decays the flash ring over
-  // ~200ms after a rising edge.
+  /* ----- Activity hook — mutate CSS custom props on this <g>. ----- */
+  const groupRef = useRef<SVGGElement>(null)
   const activityFlashUntilRef = useRef<number>(0)
+  const lastLevelRef = useRef<number>(0.5)
+  const [shapeLevel, setShapeLevel] = useState<number>(0.5)
+
   useHardwareActivity(comp.id, (frame: ActivityFrame) => {
-    const el = rootRef.current
+    const el = groupRef.current
     if (!el) return
     const level = frame.level
     el.style.setProperty('--hw-activity-level', level.toFixed(3))
-    if (frame.risingEdge) {
-      activityFlashUntilRef.current = frame.tMs + 220
-    }
+    if (frame.risingEdge) activityFlashUntilRef.current = frame.tMs + 220
     const now = frame.tMs
     const until = activityFlashUntilRef.current
     const flash = until > now ? Math.max(0, (until - now) / 220) : 0
     el.style.setProperty('--hw-activity-flash', flash.toFixed(3))
+    if (Math.abs(level - lastLevelRef.current) > 0.02 || frame.risingEdge) {
+      lastLevelRef.current = level
+      setShapeLevel(level)
+    }
   })
 
-  // Convert CANVAS-space position to client pixels via the SVG's CTM so
-  // the card always lines up with the SVG's letterboxed viewport regardless
-  // of container size. Recompute on mount / resize / position change.
-  const [screen, setScreen] = useState<{ left: number; top: number; w: number; h: number }>({
-    left: 0, top: 0, w: CARD_W, h: CARD_H
-  })
-  useLayoutEffect(() => {
-    const svg = svgRef.current
-    if (!svg) return
-    const compute = () => {
-      const ctm = svg.getScreenCTM()
-      const parent = svg.parentElement?.getBoundingClientRect()
-      if (!ctm || !parent) return
-      const pt = svg.createSVGPoint()
-      pt.x = comp.position.x
-      pt.y = comp.position.y
-      const p1 = pt.matrixTransform(ctm)
-      pt.x = comp.position.x + CARD_W
-      pt.y = comp.position.y + CARD_H
-      const p2 = pt.matrixTransform(ctm)
-      setScreen({
-        left: p1.x - parent.left,
-        top: p1.y - parent.top,
-        w: p2.x - p1.x,
-        h: p2.y - p1.y
-      })
-    }
-    compute()
-    const ro = new ResizeObserver(compute)
-    ro.observe(svg)
-    window.addEventListener('resize', compute)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', compute)
-    }
-  }, [comp.position.x, comp.position.y, svgRef])
+  /* ----- Derived pieces for the chrome (visible on hover / select). ----- */
+  const requiredRoles = KIND_ROLES[comp.kind]
+  const allBound = requiredRoles.every((r) => !!comp.pins[r])
+  const chromeVisible = selected || hovered
+
+  const selectionStroke = selected
+    ? 'var(--dp-accent)'
+    : hovered
+      ? 'color-mix(in srgb, var(--dp-accent) 50%, transparent)'
+      : 'transparent'
+  const selectionSW = Math.max(0.8, 1.25 / zoom)
+
+  // Role dots: one per required role, placed below the chrome label.
+  // Only rendered when chromeVisible. Strip is centered under the rotated
+  // bounds box.
+  const ROLE_DOT_R = 5
+  const ROLE_DOT_GAP = 4
+  const rolesCount = requiredRoles.length
+  const roleStripW =
+    rolesCount * ROLE_DOT_R * 2 + Math.max(0, rolesCount - 1) * ROLE_DOT_GAP
 
   return (
-    <div
-      ref={rootRef}
-      className={`${styles.card} ${activityStyles.card} ${selected ? styles.cardSelected : ''}`}
-      style={{
-        left: `${screen.left}px`,
-        top: `${screen.top}px`,
-        width: `${screen.w}px`,
-        height: `${screen.h}px`
-      }}
-      onMouseDown={onMouseDown}
+    <g
+      ref={groupRef}
+      className={`${styles.componentGroup} ${activityStyles.card}`}
+      transform={`translate(${comp.position.x}, ${comp.position.y})`}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
-      {/* Live-activity overlays, per kind. Driven by CSS custom props
-          set via useHardwareActivity. Pointer-events stay off so drags/
-          popovers continue to work through these layers. */}
+      {/* Rotation group — pivots on the natural center so the rotated
+          bounding box's top-left is (boundW-nat.w)/2, (boundH-nat.h)/2
+          when placed inside a parent offset... For simplicity we instead
+          rotate the shape itself and place hit/outline rects on the
+          rotated bounds around it explicitly. */}
+      <g
+        transform={`rotate(${rotation}, ${nat.w / 2}, ${nat.h / 2})`}
+        pointerEvents="none"
+      >
+        {renderComponentShape(comp, shapeLevel)}
+      </g>
+
+      {/* Selection outline + click-catcher rects in ROTATED BOUNDS frame.
+          The rotated bounding box is centered on (nat.w/2, nat.h/2) —
+          same canvas point as the natural center — because rotation
+          pivots there. We draw bounds box spanning
+          (nat.w/2 - boundW/2, nat.h/2 - boundH/2) to the opposite corner. */}
+      <rect
+        x={nat.w / 2 - boundW / 2 - 2}
+        y={nat.h / 2 - boundH / 2 - 2}
+        width={boundW + 4}
+        height={boundH + 4}
+        rx={3}
+        fill="none"
+        stroke={selectionStroke}
+        strokeWidth={selectionSW}
+        pointerEvents="none"
+        style={{ transition: 'stroke 120ms var(--dp-ease)' }}
+      />
+      <rect
+        className={styles.componentHit}
+        x={nat.w / 2 - boundW / 2}
+        y={nat.h / 2 - boundH / 2}
+        width={boundW}
+        height={boundH}
+        fill="transparent"
+        onPointerDown={onShapePointerDown}
+      />
+
+      {/* Activity overlays — small SVG circles/rects styled via CSS vars
+          on the group. Component shapes already animate pot/LED; these are
+          extra cues for buttons/jacks that don't morph. */}
       {comp.kind === 'led' ? (
-        <>
-          <span className={activityStyles.ledGlow} aria-hidden />
-          <span className={activityStyles.ledEmitter} aria-hidden />
-        </>
+        <circle
+          cx={nat.w / 2}
+          cy={nat.h / 2}
+          r={Math.max(nat.w, nat.h) * 0.7}
+          fill="color-mix(in srgb, var(--dp-signal-audio) calc(var(--hw-activity-level) * 70%), transparent)"
+          opacity={0.45}
+          pointerEvents="none"
+          style={{ filter: 'blur(2px)' }}
+        />
       ) : null}
       {comp.kind === 'button' || comp.kind === 'gate_jack' ? (
-        <span className={activityStyles.buttonPressed} aria-hidden />
+        <rect
+          x={nat.w / 2 - boundW / 2 - 1}
+          y={nat.h / 2 - boundH / 2 - 1}
+          width={boundW + 2}
+          height={boundH + 2}
+          rx={3}
+          fill="none"
+          stroke="color-mix(in srgb, var(--dp-signal-gate) calc(var(--hw-activity-flash) * 70%), transparent)"
+          strokeWidth={Math.max(1, 1.25 / zoom)}
+          pointerEvents="none"
+        />
       ) : null}
       {comp.kind === 'midi_jack' || comp.kind === 'i2s_codec' ? (
-        <span className={activityStyles.jackActivity} aria-hidden />
+        <circle
+          cx={nat.w / 2 - boundW / 2 + 6}
+          cy={nat.h / 2 - boundH / 2 + 6}
+          r={3}
+          fill="color-mix(in srgb, var(--dp-signal-gate) calc(20% + var(--hw-activity-flash) * 80%), var(--dp-surface-sunken))"
+          pointerEvents="none"
+        />
       ) : null}
 
-      <span className={styles.cardIcon}>
-        <Icon />
-      </span>
-      <span className={styles.cardLabel}>{comp.label}</span>
-      <span
-        className={styles.cardStatus}
-        data-status={bound ? 'ok' : 'warn'}
-        title={bound ? 'All roles wired' : 'Pins missing'}
-      >
-        {bound ? 'WIRED' : 'PINS?'}
-      </span>
-      <div className={styles.roleRow}>
-        {requiredRoles.map((role) => {
-          const pin = comp.pins[role]
-          return (
-            <RoleBadge
-              key={role}
-              role={role}
-              componentId={comp.id}
-              kind={comp.kind}
-              currentPin={pin ?? null}
-              allowed={allowedPinsForRole(role)}
-              pinout={pinout}
-              isBound={!!pin}
-              isDragging={activeDragRole === role}
-              onBeginWireDrag={onBeginWireDrag}
-              toCanvas={toCanvas}
-              onOpenPopover={() => setPopoverRole(role)}
-              onClosePopover={() => setPopoverRole(null)}
-              popoverOpen={popoverRole === role}
-            />
-          )
-        })}
-      </div>
-    </div>
+      {/* Hover chrome — label + status + role dots. Rendered under the
+          rotated bounding box, centered. Coordinates are in the unrotated
+          canvas frame of the component's <g>. Since we're rendering below
+          the bounds box in visual (not shape) space, position everything
+          relative to (nat.w/2, nat.h/2) center. */}
+      {chromeVisible ? (
+        <g pointerEvents="none">
+          {/* Label + status plate. */}
+          <ChromeLabel
+            cx={nat.w / 2}
+            y={nat.h / 2 + boundH / 2 + 6}
+            label={comp.label}
+            status={allBound ? 'WIRED' : 'PINS?'}
+            statusOk={allBound}
+          />
+          {/* Role dot strip — sits below the label plate. */}
+          <g
+            transform={`translate(${nat.w / 2 - roleStripW / 2}, ${nat.h / 2 + boundH / 2 + 32})`}
+            pointerEvents="auto"
+          >
+            {requiredRoles.map((role, i) => {
+              const cx = i * (ROLE_DOT_R * 2 + ROLE_DOT_GAP) + ROLE_DOT_R
+              const cy = ROLE_DOT_R
+              const pin = comp.pins[role]
+              const isActive = activeDragRole === role
+              return (
+                <RoleDot
+                  key={role}
+                  cx={cx}
+                  cy={cy}
+                  r={ROLE_DOT_R}
+                  role={role}
+                  pin={pin ?? null}
+                  isActive={isActive}
+                  pinout={pinout}
+                  componentId={comp.id}
+                  kind={comp.kind}
+                  onBeginWireDrag={onBeginWireDrag}
+                  toCanvas={toCanvas}
+                />
+              )
+            })}
+          </g>
+        </g>
+      ) : null}
+    </g>
   )
 }
 
 /* =====================================================================
- * Role badge — the drag source.
- *
- * Earlier passes failed here for two reasons:
- *   1. Pointer events were handled via React synthetics only. SVG children
- *      above the badge would capture pointermove events once the cursor
- *      left the badge, and the drag would die silently.
- *   2. The hit test was a tiny 4px pin dot.
- *
- * Fix: pointerdown arms a press state. On the first pointermove that
- * crosses the drag threshold, we release the badge's pointer capture and
- * fire `onBeginWireDrag` — from there the top-level HardwareView tracks
- * pointermove/pointerup on `window`. That cleanly escapes the SVG's
- * hover/capture machinery. The hit test in the top-level drag handler
- * uses `document.elementsFromPoint` against `data-pin-row` attributes.
+ * ChromeLabel — label pill with status badge.
  * ===================================================================== */
 
-interface RoleBadgeProps {
-  role: string
-  componentId: string
-  kind: string
-  currentPin: BoardPin | null
-  allowed: Set<string>
-  pinout: BoardPinout
-  isBound: boolean
-  isDragging: boolean
-  onBeginWireDrag: (componentId: string, role: string, kind: string, sx: number, sy: number) => void
-  toCanvas: (clientX: number, clientY: number) => { x: number; y: number }
-  onOpenPopover: () => void
-  onClosePopover: () => void
-  popoverOpen: boolean
+function ChromeLabel({
+  cx,
+  y,
+  label,
+  status,
+  statusOk
+}: {
+  cx: number
+  y: number
+  label: string
+  status: string
+  statusOk: boolean
+}) {
+  // Approximate width from label length — SVG doesn't lay out text like
+  // DOM, so size a backing plate generously and let text overflow if the
+  // user names something very long.
+  const approxW = Math.min(260, Math.max(80, label.length * 6 + 62))
+  const h = 18
+  const plateX = cx - approxW / 2
+  return (
+    <g>
+      <rect
+        x={plateX}
+        y={y}
+        width={approxW}
+        height={h}
+        rx={h / 2}
+        fill="color-mix(in srgb, var(--dp-surface-elevated) 92%, transparent)"
+        stroke="var(--dp-border)"
+        strokeWidth="0.75"
+      />
+      <text
+        x={plateX + 10}
+        y={y + h / 2 + 3.5}
+        fontFamily="var(--dp-font-sans)"
+        fontSize="10"
+        fill="var(--dp-text)"
+        dominantBaseline="middle"
+      >
+        {label}
+      </text>
+      <g>
+        <rect
+          x={plateX + approxW - 50}
+          y={y + 3}
+          width={44}
+          height={h - 6}
+          rx={(h - 6) / 2}
+          fill={
+            statusOk
+              ? 'color-mix(in srgb, var(--dp-success) 12%, transparent)'
+              : 'color-mix(in srgb, var(--dp-warning) 14%, transparent)'
+          }
+        />
+        <text
+          x={plateX + approxW - 50 + 22}
+          y={y + h / 2 + 3.5}
+          textAnchor="middle"
+          fontFamily="var(--dp-font-mono)"
+          fontSize="8"
+          letterSpacing="0.12em"
+          fill={statusOk ? 'var(--dp-success)' : 'var(--dp-warning)'}
+          dominantBaseline="middle"
+        >
+          {status}
+        </text>
+      </g>
+    </g>
+  )
 }
 
-function RoleBadge({
+/* =====================================================================
+ * RoleDot — small draggable circle next to a component, used to wire a
+ * role to a pin. Pointer handlers match the prior RoleBadge: on first
+ * move past threshold we hand off to the top-level window listeners
+ * registered in `HardwareViewInner`.
+ * ===================================================================== */
+
+function RoleDot({
+  cx,
+  cy,
+  r,
   role,
+  pin,
+  isActive,
+  pinout,
   componentId,
   kind,
-  currentPin,
-  allowed,
-  pinout,
-  isBound,
-  isDragging,
   onBeginWireDrag,
-  toCanvas,
-  onOpenPopover,
-  onClosePopover,
-  popoverOpen
-}: RoleBadgeProps) {
+  toCanvas
+}: {
+  cx: number
+  cy: number
+  r: number
+  role: string
+  pin: BoardPin | null
+  isActive: boolean
+  pinout: BoardPinout
+  componentId: string
+  kind: HardwareKind
+  onBeginWireDrag: (
+    componentId: string,
+    role: string,
+    kind: HardwareKind,
+    sx: number,
+    sy: number
+  ) => void
+  toCanvas: (clientX: number, clientY: number) => { x: number; y: number }
+}) {
+  void pinout
   const setHardwarePin = useEditorStore((s) => s.setHardwarePin)
-  const rootRef = useRef<HTMLDivElement>(null)
   const pressRef = useRef<{
     startClient: { x: number; y: number }
     capturedPointerId: number | null
     startedDrag: boolean
   } | null>(null)
 
-  const DRAG_THRESHOLD = 4
+  const DRAG_THRESHOLD = 3
 
   const onPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
+    (e: React.PointerEvent<SVGCircleElement>) => {
       if (e.button !== 0) return
       e.stopPropagation()
       e.preventDefault()
@@ -1618,15 +2016,13 @@ function RoleBadge({
   )
 
   const onPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
+    (e: React.PointerEvent<SVGCircleElement>) => {
       const st = pressRef.current
       if (!st || st.startedDrag) return
       const dx = e.clientX - st.startClient.x
       const dy = e.clientY - st.startClient.y
       if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return
       st.startedDrag = true
-      // Release the pointer capture so window-level listeners on the
-      // HardwareView can observe pointermove without fighting the badge.
       if (st.capturedPointerId !== null) {
         try {
           ;(e.currentTarget as Element).releasePointerCapture(st.capturedPointerId)
@@ -1634,137 +2030,72 @@ function RoleBadge({
           /* noop */
         }
       }
-      const rect = rootRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const cx = rect.left + rect.width / 2
-      const cy = rect.top + rect.height / 2
-      const p = toCanvas(cx, cy)
+      // Compute the dot's current canvas coord as the drag source so the
+      // preview wire starts exactly at the dot.
+      const bcr = (e.currentTarget as SVGCircleElement).getBoundingClientRect()
+      const cxClient = bcr.left + bcr.width / 2
+      const cyClient = bcr.top + bcr.height / 2
+      const p = toCanvas(cxClient, cyClient)
       onBeginWireDrag(componentId, role, kind, p.x, p.y)
     },
     [componentId, kind, onBeginWireDrag, role, toCanvas]
   )
 
-  const onPointerUp = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const st = pressRef.current
-      if (!st) return
-      // If pointer capture is still ours and no drag started, treat as tap.
-      if (!st.startedDrag) {
-        e.stopPropagation()
-        onOpenPopover()
-      }
-      pressRef.current = null
-    },
-    [onOpenPopover]
-  )
+  const onPointerUp = useCallback(() => {
+    pressRef.current = null
+  }, [])
 
   const onContextMenu = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isBound) return
+    (e: React.MouseEvent<SVGCircleElement>) => {
+      if (!pin) return
       e.preventDefault()
       e.stopPropagation()
       useEditorStore.getState().beginTransaction()
       setHardwarePin(componentId, role, null)
       useEditorStore.getState().endTransaction()
     },
-    [componentId, isBound, role, setHardwarePin]
+    [componentId, pin, role, setHardwarePin]
   )
 
+  const fill = pin
+    ? 'var(--dp-success)'
+    : 'color-mix(in srgb, var(--dp-warning) 80%, var(--dp-bg))'
+  const stroke = isActive ? 'var(--dp-accent)' : 'var(--dp-border-strong)'
+  const sw = isActive ? 1.5 : 0.75
+
   return (
-    <div
-      ref={rootRef}
-      className={`${styles.roleBadge} ${isBound ? styles.roleBound : styles.roleUnbound} ${
-        isDragging ? styles.roleDragging : ''
-      }`}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onContextMenu={onContextMenu}
-      title={
-        isBound
-          ? `${role} → ${currentPin}  (drag to rewire, right-click to clear)`
-          : `${role} (drag to a pin, or tap to pick)`
-      }
-    >
-      <span className={styles.roleName}>{role}</span>
-      <span
+    <g>
+      <circle
         className={styles.roleDot}
-        data-bound={isBound ? 'true' : 'false'}
-        aria-hidden="true"
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={sw}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onContextMenu={onContextMenu}
       >
-        {isBound ? '' : '?'}
-      </span>
-      {isBound ? (
-        <span className={styles.rolePinTag}>{currentPin}</span>
-      ) : null}
-      {popoverOpen ? (
-        <RolePopover
-          currentPin={currentPin}
-          allowed={allowed}
-          pinout={pinout}
-          onSelect={(pin) => {
-            useEditorStore.getState().beginTransaction()
-            setHardwarePin(componentId, role, pin)
-            useEditorStore.getState().endTransaction()
-            onClosePopover()
-          }}
-          onClose={onClosePopover}
-        />
-      ) : null}
-    </div>
-  )
-}
-
-function RolePopover({
-  currentPin,
-  allowed,
-  pinout,
-  onSelect,
-  onClose
-}: {
-  currentPin: BoardPin | null
-  allowed: Set<string>
-  pinout: BoardPinout
-  onSelect: (pin: BoardPin | null) => void
-  onClose: () => void
-}) {
-  const rootRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) onClose()
-    }
-    // Delay hookup so the pointerup that OPENED the popover doesn't also
-    // close it.
-    const t = setTimeout(() => window.addEventListener('mousedown', onDown), 0)
-    return () => {
-      clearTimeout(t)
-      window.removeEventListener('mousedown', onDown)
-    }
-  }, [onClose])
-  return (
-    <div
-      ref={rootRef}
-      className={styles.rolePopover}
-      onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <select
-        className={styles.rolePopoverSelect}
-        value={(currentPin as string) ?? ''}
-        onChange={(e) => {
-          const v = e.target.value
-          onSelect(v === '' ? null : (v as BoardPin))
-        }}
+        <title>
+          {pin
+            ? `${role} → ${pin} (drag to rewire, right-click to clear)`
+            : `${role} (drag to a pin)`}
+        </title>
+      </circle>
+      <text
+        x={cx}
+        y={cy + r + 8}
+        textAnchor="middle"
+        fontFamily="var(--dp-font-mono)"
+        fontSize="7"
+        letterSpacing="0.08em"
+        fill="var(--dp-text-muted)"
+        pointerEvents="none"
       >
-        <option value="">(none)</option>
-        {pinout.pinsInOrder
-          .filter((p) => allowed.has(p))
-          .map((p) => (
-            <option key={p} value={p}>
-              {pinout.pinCaps[p]?.label ?? p}
-            </option>
-          ))}
-      </select>
-    </div>
+        {role}
+      </text>
+    </g>
   )
 }

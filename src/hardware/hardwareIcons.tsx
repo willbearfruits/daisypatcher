@@ -137,6 +137,101 @@ export function IconEncoder() {
   )
 }
 
+export function IconSlider() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="10" y="3" width="4" height="18" rx="1" stroke="currentColor" strokeWidth="1.25" />
+      <rect x="6" y="7" width="12" height="4" rx="1" fill="currentColor" opacity="0.85" />
+      <line x1="12" y1="13" x2="12" y2="21" stroke="currentColor" strokeWidth="1" opacity="0.6" />
+    </svg>
+  )
+}
+
+export function IconTouchRibbon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="10" y="3" width="4" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="0.75" opacity="0.5" />
+    </svg>
+  )
+}
+
+export function IconLDR() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="7.5" stroke="currentColor" strokeWidth="1.25" />
+      <path
+        d="M6.5 9 l2.5 0 l1 3 l1 -3 l1 3 l1 -3 l1 3 l1 -3 l2 0"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+export function IconGyroscope() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="4" y="4" width="16" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+      <path d="M8 12a4 4 0 1 1 4 4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      <path d="M14 16l2 0 0 -2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      <path d="M12 6v3" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.7" />
+      <path d="M15 8l2 1" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.7" />
+      <circle cx="6.5" cy="6.5" r="0.8" fill="currentColor" />
+    </svg>
+  )
+}
+
+export function IconMagnetometer() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="4" y="4" width="16" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+      <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1" />
+      <path d="M12 7l1.2 4 L12 12 l-1.2 -1 Z" fill="currentColor" opacity="0.85" />
+      <path d="M12 17l-1.2 -4 L12 12 l1.2 1 Z" fill="currentColor" opacity="0.35" />
+    </svg>
+  )
+}
+
+export function IconTof() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="4" y="6" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+      <circle cx="10" cy="12" r="2.25" fill="currentColor" opacity="0.9" />
+      <path d="M16 9l5 3 -5 3 Z" stroke="currentColor" strokeWidth="1" strokeLinejoin="round" opacity="0.85" />
+    </svg>
+  )
+}
+
+export function IconElectret() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.25" />
+      <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="0.75" opacity="0.5" />
+      <circle cx="9" cy="10" r="0.7" fill="currentColor" opacity="0.7" />
+      <circle cx="12" cy="9" r="0.7" fill="currentColor" opacity="0.7" />
+      <circle cx="15" cy="10" r="0.7" fill="currentColor" opacity="0.7" />
+      <circle cx="9" cy="13" r="0.7" fill="currentColor" opacity="0.7" />
+      <circle cx="12" cy="14" r="0.7" fill="currentColor" opacity="0.7" />
+      <circle cx="15" cy="13" r="0.7" fill="currentColor" opacity="0.7" />
+    </svg>
+  )
+}
+
+export function IconPiezo() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.25" />
+      <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1" opacity="0.75" />
+      <line x1="4" y1="12" x2="2.5" y2="11" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      <line x1="20" y1="12" x2="21.5" y2="13" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** Pick the right icon for a HardwareKind. Used by placed cards + inspector. */
 export const HARDWARE_ICON: Record<HardwareKind, () => ReactElement> = {
   pot: IconPot,
@@ -149,5 +244,13 @@ export const HARDWARE_ICON: Record<HardwareKind, () => ReactElement> = {
   midi_jack: IconMidiJack,
   oled_ssd1306: IconOLED,
   i2s_codec: IconI2S,
-  encoder: IconEncoder
+  encoder: IconEncoder,
+  slider: IconSlider,
+  touch_ribbon: IconTouchRibbon,
+  ldr: IconLDR,
+  gyroscope: IconGyroscope,
+  magnetometer: IconMagnetometer,
+  tof: IconTof,
+  electret: IconElectret,
+  piezo: IconPiezo
 }

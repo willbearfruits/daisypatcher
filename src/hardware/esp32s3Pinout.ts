@@ -185,7 +185,13 @@ export function esp32PinsForRole(role: string, kind: string): string[] {
     switch (kind) {
       case 'pot':
       case 'cv_jack':
+      case 'slider':
+      case 'touch_ribbon':
+      case 'ldr':
+      case 'electret':
         return cap.adc
+      case 'piezo':
+        return cap.adc || cap.pwm
       case 'button':
       case 'switch_3way':
       case 'gate_jack':
@@ -194,8 +200,13 @@ export function esp32PinsForRole(role: string, kind: string): string[] {
       case 'led':
         return cap.gpio
       case 'oled_ssd1306':
-        if (r === 'sda') return cap.i2c === 'sda' || cap.gpio
-        if (r === 'scl') return cap.i2c === 'scl' || cap.gpio
+      case 'gyroscope':
+      case 'magnetometer':
+      case 'tof':
+        if (r === 'sda')   return cap.i2c === 'sda' || cap.gpio
+        if (r === 'scl')   return cap.i2c === 'scl' || cap.gpio
+        if (r === 'int')   return cap.gpio
+        if (r === 'xshut') return cap.gpio
         return !!cap.i2c
       case 'i2s_codec':
         if (r === 'sck')   return cap.i2s === 'sck'  || cap.gpio

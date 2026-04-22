@@ -18,7 +18,15 @@ import {
   IconMidiJack,
   IconOLED,
   IconI2S,
-  IconEncoder
+  IconEncoder,
+  IconSlider,
+  IconTouchRibbon,
+  IconLDR,
+  IconGyroscope,
+  IconMagnetometer,
+  IconTof,
+  IconElectret,
+  IconPiezo
 } from './hardwareIcons'
 import styles from './HardwarePalette.module.css'
 
@@ -33,10 +41,18 @@ interface HwKindCard {
 
 const HARDWARE_CARDS: HwKindCard[] = [
   { kind: 'pot',          label: 'Pot',          description: 'Potentiometer → ADC',      icon: IconPot },
+  { kind: 'slider',       label: 'Slider',       description: 'Linear fader → ADC',       icon: IconSlider },
+  { kind: 'touch_ribbon', label: 'Ribbon',       description: 'SoftPot / touch strip',    icon: IconTouchRibbon },
   { kind: 'button',       label: 'Button',       description: 'Momentary → GPIO in',      icon: IconButton },
   { kind: 'switch_3way',  label: 'Switch',       description: 'SP3T toggle',              icon: IconSwitch },
   { kind: 'encoder',      label: 'Encoder',      description: 'Rotary with push',         icon: IconEncoder },
   { kind: 'led',          label: 'LED',          description: 'GPIO out, PWM-capable',    icon: IconLED },
+  { kind: 'ldr',          label: 'LDR',          description: 'Photoresistor → ADC',      icon: IconLDR },
+  { kind: 'electret',     label: 'Mic',          description: 'Electret capsule → ADC',   icon: IconElectret },
+  { kind: 'piezo',        label: 'Piezo',        description: 'Knock sensor / buzzer',    icon: IconPiezo },
+  { kind: 'gyroscope',    label: 'Gyro / IMU',   description: 'I2C MPU-6050 / ICM',       icon: IconGyroscope },
+  { kind: 'magnetometer', label: 'Compass',      description: 'I2C HMC5883L / QMC',       icon: IconMagnetometer },
+  { kind: 'tof',          label: 'ToF',          description: 'I2C distance (VL53L0X)',   icon: IconTof },
   { kind: 'gate_jack',    label: 'Gate Jack',    description: '3.5mm gate I/O',           icon: IconGateJack },
   { kind: 'cv_jack',      label: 'CV Jack',      description: '3.5mm CV in/out',          icon: IconCVJack },
   { kind: 'audio_jack',   label: 'Audio Jack',   description: 'TRS stereo',               icon: IconAudioJack },

@@ -254,10 +254,22 @@
   flex-direction: column;
   gap: var(--dp-space-1);
   overflow: hidden;
-  max-height: 2000px;
+  max-height: 4000px;
   transition: max-height var(--dp-motion-fast) var(--dp-ease),
               opacity var(--dp-motion-fast) var(--dp-ease);
   opacity: 1;
+}
+
+/*
+ * Grid variant — applied to the section body in compact mode so the
+ * catalog fits many more items per screen. Tiles auto-fill so widening
+ * the palette adds columns.
+ */
+.sectionBodyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: var(--dp-space-1);
+  max-height: none;
 }
 
 .sectionBodyCollapsed {
@@ -297,7 +309,31 @@
 }
 
 .cardCompact {
-  padding: 4px var(--dp-space-2);
+  /*
+   * Compact = grid-tile mode. Each card becomes a vertically-stacked tile
+   * (icon above label) so several fit per row when the section body uses
+   * the `sectionBodyGrid` layout.
+   */
+  grid-template-columns: 1fr;
+  grid-template-rows: 20px auto;
+  justify-items: center;
+  text-align: center;
+  padding: 6px 4px;
+  gap: 2px;
+}
+
+.cardCompact .cardIcon {
+  grid-row: 1;
+}
+
+.cardCompact .cardText {
+  grid-row: 2;
+  align-items: center;
+  max-width: 100%;
+}
+
+.cardCompact .cardLabel {
+  font-size: var(--dp-fs-xs);
 }
 
 .cardUnsupported {

@@ -40,7 +40,10 @@ const DEFAULT_LAYOUT: LayoutSizes = {
   buildLogH: 220,
   serialMonitorH: 260,
   paletteCollapsed: false,
-  paletteCompact: false,
+  // Compact = grid tiles (icon + short label) instead of one line per kind
+  // with a description. Default ON so the 70+ catalog is browsable at a
+  // glance — resizing the palette wider automatically adds more columns.
+  paletteCompact: true,
   categoriesCollapsed: [],
   paletteFilter: 'available',
   recentKinds: []
@@ -144,7 +147,15 @@ function defaultHardwareLabel(kind: HardwareKind): string {
     midi_jack: 'MIDI',
     oled_ssd1306: 'OLED',
     i2s_codec: 'I2S',
-    encoder: 'Encoder'
+    encoder: 'Encoder',
+    slider: 'Slider',
+    touch_ribbon: 'Ribbon',
+    ldr: 'LDR',
+    gyroscope: 'Gyro',
+    magnetometer: 'Mag',
+    tof: 'ToF',
+    electret: 'Mic',
+    piezo: 'Piezo'
   }
   return m[kind]
 }
@@ -177,14 +188,26 @@ function countInvalidComponentsForBoard(
 void targetForBoard
 
 function defaultHardwareConfig(kind: HardwareKind): Record<string, number | string | boolean> {
+  // `rotation` and kind-specific defaults. Rotation lives in config to keep
+  // the `PlacedComponent` schema stable (optional config keys tolerate
+  // unknown kinds cleanly).
+  const base: Record<string, number | string | boolean> = { rotation: 0 }
   switch (kind) {
-    case 'pot':          return { taper: 'linear' }
-    case 'led':          return { color: 'white', pwm: false }
-    case 'switch_3way':  return { positions: 3 }
-    case 'encoder':      return { detents: 24, withSwitch: true }
-    case 'oled_ssd1306': return { width: 128, height: 64, address: '0x3C' }
-    case 'i2s_codec':    return { model: 'pcm3060' }
-    default:             return {}
+    case 'pot':          return { ...base, taper: 'linear' }
+    case 'led':          return { ...base, color: 'white', pwm: false }
+    case 'switch_3way':  return { ...base, positions: 3 }
+    case 'encoder':      return { ...base, detents: 24, withSwitch: true }
+    case 'oled_ssd1306': return { ...base, width: 128, height: 64, address: '0x3C' }
+    case 'i2s_codec':    return { ...base, model: 'pcm3060' }
+    case 'slider':       return { ...base, orientation: 'vertical', travel: 60 }
+    case 'touch_ribbon': return { ...base, orientation: 'vertical', length: 80 }
+    case 'ldr':          return { ...base }
+    case 'gyroscope':    return { ...base, address: '0x68', rate: 200, pullup: true, hasInt: true }
+    case 'magnetometer': return { ...base, address: '0x1E', offsetX: 0, offsetY: 0, offsetZ: 0 }
+    case 'tof':          return { ...base, address: '0x29', profile: 'short', hasXshut: true }
+    case 'electret':     return { ...base, gainDb: 20, acCouple: true }
+    case 'piezo':        return { ...base, direction: 'input', threshold: 0.2 }
+    default:             return base
   }
 }
 
@@ -563,10 +586,21 @@ export const useEditorStore = create<EditorStore>((set, get) => {
 
     addHardware(kind, position) {
       const id = nanoid(8)
+      // Auto-number the label from existing same-kind components so the
+      // first "Pot 1", second "Pot 2" etc. If the user renames one, the
+      // counter still advances past the highest numeric suffix found.
+      const existing = get().hardware.components.filter((c) => c.kind === kind)
+      const base = defaultHardwareLabel(kind)
+      let n = 1
+      for (const c of existing) {
+        const m = c.label.match(/\b(\d+)\s*$/)
+        if (m) n = Math.max(n, Number(m[1]) + 1)
+        else n = Math.max(n, existing.length + 1)
+      }
       const component: PlacedComponent = {
         id,
         kind,
-        label: defaultHardwareLabel(kind),
+        label: `${base} ${n}`,
         position,
         pins: {},
         config: defaultHardwareConfig(kind)

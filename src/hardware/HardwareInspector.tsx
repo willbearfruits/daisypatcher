@@ -121,16 +121,56 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-/** Kind-specific config controls. Simple, declarative — add rows per kind. */
+/** Kind-specific config controls. Simple, declarative — add rows per kind.
+ *  Every component also gets a universal rotation control.
+ */
 function ConfigSection({ comp }: { comp: PlacedComponent }) {
   const rows = CONFIG_ROWS[comp.kind]
-  if (!rows || rows.length === 0) return null
+  const rotationRow: ConfigRowDef = {
+    key: 'rotation',
+    label: 'Rotation',
+    kind: 'enum',
+    options: [
+      { value: '0', label: '0°' },
+      { value: '90', label: '90°' },
+      { value: '180', label: '180°' },
+      { value: '270', label: '270°' }
+    ]
+  }
   return (
     <Section title="Config">
-      {rows.map((row) => (
+      <RotationRow comp={comp} row={rotationRow} />
+      {(rows ?? []).map((row) => (
         <ConfigRow key={row.key} comp={comp} row={row} />
       ))}
     </Section>
+  )
+}
+
+/** Rotation is stored as a number in config; the enum row stores strings.
+ *  Small wrapper so users see 0°/90°/180°/270° but the store stays numeric. */
+function RotationRow({ comp, row }: { comp: PlacedComponent; row: ConfigRowDef }) {
+  const setConfig = useEditorStore((s) => s.setHardwareConfig)
+  const raw = comp.config.rotation
+  const current = String(typeof raw === 'number' ? raw : 0)
+  if (row.kind !== 'enum') return null
+  return (
+    <div className={styles.field}>
+      <div className={styles.fieldHead}>
+        <span className={styles.fieldLabel}>{row.label}</span>
+      </div>
+      <select
+        className={styles.select}
+        value={current}
+        onChange={(e) => setConfig(comp.id, 'rotation', Number(e.target.value))}
+      >
+        {row.options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   )
 }
 
@@ -199,6 +239,71 @@ const CONFIG_ROWS: Partial<Record<HardwareKind, ConfigRowDef[]>> = {
         { value: 'wm8731', label: 'WM8731' }
       ]
     }
+  ],
+  slider: [
+    {
+      key: 'orientation',
+      label: 'Orientation',
+      kind: 'enum',
+      options: [
+        { value: 'vertical', label: 'Vertical' },
+        { value: 'horizontal', label: 'Horizontal' }
+      ]
+    },
+    { key: 'travel', label: 'Travel (mm)', kind: 'number', min: 20, max: 120, step: 1 }
+  ],
+  touch_ribbon: [
+    {
+      key: 'orientation',
+      label: 'Orientation',
+      kind: 'enum',
+      options: [
+        { value: 'vertical', label: 'Vertical' },
+        { value: 'horizontal', label: 'Horizontal' }
+      ]
+    },
+    { key: 'length', label: 'Length (mm)', kind: 'number', min: 40, max: 200, step: 5 }
+  ],
+  gyroscope: [
+    { key: 'address', label: 'I2C addr', kind: 'text' },
+    { key: 'rate',    label: 'Rate (Hz)', kind: 'number', min: 10, max: 1000, step: 10 },
+    { key: 'pullup',  label: 'Pull-ups', kind: 'bool' },
+    { key: 'hasInt',  label: 'Use INT pin', kind: 'bool' }
+  ],
+  magnetometer: [
+    { key: 'address', label: 'I2C addr', kind: 'text' },
+    { key: 'offsetX', label: 'Offset X', kind: 'number', min: -1000, max: 1000, step: 1 },
+    { key: 'offsetY', label: 'Offset Y', kind: 'number', min: -1000, max: 1000, step: 1 },
+    { key: 'offsetZ', label: 'Offset Z', kind: 'number', min: -1000, max: 1000, step: 1 }
+  ],
+  tof: [
+    { key: 'address', label: 'I2C addr', kind: 'text' },
+    {
+      key: 'profile',
+      label: 'Range',
+      kind: 'enum',
+      options: [
+        { value: 'short', label: 'Short (<1.3m)' },
+        { value: 'long', label: 'Long (<4m)' }
+      ]
+    },
+    { key: 'hasXshut', label: 'Use XSHUT pin', kind: 'bool' }
+  ],
+  electret: [
+    { key: 'gainDb',   label: 'Gain (dB)', kind: 'number', min: 0, max: 60, step: 1 },
+    { key: 'acCouple', label: 'AC-couple', kind: 'bool' }
+  ],
+  piezo: [
+    {
+      key: 'direction',
+      label: 'Direction',
+      kind: 'enum',
+      options: [
+        { value: 'input', label: 'Input (sense)' },
+        { value: 'output', label: 'Output (buzzer)' }
+      ]
+    },
+    { key: 'threshold', label: 'Threshold', kind: 'number', min: 0, max: 1, step: 0.01 }
   ]
 }
 

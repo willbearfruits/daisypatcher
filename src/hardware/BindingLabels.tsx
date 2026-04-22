@@ -70,8 +70,12 @@ export function BindingLabels({
     anchor: 'start' | 'end'
   }[] = []
   for (const comp of components) {
-    const desc = descMap.get(comp.id)
-    if (!desc) continue
+    // `desc` is the DSP-graph binding description. When there is no graph
+    // binding yet (component placed but not wired into the patch), we still
+    // want to show a useful tag next to its pin — fall back to the
+    // component's own label so the label toggle is always useful, not only
+    // once a graph binding exists.
+    const desc = descMap.get(comp.id) ?? comp.label
     for (const [role, pin] of Object.entries(comp.pins)) {
       if (!pin) continue
       const coord = pinCoordMap.get(pin as string)

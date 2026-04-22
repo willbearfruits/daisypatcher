@@ -245,7 +245,9 @@ export function Palette() {
                 )}
               </button>
               <div
-                className={`${styles.sectionBody} ${isCollapsed ? styles.sectionBodyCollapsed : ''}`}
+                className={`${styles.sectionBody} ${
+                  compact ? styles.sectionBodyGrid : ''
+                } ${isCollapsed ? styles.sectionBodyCollapsed : ''}`}
                 aria-hidden={isCollapsed}
               >
                 {items.map(({ def, support }) => (
