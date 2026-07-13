@@ -19,6 +19,7 @@ import type { AudioGraph, NodeKind } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
 import { emptyHardwareLayout } from '@/types/hardware'
 import type { DaisyFlashMode, LayoutSizes, PaletteFilterMode } from '@/types/store'
+import { requestConfirm } from '@/components/layout/ConfirmDialog'
 import { useEditorStore } from './store'
 
 type Store = typeof useEditorStore
@@ -223,10 +224,15 @@ export async function openPatch(
   }
 }
 
-export function newPatch(store: Store = useEditorStore): void {
+export async function newPatch(store: Store = useEditorStore): Promise<void> {
   const s = store.getState()
   if (s.isDirty || s.history.past.length > 0) {
-    const ok = window.confirm('Discard unsaved changes?')
+    const ok = await requestConfirm({
+      title: 'New patch',
+      message: 'Discard unsaved changes?',
+      confirmLabel: 'Discard',
+      danger: true
+    })
     if (!ok) return
   }
   s.resetGraph()

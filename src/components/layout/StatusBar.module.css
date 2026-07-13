@@ -299,12 +299,13 @@
 }
 
 .popoverClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 0;
   color: var(--dp-text-dim);
   cursor: pointer;
-  font-family: var(--dp-font-mono);
-  font-size: var(--dp-fs-sm);
   line-height: 1;
   padding: 2px 4px;
   transition: color var(--dp-motion-fast) var(--dp-ease);

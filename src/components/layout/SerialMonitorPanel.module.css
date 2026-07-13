@@ -165,7 +165,6 @@
   line-height: 1.5;
   background: var(--dp-surface-sunken);
   color: var(--dp-text);
-  outline: none;
 }
 
 .empty {
@@ -214,11 +213,13 @@
   border: 1px solid var(--dp-border);
   border-radius: var(--dp-radius-sm);
   padding: 2px var(--dp-space-2);
-  outline: none;
 }
 
-.input:focus {
-  border-color: var(--dp-border-strong);
+/* Focus language: bordered fields signal focus with an accent border
+   instead of the global outline ring. */
+.input:focus-visible {
+  outline: none;
+  border-color: var(--dp-accent);
 }
 
 .input:disabled {

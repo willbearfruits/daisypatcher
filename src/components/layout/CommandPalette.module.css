@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--dp-scrim);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -34,6 +34,13 @@
   gap: var(--dp-space-2);
   padding: var(--dp-space-3);
   border-bottom: 1px solid var(--dp-border);
+  transition: border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+/* Focus language: the borderless input treats the searchRow's bottom rule
+   as its field border — accent it while the input holds focus. */
+.searchRow:focus-within {
+  border-bottom-color: var(--dp-accent);
 }
 
 .searchIcon {
@@ -47,10 +54,13 @@
   padding: 4px 6px;
   background: transparent;
   border: none;
-  outline: none;
   font-family: var(--dp-font-mono);
   font-size: var(--dp-fs-sm);
   color: var(--dp-text);
+}
+
+.input:focus-visible {
+  outline: none;
 }
 
 .input::placeholder {

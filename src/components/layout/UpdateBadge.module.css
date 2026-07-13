@@ -199,7 +199,7 @@
 
 .btnPrimary {
   background: var(--dp-accent);
-  color: #07090c;
+  color: var(--dp-bg);
   border-color: var(--dp-accent);
 }
 

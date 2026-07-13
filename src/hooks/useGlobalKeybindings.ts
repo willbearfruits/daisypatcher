@@ -37,6 +37,17 @@ export function useGlobalKeybindings(): void {
       }
 
       if (!mod) {
+        // Space — transport toggle (play/stop), the universal DAW binding.
+        // Guarded by isEditableTarget so typing a space in any input never
+        // fires it; preventDefault stops the page from scrolling and stops
+        // a focused button from re-triggering via its default Space action.
+        if (key === ' ' && !editable) {
+          ev.preventDefault()
+          const state = useEditorStore.getState()
+          state.setPlaying(!state.isPlaying)
+          return
+        }
+
         // Delete / Backspace — only when not in an input.
         if ((key === 'Delete' || key === 'Backspace') && !editable) {
           const state = useEditorStore.getState()
@@ -100,7 +111,7 @@ export function useGlobalKeybindings(): void {
       }
       if (k === 'n') {
         ev.preventDefault()
-        newPatch()
+        void newPatch()
         return
       }
 

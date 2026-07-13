@@ -108,7 +108,9 @@ function walkHardware(hardware: HardwareLayout): HwState {
         st.i2sCodec = {
           sck:   gpioNum(c.pins['sck'], 36),
           ws:    gpioNum(c.pins['ws'], 37),
-          sdIn:  gpioNum(c.pins['sd_in'], 35),
+          // sd_in falls back to 39 (not 35): 35 is the sd_out default and
+          // a single GPIO can't be both TX data and RX data in full-duplex.
+          sdIn:  gpioNum(c.pins['sd_in'], 39),
           sdOut: gpioNum(c.pins['sd_out'], 35),
           mclk:  gpioNum(c.pins['mclk'], 38)
         }
@@ -257,6 +259,19 @@ export function generateEsp32S3Project(
     pollLines.push(`    digitalWrite(${g}, (${varBase} > 0.5f) ? HIGH : LOW);`)
   }
 
+  // Real I2S input: only pulled in when the graph actually reads it.
+  // The legacy I2S driver (driver/i2s.h, the one this target emits) does
+  // full-duplex master on a single port on the S3 — TX and RX share
+  // BCLK/WS, so a codec wired to one bus gets both directions for free.
+  const hasAudioIn = graph.nodes.some((n) => n.kind === 'audio_in')
+  if (hasAudioIn) {
+    if (!hw.i2sCodec) {
+      warn('audio_in: no I2S codec component bound; RX uses default data-in pin GPIO39 (BCLK/WS shared with the output bus)')
+    } else if (hw.i2sCodec.sdIn === hw.i2sCodec.sdOut) {
+      warn(`audio_in: I2S codec sd_in and sd_out are both bound to GPIO${hw.i2sCodec.sdIn} — bind sd_in to its own pin`)
+    }
+  }
+
   const main = buildMainCpp({
     name,
     projectDisplayName: graph.meta.name,
@@ -270,6 +285,7 @@ export function generateEsp32S3Project(
     rightExpr,
     hw,
     pollLines,
+    hasAudioIn,
     warnings
   })
 
@@ -339,6 +355,8 @@ function buildMainCpp(args: {
   rightExpr: string
   hw: HwState
   pollLines: string[]
+  /** Graph contains an `audio_in` node — emit the full-duplex RX path. */
+  hasAudioIn: boolean
   warnings: string[]
 }): string {
   const block = Math.max(1, args.blockSize | 0) || 64
@@ -354,6 +372,33 @@ function buildMainCpp(args: {
   const pinLrck = codec?.ws ?? 37
   const pinDout = codec?.sdOut ?? 35
   const pinMclk = codec?.mclk
+
+  // Full-duplex RX (real line-in) — only emitted when the graph reads it.
+  // The legacy driver runs TX+RX on one port in master mode with shared
+  // BCLK/WS; RX only needs its own data-in GPIO. Default GPIO39 sits next
+  // to the I2S cluster on the right header and is otherwise unclaimed.
+  const duplex = args.hasAudioIn
+  const pinDin = codec?.sdIn ?? 39
+  const inBufDecl = duplex ? `\nint16_t audio_in_buffer[${block} * 2];` : ''
+  // Mirror of the output path's float→int conversion (out * 32767 clamped):
+  // int16 → float via * (1/32767) so a full-scale loopback round-trips to
+  // exactly ±1.0.
+  const inputReadLines = duplex
+    ? `        float in_l = (float)audio_in_buffer[i*2]     * (1.f / 32767.f);\n` +
+      `        float in_r = (float)audio_in_buffer[i*2 + 1] * (1.f / 32767.f);`
+    : `        float in_l = 0.f, in_r = 0.f;`
+  const i2sSectionComment = duplex
+    ? '// --- I2S audio (full-duplex master: TX out + RX in on one bus) ---'
+    : '// --- I2S audio out ---'
+  const i2sMode = duplex
+    ? 'I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX'
+    : 'I2S_MODE_MASTER | I2S_MODE_TX'
+  const dataInPin = duplex ? String(pinDin) : 'I2S_PIN_NO_CHANGE'
+  const i2sReadBlock = duplex
+    ? `    // --- Pull one block of stereo line-in (blocks until DMA delivers) ---\n` +
+      `    size_t read_bytes = 0;\n` +
+      `    i2s_read(I2S_PORT, audio_in_buffer, sizeof(audio_in_buffer), &read_bytes, portMAX_DELAY);\n\n`
+    : ''
 
   const hwInitLines: string[] = []
   for (const p of args.hw.pots) {
@@ -411,7 +456,7 @@ ${warningsBlock}
 static const int SAMPLE_RATE = ${sr};
 static const int BLOCK = ${block};
 static const i2s_port_t I2S_PORT = I2S_NUM_0;
-int16_t audio_out_buffer[${block} * 2];
+int16_t audio_out_buffer[${block} * 2];${inBufDecl}
 
 // --- Node declarations ---
 ${args.declLines.join('\n') || '// (no nodes emitted members)'}
@@ -421,7 +466,7 @@ ${args.hwDecls.join('\n') || '// (no hardware components placed)'}
 
 static inline void render_block() {
     for (int i = 0; i < BLOCK; i++) {
-        float in_l = 0.f, in_r = 0.f;
+${inputReadLines}
         (void)in_l; (void)in_r;
 
 ${args.processLines.join('\n')}
@@ -441,9 +486,9 @@ ${hwInitLines.join('\n') || '    // (no hardware init)'}
     // --- Node init ---
 ${args.initLines.join('\n')}
 
-    // --- I2S audio out ---
+    ${i2sSectionComment}
     i2s_config_t i2s_cfg = {
-        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
+        .mode = (i2s_mode_t)(${i2sMode}),
         .sample_rate = SAMPLE_RATE,
         .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
         .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
@@ -459,7 +504,7 @@ ${args.initLines.join('\n')}
         .bck_io_num = ${pinBclk},
         .ws_io_num = ${pinLrck},
         .data_out_num = ${pinDout},
-        .data_in_num = I2S_PIN_NO_CHANGE
+        .data_in_num = ${dataInPin}
     };
 ${mclkBlock}    i2s_driver_install(I2S_PORT, &i2s_cfg, 0, nullptr);
     i2s_set_pin(I2S_PORT, &pin_cfg);
@@ -473,7 +518,7 @@ ${hwPollLines.join('\n') || '    // (no hardware inputs)'}
     // --- Copy bound hardware values into per-node state ---
 ${args.pollLines.join('\n') || '    // (no bindings)'}
 
-    // --- Render one audio block + push to I2S ---
+${i2sReadBlock}    // --- Render one audio block + push to I2S ---
     render_block();
     size_t written = 0;
     i2s_write(I2S_PORT, audio_out_buffer, sizeof(audio_out_buffer), &written, portMAX_DELAY);

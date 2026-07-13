@@ -20,8 +20,11 @@ export const studioRack: Skin = {
   surface: '#181410',
   surfaceElevated: '#221d17',
   surfaceSunken: '#0a0807',
+  surfaceTerminal: '#0b0806',
   border: '#2e2720',
   borderStrong: '#4a3f30',
+
+  scrim: 'rgba(10, 6, 2, 0.72)',
 
   textPrimary: '#f0e7d8',
   textMuted: '#a69881',

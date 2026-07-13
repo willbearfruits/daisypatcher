@@ -26,8 +26,11 @@ function skinToCssVars(skin: Skin): Record<string, string> {
     '--dp-surface': skin.surface,
     '--dp-surface-elevated': skin.surfaceElevated,
     '--dp-surface-sunken': skin.surfaceSunken,
+    '--dp-surface-terminal': skin.surfaceTerminal,
     '--dp-border': skin.border,
     '--dp-border-strong': skin.borderStrong,
+
+    '--dp-scrim': skin.scrim,
 
     '--dp-text': skin.textPrimary,
     '--dp-text-muted': skin.textMuted,

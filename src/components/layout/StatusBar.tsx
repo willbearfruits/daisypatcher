@@ -302,7 +302,14 @@ function DevicePopover({ onClose }: { onClose: () => void }) {
           aria-label="Close"
           title="Close"
         >
-          {'\u2715'}
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+            <path
+              d="M4 4l8 8M12 4l-8 8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
         </button>
       </div>
 

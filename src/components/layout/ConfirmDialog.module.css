@@ -1,0 +1,95 @@
+/* ConfirmDialog — backdrop/footer patterns follow TestRigModal.module.css. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--dp-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--dp-z-modal, 40);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.dialog {
+  width: 360px;
+  max-width: calc(100vw - var(--dp-space-8));
+  background: var(--dp-surface);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--dp-font-sans);
+  color: var(--dp-text);
+}
+
+.title {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  padding: var(--dp-space-3) var(--dp-space-4) 0;
+}
+
+.message {
+  font-size: var(--dp-fs-sm);
+  line-height: 1.5;
+  color: var(--dp-text);
+  padding: var(--dp-space-3) var(--dp-space-4) var(--dp-space-4);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-3) var(--dp-space-4);
+  border-top: 1px solid var(--dp-border);
+  background: var(--dp-surface-sunken);
+}
+
+.btn {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  background: transparent;
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 6px var(--dp-space-4);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.btn:hover {
+  color: var(--dp-text);
+  border-color: var(--dp-border-strong);
+  background: var(--dp-surface);
+}
+
+.btnConfirm {
+  color: var(--dp-accent);
+  border-color: color-mix(in srgb, var(--dp-accent) 40%, var(--dp-border));
+}
+
+.btnConfirm:hover {
+  color: var(--dp-accent);
+  background: color-mix(in srgb, var(--dp-accent) 8%, var(--dp-surface));
+  border-color: var(--dp-accent);
+}
+
+.btnDanger {
+  color: var(--dp-danger);
+  border-color: color-mix(in srgb, var(--dp-danger) 40%, var(--dp-border));
+}
+
+.btnDanger:hover {
+  color: var(--dp-danger);
+  background: color-mix(in srgb, var(--dp-danger) 8%, var(--dp-surface));
+  border-color: var(--dp-danger);
+}

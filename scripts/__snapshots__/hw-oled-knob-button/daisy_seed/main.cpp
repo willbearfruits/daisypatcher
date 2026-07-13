@@ -27,15 +27,31 @@ float knob_in_knob1_val = 0.f;
 float button_btn1_val = 0.f;
 // oled oled1
 #include "dev/oled_ssd130x.h"
+#include <cstdio>
 using oled_oled1_Type = OledDisplay<SSD130xI2c128x64Driver>;
 oled_oled1_Type oled_oled1;
-float oled_oled1_in_a = 0.f;
-float oled_oled1_in_b = 0.f;
-float oled_oled1_in_c = 0.f;
-float oled_oled1_in_d = 0.f;
-float oled_oled1_in_e = 0.f;
-float oled_oled1_in_f = 0.f;
+volatile float oled_oled1_in_a = 0.f;
+volatile float oled_oled1_in_b = 0.f;
+volatile float oled_oled1_in_c = 0.f;
+volatile float oled_oled1_in_d = 0.f;
+volatile float oled_oled1_in_e = 0.f;
+volatile float oled_oled1_in_f = 0.f;
 uint32_t oled_oled1_last_frame_ms = 0;
+
+// Full display refresh for oled_oled1. Called from main()'s while(1) at
+// ~30 fps — NEVER from AudioCallback (blocking I2C transfer).
+void oled_oled1_DrawFrame() {
+    oled_oled1.Fill(false);
+    oled_oled1.SetCursor(0, 0);
+    oled_oled1.WriteString("DAISY", Font_6x8, true);
+    {
+        char _buf[24];
+        snprintf(_buf, sizeof _buf, "%.2f", (double)(oled_oled1_in_a));
+        oled_oled1.SetCursor(0, 16);
+        oled_oled1.WriteString(_buf, Font_6x8, true);
+    }
+    oled_oled1.Update();
+}
 // Hardware layout
 // Hardware: ADC channel values (0..1), one per placed pot / CV jack.
 float hw_pot_hwpot1_val = 0.f;
@@ -57,19 +73,13 @@ void AudioCallback(AudioHandle::InputBuffer in,
 
     hw_led_hwled1_gpio.Write(((button_btn1_out) > 0.5f) ? 1 : 0);
 
-    // --- OLED oled_oled1: latch input samples for DrawFrame() ---
+    // --- OLED oled_oled1: latch input samples for oled_oled1_DrawFrame() ---
     oled_oled1_in_a = knob_in_knob1_out;
     oled_oled1_in_b = 0.f;
     oled_oled1_in_c = 0.f;
     oled_oled1_in_d = 0.f;
     oled_oled1_in_e = 0.f;
     oled_oled1_in_f = 0.f;
-    // DrawFrame body (call from while(1) at ~30 Hz):
-    //   oled_oled1.Fill(false);
-    //   oled_oled1.SetCursor(0, 0); oled_oled1.WriteString("DAISY", Font_6x8, true);
-    //   { char buf[24]; snprintf(buf, sizeof buf, "%.2f", oled_oled1_in_a);
-    //     oled_oled1.SetCursor(0, 16); oled_oled1.WriteString(buf, Font_6x8, true); }
-    //   oled_oled1.Update();
 
         float out_l = 0.f;
         float out_r = 0.f;
@@ -112,19 +122,17 @@ int main(void) {
     // --- led: Status LED ---
     hw_led_hwled1_gpio.Init(hw.GetPin(13), GPIO::Mode::OUTPUT);
 
-    // --- I2C1 (OLED / sensors) ---
-    I2CHandle::Config i2c_cfg;
-    i2c_cfg.periph = I2CHandle::Config::Peripheral::I2C_1;
-    i2c_cfg.speed  = I2CHandle::Config::Speed::I2C_400KHZ;
-    i2c_cfg.mode   = I2CHandle::Config::Mode::I2C_MASTER;
-    i2c_cfg.pin_config.scl = hw.GetPin(11);
-    i2c_cfg.pin_config.sda = hw.GetPin(12);
-    // TODO: call into OledDisplay::Init with this i2c_cfg for SSD1306.
-
     hw.StartAudio(AudioCallback);
 
     while (1) {
         hw_pot_hwpot1_val = hw.adc.GetFloat(0);
+        { // OLED oled_oled1: throttled refresh (~30 fps)
+            uint32_t _now = System::GetNow();
+            if (_now - oled_oled1_last_frame_ms >= 33) {
+                oled_oled1_last_frame_ms = _now;
+                oled_oled1_DrawFrame();
+            }
+        }
         System::Delay(1);
     }
 }

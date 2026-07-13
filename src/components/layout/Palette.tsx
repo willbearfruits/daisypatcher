@@ -42,6 +42,18 @@ const CATEGORY_LABEL: Record<NodeDefinition['category'], string> = {
   hardware: 'Hardware'
 }
 
+/**
+ * Category → signal-color accent classes for the card's left bar. Mirrors
+ * the mapping CustomNode.tsx uses for node headers (source→audio,
+ * process→cv, io→gate, hardware→clock) so palette and canvas agree.
+ */
+const CATEGORY_ACCENT_CLASS: Record<NodeDefinition['category'], string> = {
+  source: styles['cat-source'],
+  process: styles['cat-process'],
+  io: styles['cat-io'],
+  hardware: styles['cat-hardware']
+}
+
 export const NODE_DRAG_MIME = 'application/x-dp-node-kind'
 export const PALETTE_SEARCH_INPUT_ID = 'dp-palette-search'
 
@@ -125,6 +137,12 @@ export function Palette() {
     }
     return map
   }, [grouped, query, target, filter])
+
+  const visibleCount = useMemo(() => {
+    let n = 0
+    for (const items of filtered.values()) n += items.length
+    return n
+  }, [filtered])
 
   const onInputKey = (ev: React.KeyboardEvent<HTMLInputElement>) => {
     if (ev.key === 'Escape') {
@@ -228,6 +246,35 @@ export function Palette() {
       <TargetFilter mode={filter} onChange={setPaletteFilter} />
       <div className={styles.scroll}>
         {recent.length > 0 && <RecentStrip recent={recent} target={target} filter={filter} />}
+        {visibleCount === 0 && (
+          <div className={styles.emptyState}>
+            <span className={styles.emptyText}>
+              {query.trim()
+                ? `no nodes match '${query.trim()}'`
+                : 'no nodes match the current filter'}
+            </span>
+            {query.trim() ? (
+              <button
+                type="button"
+                className={styles.emptyAction}
+                onClick={() => {
+                  setQuery('')
+                  inputRef.current?.focus()
+                }}
+              >
+                clear search
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={styles.emptyAction}
+                onClick={() => setPaletteFilter('all')}
+              >
+                show all
+              </button>
+            )}
+          </div>
+        )}
         {CATEGORY_ORDER.map((cat) => {
           const items = filtered.get(cat)
           if (!items || items.length === 0) return null
@@ -403,15 +450,30 @@ function PaletteCard({
         ? `${def.description} — stubbed on current target`
         : def.description
 
+  // Keyboard path: Enter/Space drop the node at canvas center — the same
+  // action a RecentChip click performs. stopPropagation keeps Space away
+  // from the global transport toggle while a card has focus.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    e.stopPropagation()
+    dropKindAtCanvasCenter(def.kind)
+  }
+
   return (
     <div
       className={[
         styles.card,
+        CATEGORY_ACCENT_CLASS[def.category],
         compact ? styles.cardCompact : '',
         support === 'unsupported' ? styles.cardUnsupported : ''
       ].filter(Boolean).join(' ')}
       draggable
       onDragStart={onDragStart}
+      role="button"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      aria-label={`Add ${def.label} node`}
       data-dp-node-kind={def.kind satisfies NodeKind}
       title={title}
     >

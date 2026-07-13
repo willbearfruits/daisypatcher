@@ -380,6 +380,60 @@ async function refreshDfuDetails(): Promise<void> {
   }
 }
 
+/* ------------------------------------------------------------------
+ * Linux permission-failure detection — the #1 first-run trap.
+ *
+ * Without a udev rule, the Seed's DFU bootloader (0483:df11) is
+ * root-only; dfu-util fails with "Cannot open DFU device ...
+ * (LIBUSB_ERROR_ACCESS)" (older libusb prints "Access denied
+ * (insufficient permissions)"). Without dialout-group membership,
+ * pio's upload fails with pyserial's "[Errno 13] Permission denied:
+ * '/dev/ttyACM0'". Both look like a generic flash failure unless we
+ * name the fix.
+ *
+ * NOTE: DAISY_UDEV_RULE is copied VERBATIM from README.md, section
+ * "Flashing permissions (Linux)". If you edit either, update the
+ * other — the two strings must never drift.
+ * ------------------------------------------------------------------ */
+const DAISY_UDEV_RULE =
+  'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="df11", MODE="0666"'
+
+/**
+ * Returns copy-pasteable fix-it lines when `log` shows a Linux USB or
+ * serial-port permission failure, or `undefined` when it doesn't (or
+ * when off-Linux). Only consulted after a flash already failed, so a
+ * rare false positive merely adds a hint under the real error.
+ */
+function linuxPermissionHint(log: string, target: FlashTarget): string[] | undefined {
+  if (process.platform !== 'linux') return undefined
+
+  if (target === 'esp32_s3') {
+    const serialDenied =
+      (/permission denied/i.test(log) && /\/dev\/tty/i.test(log)) ||
+      /\[Errno 13\]/i.test(log) ||
+      /EACCES/.test(log)
+    if (!serialDenied) return undefined
+    return [
+      '[error] no permission to open the serial port (user not in the dialout group). One-time fix:',
+      '[error]   sudo usermod -aG dialout $USER',
+      '[error] then log out and back in, and unplug/replug the device.'
+    ]
+  }
+
+  const usbDenied =
+    /LIBUSB_ERROR_ACCESS/i.test(log) ||
+    /Access denied/i.test(log) ||
+    /insufficient permissions/i.test(log) ||
+    /EACCES/.test(log)
+  if (!usbDenied) return undefined
+  return [
+    '[error] no permission to open the DFU device (missing udev rule). One-time fix:',
+    `[error]   echo '${DAISY_UDEV_RULE}' | sudo tee /etc/udev/rules.d/50-daisy-dfu.rules`,
+    '[error]   sudo udevadm control --reload-rules && sudo udevadm trigger',
+    '[error] then unplug/replug the device and flash again.'
+  ]
+}
+
 export async function flashBinary(
   binaryPath: string,
   emit: (line: string) => void,
@@ -448,9 +502,16 @@ export async function flashBinary(
       clearTimeout(timer)
       rlOut.close()
       rlErr.close()
-      const log = logLines.join('\n')
-      const success = !timedOut && code === 0 && successRegex.test(log)
-      resolve({ success, log })
+      const success = !timedOut && code === 0 && successRegex.test(logLines.join('\n'))
+      if (!success) {
+        // Permission failures deserve a named fix, not a generic error.
+        // push() both streams the lines to the renderer's log panel
+        // (which auto-opens on flash failure) and appends them to the
+        // returned log.
+        const hint = linuxPermissionHint(logLines.join('\n'), target)
+        if (hint) for (const line of hint) push(line)
+      }
+      resolve({ success, log: logLines.join('\n') })
     })
   })
 }

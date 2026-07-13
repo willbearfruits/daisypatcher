@@ -153,15 +153,16 @@
 
 /* Lock affordance next to the active target seg — a click releases. */
 .targetLockDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 0;
   color: var(--dp-accent);
   cursor: pointer;
   padding: 0 0 0 4px;
-  font-size: 10px;
   line-height: 1;
   align-self: center;
-  letter-spacing: 0;
 }
 
 .targetLockDot:hover { color: var(--dp-text); }
@@ -193,7 +194,17 @@
   min-width: 0;
 }
 
-.select {
+/* ---------- theme picker (custom popover replacing the native select) ---------- */
+
+.themeWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.themeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dp-space-2);
   font-family: var(--dp-font-mono);
   font-size: var(--dp-fs-xs);
   color: var(--dp-text-muted);
@@ -201,16 +212,83 @@
   border: 1px solid var(--dp-border);
   border-radius: var(--dp-radius-sm);
   padding: 4px var(--dp-space-2);
-  appearance: none;
-  -webkit-appearance: none;
-  outline: none;
   cursor: pointer;
-  transition: border-color var(--dp-motion-fast) var(--dp-ease);
+  transition:
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    color var(--dp-motion-fast) var(--dp-ease);
 }
 
-.select:hover {
+.themeBtn:hover {
   border-color: var(--dp-border-strong);
   color: var(--dp-text);
+}
+
+.themeMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--dp-space-1);
+  background: var(--dp-surface-elevated);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-sm);
+  box-shadow: var(--dp-shadow-md);
+  z-index: var(--dp-z-overlay, 30);
+}
+
+.themeItem {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  width: 100%;
+  padding: 5px var(--dp-space-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--dp-radius-xs);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.themeItem:hover {
+  background: var(--dp-surface-sunken);
+  border-color: var(--dp-border);
+}
+
+.themeItemActive {
+  border-color: var(--dp-border-strong);
+  background: var(--dp-surface-sunken);
+}
+
+.themeName {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  white-space: nowrap;
+}
+
+.themeItem:hover .themeName,
+.themeItemActive .themeName {
+  color: var(--dp-text);
+}
+
+.themeSwatches {
+  display: inline-flex;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+/* Swatch fills are data-driven (inline style from the Skin object). */
+.themeSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1px solid var(--dp-border-strong);
 }
 
 .play {

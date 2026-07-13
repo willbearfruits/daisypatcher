@@ -31,10 +31,12 @@ export type SupportLevel = 'native' | 'stub' | 'unsupported'
  * place so flipping a kind to 'native' is a single-line edit.
  */
 const ESP32_STUBS: NodeKind[] = [
-  // audio_in compiles but the target's I2S input path delivers silence
-  // (in_l/in_r hardwired 0 in targets/esp32s3.ts) — flip when real I2S
-  // input lands.
-  'audio_in',
+  // audio_in is native as of the full-duplex I2S RX path in
+  // targets/esp32s3.ts: when the graph contains an audio_in node the
+  // generated project runs the legacy I2S driver in master TX+RX mode on
+  // one port (shared BCLK/WS, codec sd_in pin or GPIO39 default) and
+  // in_l/in_r carry real line-in samples.
+  //
   // explicit unsupported(): warn + passthrough by design
   'i2s_in',   // use audio_in / I2S codec binding instead
   'i2s_out',  // use audio_output — I2S is the default sink

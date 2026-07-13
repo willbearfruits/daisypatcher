@@ -34,8 +34,13 @@ export interface Skin {
   surface: string
   surfaceElevated: string
   surfaceSunken: string
+  /** Deep terminal/console surface — build log, monitor-style panels. */
+  surfaceTerminal: string
   border: string
   borderStrong: string
+
+  /** Modal/overlay backdrop wash — semi-transparent, tinted per skin. */
+  scrim: string
 
   textPrimary: string
   textMuted: string

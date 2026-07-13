@@ -20,8 +20,11 @@ export const crtPatchbay: Skin = {
   surface: '#06120a',
   surfaceElevated: '#0a1c10',
   surfaceSunken: '#010402',
+  surfaceTerminal: '#020e07',
   border: '#133a21',
   borderStrong: '#1e5c33',
+
+  scrim: 'rgba(0, 8, 3, 0.74)',
 
   textPrimary: '#cef5d3',
   textMuted: '#6fae7e',

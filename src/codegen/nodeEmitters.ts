@@ -8,6 +8,10 @@
  *   process  — per-sample block executed inside AudioCallback's sample loop.
  *              Must produce C++ locals named `<varName>_<socketId>` for each
  *              output socket of the node.
+ *   loop     — (optional) block executed inside main()'s `while(1)` house-
+ *              keeping loop, NOT the audio callback. For slow peripherals
+ *              (display refresh, blocking I2C). Runs every loop iteration;
+ *              the emitter throttles itself.
  *
  * No file I/O, no globals, no side effects. The code is pure string building.
  * The `EmitContext` gives each emitter access to (a) the node's params and
@@ -37,6 +41,13 @@ export interface NodeEmitter {
   declare: (ctx: EmitContext) => string
   init: (ctx: EmitContext) => string
   process: (ctx: EmitContext) => string
+  /**
+   * Optional main-loop hook. Emitted inside main()'s `while(1)` — never
+   * inside AudioCallback. Use for peripherals whose update is too slow /
+   * blocking for the audio thread (OLED refresh over I2C). Code runs every
+   * loop pass; throttle inside the emitted block (e.g. `System::GetNow()`).
+   */
+  loop?: (ctx: EmitContext) => string
 }
 
 // ---------------------------------------------------------------------------
@@ -2190,10 +2201,21 @@ const visualPassthrough: NodeEmitter = {
 // OLED (SSD1306 over I2C)
 // ---------------------------------------------------------------------------
 //
-// Produces libDaisy `OledDisplay<SSD130xI2c128x64Driver>` init and a
-// `DrawFrame()` that renders the user-designed element list. Per-frame
-// input sampling goes through `static float` caches updated each
-// AudioCallback — not sample-accurate, but fine for a 30 Hz display.
+// Produces libDaisy `OledDisplay<SSD130xI2c128x64Driver>` init and a real
+// `<var>_DrawFrame()` function (file scope, emitted from `declare`) that
+// renders the user-designed element list. Input sampling goes through
+// `volatile float` caches latched each AudioCallback sample and read by
+// the draw function — not sample-accurate, but fine for a 30 Hz display.
+//
+// The `loop` hook calls `<var>_DrawFrame()` from main()'s `while(1)`,
+// throttled to ~30 fps via `System::GetNow()`. Drawing NEVER runs in
+// AudioCallback: a full 128x64 frame over I2C@400kHz is >20 ms of
+// blocking transfer.
+//
+// Transport: the `oled_ssd1306` placed component only exposes `sda`/`scl`
+// roles (see KIND_ROLES in src/types/hardware.ts), so I2C is the one
+// transport the hardware model can express; the SPI driver variants are
+// intentionally not emitted.
 //
 // The emitter is defensive: if there is no hardware layout yet (parallel
 // agent in flight) OR the node's `bindingId` doesn't resolve to a placed
@@ -2252,19 +2274,145 @@ function bindingToCache(b: unknown, v: string): string {
   return `${v}_in_${b}`
 }
 
+/**
+ * C++ for one OLED element, using the libDaisy `OneBitGraphicsDisplay`
+ * API (SetCursor/WriteString/DrawRect/DrawCircle/DrawLine/DrawPixel).
+ * Rendering semantics mirror the ESP32 Adafruit_SSD1306 emitter 1:1 —
+ * note the coordinate-convention translation: Adafruit rects take
+ * (x, y, w, h) covering pixels x..x+w-1, libDaisy's DrawRect takes
+ * inclusive corners (x1, y1, x2, y2), hence the `- 1` on extents.
+ * Lines are indented for a function body; unknown kinds emit nothing.
+ */
+function emitOledElement(el: OledElement, v: string): string {
+  const x = typeof el.x === 'number' ? el.x | 0 : 0
+  const y = typeof el.y === 'number' ? el.y | 0 : 0
+  const k = el.kind
+  if (k === 'text') {
+    const t = sanitizeCString(typeof el.text === 'string' ? el.text : '')
+    const fontExpr = el.size === 2 ? 'Font_11x18' : 'Font_6x8'
+    return [
+      `    ${v}.SetCursor(${x}, ${y});`,
+      `    ${v}.WriteString("${t}", ${fontExpr}, true);`
+    ].join('\n')
+  }
+  if (k === 'value') {
+    const cache = bindingToCache(el.binding, v)
+    const decimals = typeof el.decimals === 'number' ? el.decimals | 0 : 2
+    const unit = sanitizeCString(typeof el.unit === 'string' ? el.unit : '')
+    const fontExpr = el.size === 2 ? 'Font_11x18' : 'Font_6x8'
+    return [
+      `    {`,
+      `        char _buf[24];`,
+      `        snprintf(_buf, sizeof _buf, "%.${decimals}f${unit}", (double)(${cache}));`,
+      `        ${v}.SetCursor(${x}, ${y});`,
+      `        ${v}.WriteString(_buf, ${fontExpr}, true);`,
+      `    }`
+    ].join('\n')
+  }
+  if (k === 'meter') {
+    const cache = bindingToCache(el.binding, v)
+    const w = typeof el.width === 'number' ? el.width | 0 : 40
+    const h = typeof el.height === 'number' ? el.height | 0 : 8
+    const lines: string[] = [
+      `    {`,
+      `        float _mv = fabsf(${cache});`,
+      `        if (_mv > 1.f) _mv = 1.f;`,
+      `        ${v}.DrawRect(${x}, ${y}, ${x + w - 1}, ${y + h - 1}, true, false);`
+    ]
+    if (el.orientation === 'v') {
+      lines.push(`        int _fh = (int)(_mv * (float)(${h - 2}));`)
+      lines.push(
+        `        if (_fh > 0) ${v}.DrawRect(${x + 1}, ${y + h - 1} - _fh, ${x + w - 2}, ${y + h - 2}, true, true);`
+      )
+    } else {
+      lines.push(`        int _fw = (int)(_mv * (float)(${w - 2}));`)
+      lines.push(
+        `        if (_fw > 0) ${v}.DrawRect(${x + 1}, ${y + 1}, ${x} + _fw, ${y + h - 2}, true, true);`
+      )
+    }
+    lines.push(`    }`)
+    return lines.join('\n')
+  }
+  if (k === 'scope') {
+    const cache = bindingToCache(el.binding, v)
+    const w = typeof el.width === 'number' ? el.width | 0 : 64
+    const h = typeof el.height === 'number' ? el.height | 0 : 24
+    return [
+      `    { // scope — single-sample sparkline`,
+      `        int _pxY = ${y + (h >> 1)} - (int)((${cache}) * (float)(${h >> 1}));`,
+      `        if (_pxY >= 0 && _pxY < 64) {`,
+      `            for (int _xx = 0; _xx < ${w}; _xx++) ${v}.DrawPixel(${x} + _xx, _pxY, true);`,
+      `        }`,
+      `    }`
+    ].join('\n')
+  }
+  if (k === 'rect') {
+    const w = typeof el.width === 'number' ? el.width | 0 : 20
+    const h = typeof el.height === 'number' ? el.height | 0 : 12
+    const fillArg = el.fill === true ? 'true' : 'false'
+    return `    ${v}.DrawRect(${x}, ${y}, ${x + w - 1}, ${y + h - 1}, true, ${fillArg});`
+  }
+  if (k === 'circle') {
+    const r = typeof el.radius === 'number' ? el.radius | 0 : 6
+    return `    ${v}.DrawCircle(${x}, ${y}, ${r}, true);`
+  }
+  if (k === 'line') {
+    const x2 = typeof el.x2 === 'number' ? el.x2 | 0 : x + 8
+    const y2 = typeof el.y2 === 'number' ? el.y2 | 0 : y
+    return `    ${v}.DrawLine(${x}, ${y}, ${x2}, ${y2}, true);`
+  }
+  if (k === 'pattern') {
+    const cache = bindingToCache(el.binding, v)
+    const cols = typeof el.cols === 'number' ? el.cols | 0 : 8
+    const rows = typeof el.rows === 'number' ? el.rows | 0 : 2
+    const cell = typeof el.cellSize === 'number' ? el.cellSize | 0 : 4
+    return [
+      `    {`,
+      `        float _pv = fabsf(${cache});`,
+      `        if (_pv > 1.f) _pv = 1.f;`,
+      `        int _lit = (int)(_pv * (float)(${cols * rows}));`,
+      `        for (int _rr = 0; _rr < ${rows}; _rr++) for (int _cc = 0; _cc < ${cols}; _cc++) {`,
+      `            int _idx = _rr * ${cols} + _cc;`,
+      `            ${v}.DrawRect(${x} + _cc * ${cell}, ${y} + _rr * ${cell}, ${x} + _cc * ${cell} + ${cell - 2}, ${y} + _rr * ${cell} + ${cell - 2}, true, _idx < _lit);`,
+      `        }`,
+      `    }`
+    ].join('\n')
+  }
+  return ''
+}
+
 const oled: NodeEmitter = {
   declare: (ctx) => {
     const v = ctx.varName(ctx.node.id)
+    const elements = parseOledElements(ctx.node.params.elements)
+    if (elements.length > 12) {
+      ctx.warn('oled draw is approximate at high element counts')
+    }
     const lines: string[] = []
     // daisy_seed.h pulls in OledDisplay<> but not the SSD130x driver
     // header — bring it in at file scope so the template arg resolves.
     lines.push(`#include "dev/oled_ssd130x.h"`)
+    lines.push(`#include <cstdio>`)
     lines.push(`using ${v}_Type = OledDisplay<SSD130xI2c128x64Driver>;`)
     lines.push(`${v}_Type ${v};`)
+    // Written per-sample in AudioCallback (interrupt context), read by
+    // ${v}_DrawFrame() from main()'s while(1) — volatile keeps the
+    // cross-context reads honest.
     for (const sock of OLED_INPUT_SOCKETS) {
-      lines.push(`float ${v}_in_${sock} = 0.f;`)
+      lines.push(`volatile float ${v}_in_${sock} = 0.f;`)
     }
     lines.push(`uint32_t ${v}_last_frame_ms = 0;`)
+    lines.push(``)
+    lines.push(`// Full display refresh for ${v}. Called from main()'s while(1) at`)
+    lines.push(`// ~30 fps — NEVER from AudioCallback (blocking I2C transfer).`)
+    lines.push(`void ${v}_DrawFrame() {`)
+    lines.push(`    ${v}.Fill(false);`)
+    for (const el of elements) {
+      const code = emitOledElement(el, v)
+      if (code) lines.push(code)
+    }
+    lines.push(`    ${v}.Update();`)
+    lines.push(`}`)
     return lines.join('\n')
   },
 
@@ -2316,115 +2464,38 @@ const oled: NodeEmitter = {
 
   /**
    * Per-AudioCallback sample: latch the current input values into the
-   * per-node caches so `DrawFrame()` (invoked outside AudioCallback) sees
-   * stable values. No audio outputs — the node is a sink.
+   * per-node caches so `<var>_DrawFrame()` (invoked from main()'s while(1)
+   * via the `loop` hook) sees stable values. No audio outputs — the node
+   * is a sink.
    */
   process: (ctx) => {
     const v = ctx.varName(ctx.node.id)
-    const elements = parseOledElements(ctx.node.params.elements)
-    if (elements.length > 12) {
-      ctx.warn('oled draw is approximate at high element counts')
-    }
-
     const lines: string[] = []
-    lines.push(`    // --- OLED ${v}: latch input samples for DrawFrame() ---`)
+    lines.push(`    // --- OLED ${v}: latch input samples for ${v}_DrawFrame() ---`)
     for (const sock of OLED_INPUT_SOCKETS) {
       const expr = ctx.inputExpr(ctx.node.id, sock, '0.f')
       lines.push(`    ${v}_in_${sock} = ${expr};`)
     }
-
-    // Emit a DrawFrame() body as a block-comment guide for the hardware-
-    // integration pass. Inlining the real call here would fire from
-    // AudioCallback which is too expensive; the while(1) in main() is the
-    // right place (to be wired by the hardware-view integration).
-    const drawBody: string[] = []
-    drawBody.push(`    // DrawFrame body (call from while(1) at ~30 Hz):`)
-    drawBody.push(`    //   ${v}.Fill(false);`)
-    for (const el of elements) {
-      const k = el.kind
-      const x = typeof el.x === 'number' ? el.x | 0 : 0
-      const y = typeof el.y === 'number' ? el.y | 0 : 0
-      if (k === 'text') {
-        const t = sanitizeCString(typeof el.text === 'string' ? el.text : '')
-        const fontExpr = el.size === 2 ? 'Font_11x18' : 'Font_6x8'
-        drawBody.push(
-          `    //   ${v}.SetCursor(${x}, ${y}); ${v}.WriteString("${t}", ${fontExpr}, true);`
-        )
-      } else if (k === 'value') {
-        const cache = bindingToCache(el.binding, v)
-        const decimals = typeof el.decimals === 'number' ? el.decimals | 0 : 2
-        const unit = sanitizeCString(typeof el.unit === 'string' ? el.unit : '')
-        const fontExpr = el.size === 2 ? 'Font_11x18' : 'Font_6x8'
-        drawBody.push(
-          `    //   { char buf[24]; snprintf(buf, sizeof buf, "%.${decimals}f${unit}", ${cache});`
-        )
-        drawBody.push(
-          `    //     ${v}.SetCursor(${x}, ${y}); ${v}.WriteString(buf, ${fontExpr}, true); }`
-        )
-      } else if (k === 'meter') {
-        const cache = bindingToCache(el.binding, v)
-        const w = typeof el.width === 'number' ? el.width | 0 : 40
-        const h = typeof el.height === 'number' ? el.height | 0 : 8
-        if (el.orientation === 'v') {
-          drawBody.push(`    //   { float mv = fabsf(${cache}); if (mv > 1.f) mv = 1.f;`)
-          drawBody.push(`    //     int fh = (int)(mv * (float)(${h - 2}));`)
-          drawBody.push(`    //     ${v}.DrawRect(${x}, ${y}, ${x + w}, ${y + h}, true, false);`)
-          drawBody.push(
-            `    //     ${v}.DrawRect(${x + 1}, ${y + h - 1} - fh, ${x + w - 1}, ${y + h - 1}, true, true); }`
-          )
-        } else {
-          drawBody.push(`    //   { float mv = fabsf(${cache}); if (mv > 1.f) mv = 1.f;`)
-          drawBody.push(`    //     int fw = (int)(mv * (float)(${w - 2}));`)
-          drawBody.push(`    //     ${v}.DrawRect(${x}, ${y}, ${x + w}, ${y + h}, true, false);`)
-          drawBody.push(
-            `    //     ${v}.DrawRect(${x + 1}, ${y + 1}, ${x + 1} + fw, ${y + h - 1}, true, true); }`
-          )
-        }
-      } else if (k === 'scope') {
-        const cache = bindingToCache(el.binding, v)
-        const w = typeof el.width === 'number' ? el.width | 0 : 64
-        const h = typeof el.height === 'number' ? el.height | 0 : 24
-        drawBody.push(`    //   { // scope placeholder — single-sample sparkline:`)
-        drawBody.push(
-          `    //     int midY = ${y + (h >> 1)}; int pxY = midY - (int)(${cache} * (float)(${h >> 1}));`
-        )
-        drawBody.push(
-          `    //     for (int xx = 0; xx < ${w}; xx++) ${v}.DrawPixel(${x} + xx, pxY, true); }`
-        )
-      } else if (k === 'rect') {
-        const w = typeof el.width === 'number' ? el.width | 0 : 20
-        const h = typeof el.height === 'number' ? el.height | 0 : 12
-        const fillArg = el.fill === true ? 'true' : 'false'
-        drawBody.push(
-          `    //   ${v}.DrawRect(${x}, ${y}, ${x + w}, ${y + h}, true, ${fillArg});`
-        )
-      } else if (k === 'circle') {
-        const r = typeof el.radius === 'number' ? el.radius | 0 : 6
-        drawBody.push(`    //   ${v}.DrawCircle(${x}, ${y}, ${r}, true);`)
-      } else if (k === 'line') {
-        const x2 = typeof el.x2 === 'number' ? el.x2 | 0 : x + 8
-        const y2 = typeof el.y2 === 'number' ? el.y2 | 0 : y
-        drawBody.push(`    //   ${v}.DrawLine(${x}, ${y}, ${x2}, ${y2}, true);`)
-      } else if (k === 'pattern') {
-        const cache = bindingToCache(el.binding, v)
-        const cols = typeof el.cols === 'number' ? el.cols | 0 : 8
-        const rows = typeof el.rows === 'number' ? el.rows | 0 : 2
-        const cell = typeof el.cellSize === 'number' ? el.cellSize | 0 : 4
-        drawBody.push(`    //   { float pv = fabsf(${cache}); if (pv > 1.f) pv = 1.f;`)
-        drawBody.push(`    //     int lit = (int)(pv * (float)(${cols * rows}));`)
-        drawBody.push(
-          `    //     for (int rr = 0; rr < ${rows}; rr++) for (int cc = 0; cc < ${cols}; cc++) {`
-        )
-        drawBody.push(`    //       int idx = rr * ${cols} + cc;`)
-        drawBody.push(
-          `    //       ${v}.DrawRect(${x} + cc * ${cell}, ${y} + rr * ${cell}, ${x} + cc * ${cell} + ${cell - 1}, ${y} + rr * ${cell} + ${cell - 1}, true, idx < lit);`
-        )
-        drawBody.push(`    //     } }`)
-      }
-    }
-    drawBody.push(`    //   ${v}.Update();`)
-    lines.push(drawBody.join('\n'))
     return lines.join('\n') + '\n'
+  },
+
+  /**
+   * Main-loop hook: refresh the display at ~30 fps. `System::GetNow()`
+   * is libDaisy's ms tick; unsigned subtraction survives wraparound.
+   * The blocking I2C traffic (~1 KB framebuffer) lives here, never in
+   * AudioCallback.
+   */
+  loop: (ctx) => {
+    const v = ctx.varName(ctx.node.id)
+    return [
+      `        { // OLED ${v}: throttled refresh (~30 fps)`,
+      `            uint32_t _now = System::GetNow();`,
+      `            if (_now - ${v}_last_frame_ms >= 33) {`,
+      `                ${v}_last_frame_ms = _now;`,
+      `                ${v}_DrawFrame();`,
+      `            }`,
+      `        }`
+    ].join('\n')
   }
 }
 

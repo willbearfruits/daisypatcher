@@ -149,7 +149,22 @@ function buildTestGraph(kind) {
 
   // oled — include with 6 dummy constants on its inputs; no audio path expected.
   if (kind === 'oled') {
-    const oledNode = makeNode('oled')
+    // One of every element kind, so the compile check covers the full
+    // generated DrawFrame body rather than an empty frame.
+    const oledNode = makeNode('oled', {
+      elements: JSON.stringify([
+        { kind: 'text', x: 0, y: 0, text: 'TEST', size: 1 },
+        { kind: 'value', x: 40, y: 0, binding: 'a', decimals: 2, unit: 'Hz' },
+        { kind: 'meter', x: 0, y: 20, width: 40, height: 8, binding: 'b' },
+        { kind: 'meter', x: 46, y: 12, width: 8, height: 20, orientation: 'v', binding: 'c' },
+        { kind: 'scope', x: 64, y: 8, width: 60, height: 24, binding: 'd' },
+        { kind: 'rect', x: 0, y: 34, width: 20, height: 12, fill: false },
+        { kind: 'rect', x: 24, y: 34, width: 20, height: 12, fill: true },
+        { kind: 'circle', x: 110, y: 52, radius: 6 },
+        { kind: 'line', x: 0, y: 62, x2: 100, y2: 62 },
+        { kind: 'pattern', x: 56, y: 40, cols: 8, rows: 2, cellSize: 4, binding: 'e' }
+      ])
+    })
     const sink = makeNode('audio_output')
     nodes.push(oledNode, sink)
     // Wire constants to any inputs that exist.

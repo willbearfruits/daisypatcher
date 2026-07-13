@@ -18,8 +18,11 @@ export const signalLab: Skin = {
   surface: '#0d1117',
   surfaceElevated: '#141b24',
   surfaceSunken: '#05070a',
+  surfaceTerminal: '#03050a',
   border: '#1a2230',
   borderStrong: '#2a3545',
+
+  scrim: 'rgba(2, 4, 8, 0.7)',
 
   textPrimary: '#e6edf3',
   textMuted: '#8b95a4',

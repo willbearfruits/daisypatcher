@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, #000 70%, transparent);
+  background: var(--dp-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -212,12 +212,14 @@
   border: 1px solid var(--dp-border);
   border-radius: var(--dp-radius-sm);
   padding: 6px var(--dp-space-2);
-  outline: none;
   transition: border-color var(--dp-motion-fast) var(--dp-ease);
 }
 
-.notesInput:focus {
-  border-color: var(--dp-border-strong);
+/* Focus language: bordered fields signal focus with an accent border
+   instead of the global outline ring. */
+.notesInput:focus-visible {
+  outline: none;
+  border-color: var(--dp-accent);
 }
 
 .footer {

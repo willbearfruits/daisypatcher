@@ -38,6 +38,7 @@ import { BuildLogPanel } from '@/components/layout/BuildLogPanel'
 import { SerialMonitorPanel } from '@/components/layout/SerialMonitorPanel'
 import { SdkInstallModal } from '@/components/layout/SdkInstallModal'
 import { CommandPalette } from '@/components/layout/CommandPalette'
+import { ConfirmHost } from '@/components/layout/ConfirmDialog'
 import type { NodeKind } from '@/types/graph'
 import { HardwarePalette } from '@/hardware/HardwarePalette'
 import { HardwareView } from '@/hardware/HardwareView'
@@ -151,6 +152,7 @@ export default function App() {
         <SerialMonitorPanel />
         <SdkInstallModal />
         <CommandPalette />
+        <ConfirmHost />
       </AudioEngineProvider>
     </ThemeProvider>
   )

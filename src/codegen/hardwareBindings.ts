@@ -17,7 +17,9 @@
  *
  *   - pots (+ CV jacks in-mode)  -> single ADC block with one
  *     AdcChannelConfig per placed pot, Init + Start.
- *   - OLED / I2C devices         -> I2C1 config (standard-mode, 100kHz).
+ *   - OLED                       -> nothing here; the `oled` node emitter
+ *     owns the full OledDisplay init (which brings up I2C1 itself via
+ *     driver_config.transport_config). See nodeEmitters.ts.
  *   - I2S codec                  -> sai1 config sketch (comment only;
  *     full I2S init is too board-specific to auto-generate, we leave
  *     a TODO stub).
@@ -148,22 +150,10 @@ export function emitHardwareInit(layout: HardwareLayout): {
     )
   }
 
-  // I2C devices (OLED etc.).
-  const hasI2c = layout.components.some(
-    (c) => c.kind === 'oled_ssd1306' && c.pins['sda'] && c.pins['scl']
-  )
-  if (hasI2c) {
-    initLines.push(
-      '    // --- I2C1 (OLED / sensors) ---\n' +
-      '    I2CHandle::Config i2c_cfg;\n' +
-      '    i2c_cfg.periph = I2CHandle::Config::Peripheral::I2C_1;\n' +
-      '    i2c_cfg.speed  = I2CHandle::Config::Speed::I2C_400KHZ;\n' +
-      '    i2c_cfg.mode   = I2CHandle::Config::Mode::I2C_MASTER;\n' +
-      '    i2c_cfg.pin_config.scl = hw.GetPin(11);\n' +
-      '    i2c_cfg.pin_config.sda = hw.GetPin(12);\n' +
-      '    // TODO: call into OledDisplay::Init with this i2c_cfg for SSD1306.'
-    )
-  }
+  // OLED (I2C) — intentionally nothing here. The `oled` node emitter owns
+  // the full OledDisplay<SSD130xI2c128x64Driver> init, and its Init()
+  // brings up I2C1 itself via driver_config.transport_config; a second
+  // I2C1 config emitted here would just be dead, confusing code.
 
   // I2S codec — only a stub; full SAI config is board-specific.
   const hasI2s = layout.components.some((c) => c.kind === 'i2s_codec')

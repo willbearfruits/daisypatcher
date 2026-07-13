@@ -91,6 +91,9 @@ export function generateDaisySeedProject(
   const declLines: string[] = []
   const initLines: string[] = []
   const processLines: string[] = []
+  // Emitted inside main()'s while(1) — slow-peripheral servicing (OLED
+  // refresh etc.). See NodeEmitter.loop.
+  const loopLines: string[] = []
 
   const outputNode = graph.nodes.find((n) => n.kind === 'audio_output')
   const knobs: { node: NodeInstance; channel: number }[] = []
@@ -126,6 +129,8 @@ export function generateDaisySeedProject(
     if (initSrc) initLines.push(initSrc)
     const p = emitter.process(c)
     if (p) processLines.push(p)
+    const l = emitter.loop?.(c)
+    if (l) loopLines.push(l)
 
     if (node.kind === 'knob_in') {
       knobs.push({ node, channel: knobChannel(node, warn) })
@@ -173,7 +178,7 @@ export function generateDaisySeedProject(
   }
 
   const combinedInit = [hwOut.initCode, knobInit].filter(Boolean).join('\n\n')
-  const combinedPoll = [hwPoll, knobPoll].filter(Boolean).join('\n')
+  const combinedPoll = [hwPoll, knobPoll, ...loopLines].filter(Boolean).join('\n')
 
   const mainCpp = buildMainCpp({
     name,

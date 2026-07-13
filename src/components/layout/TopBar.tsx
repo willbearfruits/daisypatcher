@@ -19,6 +19,7 @@ import type { NodeKind } from '@/types/graph'
 import { UpdateBadge, UpdateMenu } from './UpdateBadge'
 import { VerificationPanel } from './VerificationPanel'
 import { TestRigModal } from './TestRigModal'
+import { requestConfirm } from './ConfirmDialog'
 import styles from './TopBar.module.css'
 
 /* ---------- inline 16x16 icons ---------- */
@@ -100,6 +101,62 @@ function IconFlash() {
   )
 }
 
+/* Transport: play triangle / stop square. */
+function IconPlay() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M5.5 3.5v9L12.5 8L5.5 3.5z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconStop() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect
+        x="4.25"
+        y="4.25"
+        width="7.5"
+        height="7.5"
+        rx="1"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/* Padlock — "target locked by user". Rendered small next to the switcher. */
+function IconLock() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect
+        x="3.5"
+        y="7"
+        width="9"
+        height="6.5"
+        rx="1"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.5 7V5a2.5 2.5 0 015 0v2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 /* Tiny rotating ring used as the "busy" indicator overlaid on the button. */
 function BusyRing() {
   return (
@@ -147,7 +204,7 @@ export function TopBar() {
         <span className={styles.wordmark}>DAISYPATCHER</span>
         <UpdateBadge />
         <span className={styles.divider} aria-hidden />
-        <IconButton label="New" onClick={() => newPatch()}>
+        <IconButton label="New" onClick={() => void newPatch()}>
           <IconNew />
         </IconButton>
         <IconButton label="Open" onClick={() => void openPatch()}>
@@ -190,18 +247,7 @@ export function TopBar() {
         >
           <IconVerify />
         </IconButton>
-        <select
-          className={styles.select}
-          value={skinId}
-          onChange={(e) => setSkinId(e.target.value)}
-          aria-label="Theme"
-        >
-          {Object.entries(THEMES).map(([id, skin]) => (
-            <option key={id} value={id}>
-              {skin.name}
-            </option>
-          ))}
-        </select>
+        <ThemePicker skinId={skinId} setSkinId={setSkinId} />
         <FlashModePicker />
         <span className={styles.divider} aria-hidden />
         <CompileButton />
@@ -214,7 +260,7 @@ export function TopBar() {
           aria-label={isPlaying ? 'Stop' : 'Play'}
           title={isPlaying ? 'Stop' : 'Play'}
         >
-          {isPlaying ? '\u25A0' : '\u25B6'}
+          {isPlaying ? <IconStop /> : <IconPlay />}
         </button>
       </div>
       <VerificationPanel
@@ -420,7 +466,7 @@ function ViewSwitcher() {
  *                releases the lock and applies autodetect.
  *   - no dot:    nothing detected, or detection is ambiguous.
  *
- * A second tiny "●" lock indicator appears directly next to whichever
+ * A second tiny padlock indicator appears directly next to whichever
  * segment is active when `targetLockedByUser` is true. Clicking it
  * releases the lock so the next autodetect tick can apply.
  */
@@ -453,10 +499,14 @@ function TargetSwitcher() {
           ? 'mismatch'
           : null
 
-  const onDotClick = (): void => {
+  const onDotClick = async (): Promise<void> => {
     if (dotState !== 'mismatch' || detectedBoard === null) return
     const label = detectedBoard === 'daisy_seed' ? 'Seed' : 'ESP32'
-    const ok = window.confirm(`A ${label} is connected. Switch target?`)
+    const ok = await requestConfirm({
+      title: 'Switch target',
+      message: `A ${label} is connected. Switch target?`,
+      confirmLabel: 'Switch'
+    })
     if (!ok) return
     releaseTargetLock()
     autoSetTarget(detectedBoard)
@@ -514,8 +564,150 @@ function TargetSwitcher() {
           aria-label="Target locked by user \u2014 click to release and re-apply autodetect"
           title="Target locked \u2014 click to release"
         >
-          {'\u25CF'}
+          <IconLock />
         </button>
+      ) : null}
+    </div>
+  )
+}
+
+/* ---------- theme picker ----------
+ *
+ * Custom popover menu replacing the native <select> — the OS dropdown was
+ * the one piece of chrome the theme system couldn't style. Interaction
+ * model mirrors the StatusBar's DevicePopover: click-outside + Esc close.
+ * Each row previews the skin with three swatches (bg / accent / audio
+ * signal) pulled straight from the Skin object — data-driven, so this is
+ * not a hardcoded-color violation.
+ *
+ * Keyboard: ArrowUp/ArrowDown move focus through the options (wrapping),
+ * Enter/Space select, Esc closes and returns focus to the trigger.
+ */
+function ThemePicker({
+  skinId,
+  setSkinId
+}: {
+  skinId: string
+  setSkinId: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  const entries = Object.entries(THEMES)
+  const current = THEMES[skinId] ?? entries[0]?.[1]
+
+  const close = (refocus: boolean): void => {
+    setOpen(false)
+    if (refocus) triggerRef.current?.focus()
+  }
+
+  // Click-outside + Esc — same pattern as StatusBar's DevicePopover.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    const onDoc = (e: Event): void => {
+      const node = wrapRef.current
+      const t = e.target as Node | null
+      if (node && t && !node.contains(t)) setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    // Defer attach so the click that opened the menu doesn't close it.
+    const t = setTimeout(() => document.addEventListener('mousedown', onDoc), 0)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      clearTimeout(t)
+      document.removeEventListener('mousedown', onDoc)
+    }
+  }, [open])
+
+  // Focus the active option when the menu opens.
+  useEffect(() => {
+    if (!open) return
+    const idx = Math.max(0, Object.keys(THEMES).indexOf(skinId))
+    itemRefs.current[idx]?.focus()
+    // Only on open — arrow keys own focus afterwards.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const onMenuKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      e.stopPropagation()
+      const active = itemRefs.current.findIndex((el) => el === document.activeElement)
+      const delta = e.key === 'ArrowDown' ? 1 : -1
+      const next = (active + delta + entries.length) % entries.length
+      itemRefs.current[next]?.focus()
+      return
+    }
+    // Keep Enter/Space away from the global keybinding layer (space is
+    // the transport toggle) — the focused option button handles them.
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.stopPropagation()
+    }
+  }
+
+  return (
+    <div className={styles.themeWrap} ref={wrapRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={styles.themeBtn}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Theme"
+        title="Theme"
+      >
+        <span>{current?.name ?? 'Theme'}</span>
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <path
+            d="M4 6l4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {open ? (
+        <div
+          className={styles.themeMenu}
+          role="listbox"
+          aria-label="Theme"
+          onKeyDown={onMenuKeyDown}
+        >
+          {entries.map(([id, skin], i) => (
+            <button
+              key={id}
+              ref={(el) => {
+                itemRefs.current[i] = el
+              }}
+              type="button"
+              role="option"
+              aria-selected={id === skinId}
+              className={`${styles.themeItem} ${id === skinId ? styles.themeItemActive : ''}`}
+              onClick={() => {
+                setSkinId(id)
+                close(true)
+              }}
+              title={skin.description}
+            >
+              <span className={styles.themeSwatches} aria-hidden>
+                <span className={styles.themeSwatch} style={{ background: skin.bg }} />
+                <span className={styles.themeSwatch} style={{ background: skin.accent }} />
+                <span className={styles.themeSwatch} style={{ background: skin.signal.audio }} />
+              </span>
+              <span className={styles.themeName}>{skin.name}</span>
+            </button>
+          ))}
+        </div>
       ) : null}
     </div>
   )

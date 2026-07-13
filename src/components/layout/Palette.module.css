@@ -126,7 +126,6 @@
   background: var(--dp-surface-sunken);
   border: 1px solid var(--dp-border);
   border-radius: var(--dp-radius-sm);
-  outline: none;
   transition: border-color var(--dp-motion-fast) var(--dp-ease);
 }
 
@@ -134,7 +133,10 @@
   color: var(--dp-text-dim);
 }
 
-.searchInput:focus {
+/* Focus language: bordered fields signal focus with an accent border
+   instead of the global outline ring. */
+.searchInput:focus-visible {
+  outline: none;
   border-color: var(--dp-accent);
 }
 
@@ -278,6 +280,43 @@
   pointer-events: none;
 }
 
+/* Empty state — search/target-filter yielded no cards. */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-6) var(--dp-space-3);
+  text-align: center;
+}
+
+.emptyText {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.emptyAction {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  background: transparent;
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 3px var(--dp-space-3);
+  cursor: pointer;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.emptyAction:hover {
+  color: var(--dp-text);
+  border-color: var(--dp-border-strong);
+}
+
 /* Cards --------------------------------------------------------------- */
 
 .card {
@@ -297,6 +336,26 @@
     transform var(--dp-motion-fast) var(--dp-ease),
     opacity var(--dp-motion-fast) var(--dp-ease);
 }
+
+/* Category accent — 2px left bar in the category's signal color. Same
+   category→signal mapping as the node headers on the canvas. Kept subtle
+   via a short inset + reduced opacity. */
+.card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--card-accent, transparent);
+  opacity: 0.65;
+}
+
+.cat-source { --card-accent: var(--dp-signal-audio); }
+.cat-process { --card-accent: var(--dp-signal-cv); }
+.cat-io { --card-accent: var(--dp-signal-gate); }
+.cat-hardware { --card-accent: var(--dp-signal-clock); }
 
 .card:hover {
   border-color: var(--dp-border-strong);

@@ -6,7 +6,7 @@
   /* `height` is written inline from the store — the clamps in setBuildLogH
      keep it in the 120..70vh band, so no hard CSS min/max are needed. */
   height: 220px;
-  background: #03050a;
+  background: var(--dp-surface-terminal);
   border-top: 1px solid var(--dp-border);
   box-shadow: var(--dp-shadow-md);
   display: flex;
@@ -112,9 +112,8 @@
   font-family: var(--dp-font-mono);
   font-size: var(--dp-fs-xs);
   line-height: 1.5;
-  background: #03050a;
+  background: var(--dp-surface-terminal);
   color: var(--dp-text);
-  outline: none;
 }
 
 .empty {
