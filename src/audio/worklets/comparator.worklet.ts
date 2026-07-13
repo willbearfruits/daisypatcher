@@ -25,13 +25,21 @@ class ComparatorProcessor extends AudioWorkletProcessor {
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const refCh = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    // Wave 2 cv_threshold at index 2 — replace-semantics override, clamped -1..1.
+    const thrCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
     const threshold = parameters.threshold[0] ?? 0
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
       const r = refCh ? refCh[i] : 0
-      outCh[i] = x > r + threshold ? 1 : 0
+      let t = threshold
+      if (thrCv) {
+        t = thrCv[i]
+        if (t < -1) t = -1
+        else if (t > 1) t = 1
+      }
+      outCh[i] = x > r + t ? 1 : 0
     }
 
     for (let c = 1; c < output.length; c++) output[c].set(outCh)

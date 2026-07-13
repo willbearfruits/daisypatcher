@@ -34,6 +34,8 @@ class PanProcessor extends AudioWorkletProcessor {
     const inCv = inputs[1]
     const audioCh = inAudio && inAudio.length > 0 ? inAudio[0] : undefined
     const cvCh = inCv && inCv.length > 0 ? inCv[0] : undefined
+    // Wave 2 cv_pan at index 2 — replace-semantics override of `pan`.
+    const panCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
     const basePan = parameters.pan[0] ?? 0
     const n = outL.length
@@ -45,7 +47,14 @@ class PanProcessor extends AudioWorkletProcessor {
     }
 
     for (let i = 0; i < n; i++) {
-      let p = basePan + (cvCh ? cvCh[i] : 0)
+      // cv_pan replaces sidebar directly; legacy `cv` still adds as offset.
+      let root = basePan
+      if (panCv) {
+        root = panCv[i]
+        if (root < -1) root = -1
+        else if (root > 1) root = 1
+      }
+      let p = root + (cvCh ? cvCh[i] : 0)
       if (p > 1) p = 1
       else if (p < -1) p = -1
       // p in [-1,1] → angle in [0, π/2]. Equal-power.

@@ -1,0 +1,53 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "clk1",
+        "kind": "clock",
+        "position": { "x": 0, "y": 0 },
+        "params": { "bpm": 120, "pulse_width": 0.1 }
+      },
+      {
+        "id": "kick1",
+        "kind": "drum_kick",
+        "position": { "x": 300, "y": 0 },
+        "params": { "tune": 60, "decay": 0.35, "punch": 0.5, "sweep": 0.6 }
+      },
+      {
+        "id": "snare1",
+        "kind": "drum_snare",
+        "position": { "x": 300, "y": 200 },
+        "params": { "tune": 200, "decay": 0.2, "tone": 0.5 }
+      },
+      {
+        "id": "hat1",
+        "kind": "drum_hat",
+        "position": { "x": 300, "y": 400 },
+        "params": { "decay": 0.08, "tone": 0.7 }
+      },
+      {
+        "id": "mix1",
+        "kind": "mixer4",
+        "position": { "x": 600, "y": 0 },
+        "params": { "gain1": 1, "gain2": 1, "gain3": 1, "gain4": 1 }
+      },
+      {
+        "id": "out1",
+        "kind": "audio_output",
+        "position": { "x": 900, "y": 0 },
+        "params": {}
+      }
+    ],
+    "connections": [
+      { "id": "c1", "from": { "nodeId": "clk1", "socketId": "out" }, "to": { "nodeId": "kick1", "socketId": "trigger" } },
+      { "id": "c2", "from": { "nodeId": "clk1", "socketId": "out" }, "to": { "nodeId": "snare1", "socketId": "trigger" } },
+      { "id": "c3", "from": { "nodeId": "clk1", "socketId": "out" }, "to": { "nodeId": "hat1", "socketId": "trigger" } },
+      { "id": "c4", "from": { "nodeId": "kick1", "socketId": "out" }, "to": { "nodeId": "mix1", "socketId": "in1" } },
+      { "id": "c5", "from": { "nodeId": "snare1", "socketId": "out" }, "to": { "nodeId": "mix1", "socketId": "in2" } },
+      { "id": "c6", "from": { "nodeId": "hat1", "socketId": "out" }, "to": { "nodeId": "mix1", "socketId": "in3" } },
+      { "id": "c7", "from": { "nodeId": "mix1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "left" } },
+      { "id": "c8", "from": { "nodeId": "mix1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "right" } }
+    ],
+    "meta": { "name": "drums_kit", "sampleRate": 48000, "blockSize": 48 }
+  }
+}

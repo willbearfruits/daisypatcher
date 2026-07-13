@@ -30,7 +30,7 @@ type Props<S extends ClassicScheme> = {
   emit: RenderEmit<S>
 }
 
-type Category = 'source' | 'process' | 'io'
+type Category = 'source' | 'process' | 'io' | 'hardware'
 
 function accentClassFor(cat: Category): string {
   switch (cat) {
@@ -40,6 +40,8 @@ function accentClassFor(cat: Category): string {
       return styles['accent-process']
     case 'io':
       return styles['accent-io']
+    case 'hardware':
+      return styles['accent-hardware']
   }
 }
 

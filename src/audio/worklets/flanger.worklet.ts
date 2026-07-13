@@ -36,23 +36,54 @@ class FlangerProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const rate = parameters.rate[0] ?? 0.3
-    const depth = parameters.depth[0] ?? 0.6
-    let fb = parameters.feedback[0] ?? 0.5
-    if (fb > 0.95) fb = 0.95
-    else if (fb < -0.95) fb = -0.95
-    const mix = parameters.mix[0] ?? 0.5
+    const rateCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const depthCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const fbCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+    const mixCv = inputs[4] && inputs[4].length > 0 ? inputs[4][0] : undefined
+
+    const rateBase = parameters.rate[0] ?? 0.3
+    const depthBase = parameters.depth[0] ?? 0.6
+    let fbBase = parameters.feedback[0] ?? 0.5
+    if (fbBase > 0.95) fbBase = 0.95
+    else if (fbBase < -0.95) fbBase = -0.95
+    const mixBase = parameters.mix[0] ?? 0.5
 
     const sr = sampleRate
     const buf = this.buffer
     const bufLen = buf.length
     const baseSamples = (this.BASE_MS / 1000) * sr
-    const modSamples = (this.MOD_MS / 1000) * sr * depth
-    const phaseInc = (this.TWO_PI * rate) / sr
+    const modRange = (this.MOD_MS / 1000) * sr
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+
+      let rate = rateBase
+      if (rateCv) {
+        rate = rateCv[i]
+        if (rate < 0.05) rate = 0.05
+        else if (rate > 5) rate = 5
+      }
+      let depth = depthBase
+      if (depthCv) {
+        depth = depthCv[i]
+        if (depth < 0) depth = 0
+        else if (depth > 1) depth = 1
+      }
+      let fb = fbBase
+      if (fbCv) {
+        fb = fbCv[i]
+        if (fb < -0.95) fb = -0.95
+        else if (fb > 0.95) fb = 0.95
+      }
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
+      }
+      const modSamples = modRange * depth
+      const phaseInc = (this.TWO_PI * rate) / sr
 
       // LFO 0..1 gives a one-sided sweep so the tap never goes below base.
       const lfo = (Math.sin(this.lfoPhase) + 1) * 0.5

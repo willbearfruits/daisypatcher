@@ -5,6 +5,12 @@
  * feedback tap on its own previous output. Registered as `'dp-fm-op'`.
  *
  *   out = sin(phase + mod_in + feedback * last_out) * amplitude
+ *
+ * Inputs:
+ *   0  mod          — audio-rate phase-mod signal
+ *   1  pitch_cv     — 1 V/oct style exponential pitch mod (offset semantics, preserved)
+ *   2  cv_amp       — replaces sidebar `amplitude` (0..1)
+ *   3  cv_mod_index — replaces sidebar `feedback` (self-FM depth 0..1)
  */
 
 class FmOpProcessor extends AudioWorkletProcessor {
@@ -34,11 +40,13 @@ class FmOpProcessor extends AudioWorkletProcessor {
 
     const modCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const pitchCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const ampCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const modIdxCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
     const baseFreq = parameters.frequency[0] ?? 220
     const ratio = parameters.ratio[0] ?? 1
-    const amp = parameters.amplitude[0] ?? 0.7
-    const fb = parameters.feedback[0] ?? 0
+    const sidebarAmp = parameters.amplitude[0] ?? 0.7
+    const sidebarFb = parameters.feedback[0] ?? 0
 
     const twoPi = this.TWO_PI
     const n = outCh.length
@@ -47,6 +55,20 @@ class FmOpProcessor extends AudioWorkletProcessor {
       if (pitchCv) freq *= Math.pow(2, pitchCv[i])
       if (freq < 0) freq = 0
       else if (freq > sampleRate * 0.5) freq = sampleRate * 0.5
+
+      // Replace-semantics: CV overrides sidebar amp/feedback when connected.
+      let amp = sidebarAmp
+      if (ampCv) {
+        amp = ampCv[i]
+        if (amp < 0) amp = 0
+        else if (amp > 1) amp = 1
+      }
+      let fb = sidebarFb
+      if (modIdxCv) {
+        fb = modIdxCv[i]
+        if (fb < 0) fb = 0
+        else if (fb > 1) fb = 1
+      }
 
       const inc = (twoPi * freq) / sampleRate
       const modIn = modCh ? modCh[i] : 0

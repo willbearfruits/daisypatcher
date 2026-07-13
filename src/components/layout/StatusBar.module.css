@@ -167,6 +167,24 @@
   flex: 0 0 auto;
 }
 
+/* Board is alive and running its app — one RESET tap away from flashable.
+   Warning hue: informative, not an error. */
+.pillRunning {
+  color: var(--dp-warning);
+  border-color: color-mix(in srgb, var(--dp-warning) 50%, var(--dp-border));
+  background: color-mix(in srgb, var(--dp-warning) 8%, var(--dp-surface-sunken));
+}
+
+.pillRunning::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-warning);
+  box-shadow: 0 0 6px var(--dp-warning);
+  flex: 0 0 auto;
+}
+
 .pillSerial {
   color: var(--dp-signal-audio);
   border-color: color-mix(in srgb, var(--dp-signal-audio) 50%, var(--dp-border));
@@ -301,6 +319,71 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* ---- state banner: the "what's happening" summary above the details ---- */
+
+.stateBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--dp-space-2);
+  margin-bottom: 2px;
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  background: var(--dp-surface-sunken);
+}
+
+.stateChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: var(--dp-font-mono);
+}
+
+.stateChip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  flex: 0 0 auto;
+}
+
+.stateChipOk {
+  color: var(--dp-signal-gate);
+}
+
+.stateChipWarn {
+  color: var(--dp-warning);
+}
+
+.stateChipDim {
+  color: var(--dp-text-dim);
+}
+
+.stateChipDim::before {
+  box-shadow: none;
+}
+
+.stateHint {
+  color: var(--dp-text-muted);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.5;
+}
+
+.stateHint kbd {
+  font-family: var(--dp-font-mono);
+  font-size: 0.92em;
+  color: var(--dp-text);
+  background: var(--dp-surface);
+  border: 1px solid var(--dp-border);
+  border-radius: 3px;
+  padding: 0 4px;
 }
 
 .popoverRow {

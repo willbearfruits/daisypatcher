@@ -31,23 +31,67 @@ class CompressorProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const threshold = parameters.threshold[0] ?? -20
-    const ratio = parameters.ratio[0] ?? 4
-    const attack = parameters.attack[0] ?? 0.01
-    const release = parameters.release[0] ?? 0.1
-    const makeup = parameters.makeup[0] ?? 0
+    // Wave 2 CVs: 1=thr, 2=ratio, 3=attack, 4=release, 5=makeup.
+    const thrCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const ratioCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const atkCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+    const relCv = inputs[4] && inputs[4].length > 0 ? inputs[4][0] : undefined
+    const makeCv = inputs[5] && inputs[5].length > 0 ? inputs[5][0] : undefined
+
+    const thrBase = parameters.threshold[0] ?? -20
+    const ratioBase = parameters.ratio[0] ?? 4
+    const atkBase = parameters.attack[0] ?? 0.01
+    const relBase = parameters.release[0] ?? 0.1
+    const makeBase = parameters.makeup[0] ?? 0
 
     const sr = sampleRate
-    // One-pole coefs: y += (x - y) * coef. coef = 1 - exp(-1/(t*sr))
-    const atkCoef = 1 - Math.exp(-1 / Math.max(0.0001, attack) / sr)
-    const relCoef = 1 - Math.exp(-1 / Math.max(0.0001, release) / sr)
-    const slope = 1 - 1 / Math.max(1.0001, ratio)
-    const makeupLin = Math.pow(10, makeup / 20)
+    // Block-rate coefs when no CV is connected for that param.
+    const atkCoefK = 1 - Math.exp(-1 / Math.max(0.0001, atkBase) / sr)
+    const relCoefK = 1 - Math.exp(-1 / Math.max(0.0001, relBase) / sr)
+    const slopeK = 1 - 1 / Math.max(1.0001, ratioBase)
+    const makeupLinK = Math.pow(10, makeBase / 20)
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
       const absX = x < 0 ? -x : x
+
+      // Per-sample effective params (replace semantics when CV is wired).
+      let threshold = thrBase
+      if (thrCv) {
+        threshold = thrCv[i]
+        if (threshold < -60) threshold = -60
+        else if (threshold > 0) threshold = 0
+      }
+      let slope = slopeK
+      if (ratioCv) {
+        let r = ratioCv[i]
+        if (r < 1) r = 1
+        else if (r > 20) r = 20
+        slope = 1 - 1 / Math.max(1.0001, r)
+      }
+      let atkCoef = atkCoefK
+      if (atkCv) {
+        let a = atkCv[i]
+        if (a < 0.001) a = 0.001
+        else if (a > 0.5) a = 0.5
+        atkCoef = 1 - Math.exp(-1 / Math.max(0.0001, a) / sr)
+      }
+      let relCoef = relCoefK
+      if (relCv) {
+        let r = relCv[i]
+        if (r < 0.01) r = 0.01
+        else if (r > 3) r = 3
+        relCoef = 1 - Math.exp(-1 / Math.max(0.0001, r) / sr)
+      }
+      let makeupLin = makeupLinK
+      if (makeCv) {
+        let m = makeCv[i]
+        if (m < 0) m = 0
+        else if (m > 24) m = 24
+        makeupLin = Math.pow(10, m / 20)
+      }
+
       // Asymmetric envelope tracking.
       if (absX > this.env) this.env += (absX - this.env) * atkCoef
       else this.env += (absX - this.env) * relCoef

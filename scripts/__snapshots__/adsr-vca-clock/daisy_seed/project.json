@@ -1,0 +1,125 @@
+{
+  "nodes": [
+    {
+      "id": "clk1",
+      "kind": "clock",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "params": {
+        "bpm": 120,
+        "pulse_width": 0.1
+      }
+    },
+    {
+      "id": "adsr1",
+      "kind": "adsr",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "params": {
+        "attack": 0.01,
+        "decay": 0.1,
+        "sustain": 0.7,
+        "release": 0.3
+      }
+    },
+    {
+      "id": "osc1",
+      "kind": "oscillator",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "params": {
+        "frequency": 220,
+        "amplitude": 0.5,
+        "waveform": "sine"
+      }
+    },
+    {
+      "id": "vca1",
+      "kind": "vca",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "params": {
+        "bias": 0
+      }
+    },
+    {
+      "id": "out1",
+      "kind": "audio_output",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": {
+        "nodeId": "clk1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "adsr1",
+        "socketId": "gate"
+      }
+    },
+    {
+      "id": "c2",
+      "from": {
+        "nodeId": "osc1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "vca1",
+        "socketId": "in"
+      }
+    },
+    {
+      "id": "c3",
+      "from": {
+        "nodeId": "adsr1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "vca1",
+        "socketId": "cv"
+      }
+    },
+    {
+      "id": "c4",
+      "from": {
+        "nodeId": "vca1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "left"
+      }
+    },
+    {
+      "id": "c5",
+      "from": {
+        "nodeId": "vca1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "right"
+      }
+    }
+  ],
+  "meta": {
+    "name": "adsr_vca_clock",
+    "sampleRate": 48000,
+    "blockSize": 48
+  }
+}

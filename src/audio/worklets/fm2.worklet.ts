@@ -7,6 +7,11 @@
  *   mod = sin(modPhase) * mod_index
  *   out = sin(carrierPhase + mod) * carrier_amp
  *
+ * Inputs:
+ *   0  pitch_cv     — 1 V/oct style exponential pitch mod (offset semantics, preserved)
+ *   1  amp_cv       — VCA-style amp scaling (offset semantics, preserved)
+ *   2  cv_mod_index — replaces sidebar `mod_index` (0..20)
+ *
  * Registered as `'dp-fm2'`.
  */
 
@@ -37,10 +42,11 @@ class Fm2Processor extends AudioWorkletProcessor {
 
     const pitchCv = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const ampCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const modIdxCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
     const baseFreq = parameters.frequency[0] ?? 220
     const modRatio = parameters.mod_ratio[0] ?? 2
-    const modIndex = parameters.mod_index[0] ?? 3
+    const sidebarModIndex = parameters.mod_index[0] ?? 3
     const baseAmp = parameters.carrier_amp[0] ?? 0.7
 
     const twoPi = this.TWO_PI
@@ -59,6 +65,14 @@ class Fm2Processor extends AudioWorkletProcessor {
 
       const cInc = (twoPi * carrierFreq) / sampleRate
       const mInc = (twoPi * modFreq) / sampleRate
+
+      // Replace-semantics: CV overrides sidebar mod_index when connected.
+      let modIndex = sidebarModIndex
+      if (modIdxCv) {
+        modIndex = modIdxCv[i]
+        if (modIndex < 0) modIndex = 0
+        else if (modIndex > 20) modIndex = 20
+      }
 
       const mod = Math.sin(this.modPhase) * modIndex
       let amp = baseAmp

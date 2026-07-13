@@ -37,7 +37,7 @@ class RandomProcessor extends AudioWorkletProcessor {
     const out = outputs[0]?.[0]
     if (!out) return true
 
-    const rate = parameters.rate[0] ?? 2
+    const rateBase = parameters.rate[0] ?? 2
     const range = parameters.range[0] ?? 1
     let smooth = parameters.smooth[0] ?? 0
     if (smooth < 0) smooth = 0
@@ -57,8 +57,8 @@ class RandomProcessor extends AudioWorkletProcessor {
 
     const clkCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const hasClock = !!clkCh
-
-    const samplesPerTick = sampleRate / Math.max(0.0001, rate)
+    // Wave 4 CV: 1=rate. Replace semantics; ignored when clock is connected.
+    const rateCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
 
     const n = out.length
     for (let i = 0; i < n; i++) {
@@ -68,6 +68,13 @@ class RandomProcessor extends AudioWorkletProcessor {
         if (nowHigh && !this.clkHigh) this.pickTarget(range)
         this.clkHigh = nowHigh
       } else {
+        let rate = rateBase
+        if (rateCv) {
+          rate = rateCv[i]
+          if (rate < 0.1) rate = 0.1
+          else if (rate > 20) rate = 20
+        }
+        const samplesPerTick = sampleRate / Math.max(0.0001, rate)
         this.freePhase++
         if (this.freePhase >= samplesPerTick) {
           this.freePhase -= samplesPerTick

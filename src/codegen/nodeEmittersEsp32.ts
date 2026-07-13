@@ -154,6 +154,12 @@ const lfo: NodeEmitter = {
     const depth = numParam(ctx.node, 'depth', 1)
     const offset = numParam(ctx.node, 'offset', 0)
     const wave = enumParam(ctx.node, 'waveform', 'sine')
+    const rateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const depthCvExpr = ctx.inputExpr(ctx.node.id, 'cv_depth', '__NC__')
+    const offsetCvExpr = ctx.inputExpr(ctx.node.id, 'cv_offset', '__NC__')
+    const freqExpr = rateCvExpr === '__NC__' ? `${freq}` : `fmaxf(0.01f, fminf(20.f, ${rateCvExpr}))`
+    const depthExpr = depthCvExpr === '__NC__' ? `${depth}` : `fmaxf(0.f, fminf(1.f, ${depthCvExpr}))`
+    const offsetExpr = offsetCvExpr === '__NC__' ? `${offset}` : `fmaxf(-1.f, fminf(1.f, ${offsetCvExpr}))`
     const waveExpr =
       wave === 'saw'
         ? `(2.f * ${v}_phase - 1.f)`
@@ -163,9 +169,9 @@ const lfo: NodeEmitter = {
             ? `(4.f * fabsf(${v}_phase - 0.5f) - 1.f)`
             : `sinf(${v}_phase * 6.28318530718f)`
     return (
-      `    ${v}_phase += ${freq} / (float)SAMPLE_RATE;\n` +
+      `    ${v}_phase += (${freqExpr}) / (float)SAMPLE_RATE;\n` +
       `    if (${v}_phase >= 1.f) ${v}_phase -= 1.f;\n` +
-      `    float ${out} = ${waveExpr} * ${depth} + ${offset};\n`
+      `    float ${out} = ${waveExpr} * (${depthExpr}) + (${offsetExpr});\n`
     )
   }
 }
@@ -210,6 +216,12 @@ const karplus: NodeEmitter = {
     const freq = numParam(ctx.node, 'frequency', 220)
     const damping = numParam(ctx.node, 'damping', 0.5)
     const feedback = numParam(ctx.node, 'feedback', 0.99)
+    const pitchExpr = ctx.inputExpr(ctx.node.id, 'cv_pitch', '__NC__')
+    const decayExpr = ctx.inputExpr(ctx.node.id, 'cv_decay', '__NC__')
+    const dampExpr = ctx.inputExpr(ctx.node.id, 'cv_damp', '__NC__')
+    const fExpr = pitchExpr === '__NC__' ? freq : `fmaxf(20.f, fminf(2000.f, ${pitchExpr}))`
+    const fbExpr = decayExpr === '__NC__' ? feedback : `fmaxf(0.9f, fminf(0.999f, ${decayExpr}))`
+    const dExpr = dampExpr === '__NC__' ? damping : `fmaxf(0.f, fminf(1.f, ${dampExpr}))`
     const retrig = enumParam(ctx.node, 'retrigger', 'manual')
     const autoExpr =
       retrig === '1s'
@@ -221,10 +233,13 @@ const karplus: NodeEmitter = {
             : '0'
     return (
       `    {\n` +
-      `        int _target = (int)((float)SAMPLE_RATE / fmaxf(${freq}, 20.f));\n` +
+      `        float _freq = ${fExpr};\n` +
+      `        float _fb = ${fbExpr};\n` +
+      `        float _damping = ${dExpr};\n` +
+      `        int _target = (int)((float)SAMPLE_RATE / fmaxf(_freq, 20.f));\n` +
       `        if (_target < 2) _target = 2; if (_target > 2400) _target = 2400;\n` +
       `        ${v}_len = _target;\n` +
-      `        float _lp_coef = ${damping} * 0.95f;\n` +
+      `        float _lp_coef = _damping * 0.95f;\n` +
       `        int _auto_period = ${autoExpr};\n` +
       `        float _tv = (${trig});\n` +
       `        bool _edge = (_tv >= 0.5f) && (${v}_prev_trig < 0.5f);\n` +
@@ -252,7 +267,7 @@ const karplus: NodeEmitter = {
       `        int _ri = ${v}_wr % ${v}_len;\n` +
       `        float _s = ${v}_buf[_ri];\n` +
       `        ${v}_lp = _s * (1.f - _lp_coef) + ${v}_lp * _lp_coef;\n` +
-      `        float _next = ${v}_lp * ${feedback};\n` +
+      `        float _next = ${v}_lp * _fb;\n` +
       `        if (_next > 1.f) _next = 1.f; else if (_next < -1.f) _next = -1.f;\n` +
       `        ${v}_buf[_ri] = _next;\n` +
       `        ${v}_wr++; if (${v}_wr >= ${v}_len) ${v}_wr -= ${v}_len;\n` +
@@ -275,17 +290,23 @@ const fm_op: NodeEmitter = {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const mod = ctx.inputExpr(ctx.node.id, 'mod', '0.f')
     const pitchCv = ctx.inputExpr(ctx.node.id, 'pitch_cv', '0.f')
+    const ampCvExpr = ctx.inputExpr(ctx.node.id, 'cv_amp', '__NC__')
+    const modIdxExpr = ctx.inputExpr(ctx.node.id, 'cv_mod_index', '__NC__')
     const freq = numParam(ctx.node, 'frequency', 220)
     const ratio = numParam(ctx.node, 'ratio', 1)
     const amp = numParam(ctx.node, 'amplitude', 0.7)
     const fb = numParam(ctx.node, 'feedback', 0)
+    const ampExpr = ampCvExpr === '__NC__' ? amp : `fmaxf(0.f, fminf(1.f, ${ampCvExpr}))`
+    const fbExpr = modIdxExpr === '__NC__' ? fb : `fmaxf(0.f, fminf(1.f, ${modIdxExpr}))`
     return (
       `    {\n` +
       `        float _f = ${freq} * ${ratio} * powf(2.f, ${pitchCv});\n` +
       `        float _ny = (float)SAMPLE_RATE * 0.5f;\n` +
       `        if (_f < 0.f) _f = 0.f; else if (_f > _ny) _f = _ny;\n` +
       `        float _inc = 6.28318530718f * _f / (float)SAMPLE_RATE;\n` +
-      `        float _y = sinf(${v}_phase + (${mod}) + ${fb} * ${v}_last) * ${amp};\n` +
+      `        float _amp = ${ampExpr};\n` +
+      `        float _fb = ${fbExpr};\n` +
+      `        float _y = sinf(${v}_phase + (${mod}) + _fb * ${v}_last) * _amp;\n` +
       `        if (_y > 1.f) _y = 1.f; else if (_y < -1.f) _y = -1.f;\n` +
       `        ${v}_last = _y;\n` +
       `        ${v}_phase += _inc;\n` +
@@ -309,10 +330,12 @@ const fm2: NodeEmitter = {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const pitchCv = ctx.inputExpr(ctx.node.id, 'pitch_cv', '0.f')
     const ampCv = ctx.inputExpr(ctx.node.id, 'amp_cv', '1.f')
+    const modIdxExpr = ctx.inputExpr(ctx.node.id, 'cv_mod_index', '__NC__')
     const freq = numParam(ctx.node, 'frequency', 220)
     const modRatio = numParam(ctx.node, 'mod_ratio', 2)
     const modIndex = numParam(ctx.node, 'mod_index', 3)
     const amp = numParam(ctx.node, 'carrier_amp', 0.7)
+    const idxExpr = modIdxExpr === '__NC__' ? modIndex : `fmaxf(0.f, fminf(20.f, ${modIdxExpr}))`
     return (
       `    {\n` +
       `        float _ny = (float)SAMPLE_RATE * 0.5f;\n` +
@@ -321,7 +344,8 @@ const fm2: NodeEmitter = {
       `        float _mf = _cf * ${modRatio}; if (_mf > _ny) _mf = _ny;\n` +
       `        float _cinc = 6.28318530718f * _cf / (float)SAMPLE_RATE;\n` +
       `        float _minc = 6.28318530718f * _mf / (float)SAMPLE_RATE;\n` +
-      `        float _mod = sinf(${v}_mph) * ${modIndex};\n` +
+      `        float _idx = ${idxExpr};\n` +
+      `        float _mod = sinf(${v}_mph) * _idx;\n` +
       `        float _a = ${amp} * fmaxf(0.f, ${ampCv});\n` +
       `        float _y = sinf(${v}_cph + _mod) * _a;\n` +
       `        if (_y > 1.f) _y = 1.f; else if (_y < -1.f) _y = -1.f;\n` +
@@ -430,12 +454,21 @@ const drum_kick: NodeEmitter = {
     const decay = numParam(ctx.node, 'decay', 0.35)
     const punch = numParam(ctx.node, 'punch', 0.5)
     const sweep = numParam(ctx.node, 'sweep', 0.6)
+    const tuneExpr = ctx.inputExpr(ctx.node.id, 'cv_tune', '__NC__')
+    const decayExpr = ctx.inputExpr(ctx.node.id, 'cv_decay', '__NC__')
+    const punchExpr = ctx.inputExpr(ctx.node.id, 'cv_punch', '__NC__')
+    const tExpr = tuneExpr === '__NC__' ? tune : `fmaxf(30.f, fminf(200.f, ${tuneExpr}))`
+    const dExpr = decayExpr === '__NC__' ? decay : `fmaxf(0.05f, fminf(2.f, ${decayExpr}))`
+    const pExpr = punchExpr === '__NC__' ? punch : `fmaxf(0.f, fminf(1.f, ${punchExpr}))`
     return (
       `    {\n` +
-      `        float _dec = fmaxf(0.05f, ${decay});\n` +
+      `        float _tune = ${tExpr};\n` +
+      `        float _decay_s = ${dExpr};\n` +
+      `        float _punch = ${pExpr};\n` +
+      `        float _dec = fmaxf(0.05f, _decay_s);\n` +
       `        float _amp_coef = expf(-1.f / (_dec * (float)SAMPLE_RATE));\n` +
       `        float _pitch_coef = expf(-1.f / (0.03f * (float)SAMPLE_RATE));\n` +
-      `        float _atk_seconds = 0.008f - ${punch} * 0.007f;\n` +
+      `        float _atk_seconds = 0.008f - _punch * 0.007f;\n` +
       `        float _atk_inc = 1.f / (_atk_seconds * (float)SAMPLE_RATE);\n` +
       `        float _topMul = 1.f + ${sweep} * 2.f;\n` +
       `        float _tv = (${trig});\n` +
@@ -451,7 +484,7 @@ const drum_kick: NodeEmitter = {
       `            ${v}_amp *= _amp_coef;\n` +
       `        }\n` +
       `        ${v}_pitch_env *= _pitch_coef;\n` +
-      `        float _f = ${tune} * (1.f + (_topMul - 1.f) * ${v}_pitch_env);\n` +
+      `        float _f = _tune * (1.f + (_topMul - 1.f) * ${v}_pitch_env);\n` +
       `        float _inc = 6.28318530718f * _f / (float)SAMPLE_RATE;\n` +
       `        float _y = sinf(${v}_phase) * ${v}_amp;\n` +
       `        if (_y > 1.f) _y = 1.f; else if (_y < -1.f) _y = -1.f;\n` +
@@ -479,13 +512,22 @@ const drum_snare: NodeEmitter = {
     const tune = numParam(ctx.node, 'tune', 200)
     const decay = numParam(ctx.node, 'decay', 0.2)
     const tone = numParam(ctx.node, 'tone', 0.5)
+    const tuneExpr = ctx.inputExpr(ctx.node.id, 'cv_tune', '__NC__')
+    const decayExpr = ctx.inputExpr(ctx.node.id, 'cv_decay', '__NC__')
+    const noiseExpr = ctx.inputExpr(ctx.node.id, 'cv_noise', '__NC__')
+    const tExpr = tuneExpr === '__NC__' ? tune : `fmaxf(100.f, fminf(400.f, ${tuneExpr}))`
+    const dExpr = decayExpr === '__NC__' ? decay : `fmaxf(0.05f, fminf(1.f, ${decayExpr}))`
+    const nExpr = noiseExpr === '__NC__' ? tone : `fmaxf(0.f, fminf(1.f, ${noiseExpr}))`
     return (
       `    {\n` +
-      `        float _dec = fmaxf(0.05f, ${decay});\n` +
+      `        float _tune = ${tExpr};\n` +
+      `        float _decay_s = ${dExpr};\n` +
+      `        float _tone = ${nExpr};\n` +
+      `        float _dec = fmaxf(0.05f, _decay_s);\n` +
       `        float _amp_coef = expf(-1.f / (_dec * (float)SAMPLE_RATE));\n` +
       `        float _lp_coef = expf(-6.28318530718f * 1000.f / (float)SAMPLE_RATE);\n` +
-      `        float _inc1 = 6.28318530718f * ${tune} / (float)SAMPLE_RATE;\n` +
-      `        float _inc2 = 6.28318530718f * (${tune} * 1.59f) / (float)SAMPLE_RATE;\n` +
+      `        float _inc1 = 6.28318530718f * _tune / (float)SAMPLE_RATE;\n` +
+      `        float _inc2 = 6.28318530718f * (_tune * 1.59f) / (float)SAMPLE_RATE;\n` +
       `        float _tv = (${trig});\n` +
       `        if (_tv >= 0.5f && ${v}_prev < 0.5f) { ${v}_amp = 1.f; ${v}_p1 = 0.f; ${v}_p2 = 0.f; }\n` +
       `        ${v}_prev = _tv;\n` +
@@ -496,7 +538,7 @@ const drum_snare: NodeEmitter = {
       `        float _w = ((${v}_rng >> 8) / 16777216.f) * 2.f - 1.f;\n` +
       `        ${v}_hp = ${v}_hp * _lp_coef + _w * (1.f - _lp_coef);\n` +
       `        float _noise = _w - ${v}_hp;\n` +
-      `        float _y = (_body * (1.f - ${tone}) + _noise * ${tone}) * ${v}_amp;\n` +
+      `        float _y = (_body * (1.f - _tone) + _noise * _tone) * ${v}_amp;\n` +
       `        ${v}_amp *= _amp_coef;\n` +
       `        if (_y > 1.f) _y = 1.f; else if (_y < -1.f) _y = -1.f;\n` +
       `        ${v}_p1 += _inc1; if (${v}_p1 >= 6.28318530718f) ${v}_p1 -= 6.28318530718f;\n` +
@@ -522,14 +564,20 @@ const drum_hat: NodeEmitter = {
     const trig = ctx.inputExpr(ctx.node.id, 'trigger', '0.f')
     const decay = numParam(ctx.node, 'decay', 0.08)
     const tone = numParam(ctx.node, 'tone', 0.7)
+    const decayExpr = ctx.inputExpr(ctx.node.id, 'cv_decay', '__NC__')
+    const toneExpr = ctx.inputExpr(ctx.node.id, 'cv_tone', '__NC__')
+    const dExpr = decayExpr === '__NC__' ? decay : `fmaxf(0.01f, fminf(0.5f, ${decayExpr}))`
+    const tExpr = toneExpr === '__NC__' ? tone : `fmaxf(0.3f, fminf(1.f, ${toneExpr}))`
     return (
       `    {\n` +
       `        const float _ratios[6] = { 2.f, 3.f, 4.16f, 5.43f, 6.79f, 8.21f };\n` +
-      `        float _dec = fmaxf(0.01f, ${decay});\n` +
+      `        float _decay_s = ${dExpr};\n` +
+      `        float _tone = ${tExpr};\n` +
+      `        float _dec = fmaxf(0.01f, _decay_s);\n` +
       `        float _amp_coef = expf(-1.f / (_dec * (float)SAMPLE_RATE));\n` +
       `        float _base = 40.f;\n` +
       `        float _ny = (float)SAMPLE_RATE * 0.5f;\n` +
-      `        float _bpF = 8000.f * ${tone}; if (_bpF > _ny * 0.9f) _bpF = _ny * 0.9f;\n` +
+      `        float _bpF = 8000.f * _tone; if (_bpF > _ny * 0.9f) _bpF = _ny * 0.9f;\n` +
       `        float _f = 2.f * sinf(3.14159265f * _bpF / (float)SAMPLE_RATE);\n` +
       `        float _q = 0.5f;\n` +
       `        float _tv = (${trig});\n` +
@@ -566,7 +614,11 @@ const gain: NodeEmitter = {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const amt = numParam(ctx.node, 'gain', 1)
-    return `    float ${out} = (${input}) * ${amt};\n`
+    const gainCvExpr = ctx.inputExpr(ctx.node.id, 'cv_gain', '__NC__')
+    const gE = gainCvExpr === '__NC__'
+      ? `${amt}`
+      : `fmaxf(0.f, fminf(2.f, ${gainCvExpr}))`
+    return `    float ${out} = (${input}) * (${gE});\n`
   }
 }
 
@@ -590,7 +642,11 @@ const mixer4: NodeEmitter = {
     for (let i = 1; i <= 4; i++) {
       const sig = ctx.inputExpr(ctx.node.id, `in${i}`, '0.f')
       const g = numParam(ctx.node, `gain${i}`, 1)
-      parts.push(`(${sig}) * ${g}`)
+      const lvlExpr = ctx.inputExpr(ctx.node.id, `cv_level${i}`, '__NC__')
+      const gE = lvlExpr === '__NC__'
+        ? `${g}`
+        : `fmaxf(0.f, fminf(2.f, ${lvlExpr}))`
+      parts.push(`(${sig}) * (${gE})`)
     }
     return `    float ${out} = ${parts.join(' + ')};\n`
   }
@@ -604,10 +660,17 @@ const pan: NodeEmitter = {
     const r = ctx.outputVar(ctx.node.id, 'right')
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const p = numParam(ctx.node, 'pan', 0)
+    const cv = ctx.inputExpr(ctx.node.id, 'cv', '0.f')
+    const panCvExpr = ctx.inputExpr(ctx.node.id, 'cv_pan', '__NC__')
+    const rootExpr = panCvExpr === '__NC__'
+      ? `${p}`
+      : `fmaxf(-1.f, fminf(1.f, ${panCvExpr}))`
     return (
       `    float ${l}, ${r};\n` +
       `    {\n` +
-      `        float _p = ${p} * 0.5f + 0.5f;\n` +
+      `        float _pn = (${rootExpr}) + (${cv});\n` +
+      `        if (_pn < -1.f) _pn = -1.f; else if (_pn > 1.f) _pn = 1.f;\n` +
+      `        float _p = _pn * 0.5f + 0.5f;\n` +
       `        float _gl = cosf(_p * 1.5707963268f);\n` +
       `        float _gr = sinf(_p * 1.5707963268f);\n` +
       `        ${l} = (${input}) * _gl;\n` +
@@ -623,9 +686,32 @@ const clip: NodeEmitter = {
   process: (ctx) => {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
-    const lo = numParam(ctx.node, 'min', -1)
-    const hi = numParam(ctx.node, 'max', 1)
-    return `    float ${out} = fmaxf(${lo}, fminf(${hi}, (${input})));\n`
+    const drive = numParam(ctx.node, 'drive', 1)
+    const mode = enumParam(ctx.node, 'mode', 'hard')
+    const driveCvExpr = ctx.inputExpr(ctx.node.id, 'cv_drive', '__NC__')
+    const dE = driveCvExpr === '__NC__'
+      ? `${drive}`
+      : `fmaxf(1.f, fminf(20.f, ${driveCvExpr}))`
+    if (mode === 'tanh') {
+      return `    float ${out} = tanhf((${input}) * (${dE}));\n`
+    }
+    if (mode === 'soft') {
+      return (
+        `    float ${out};\n` +
+        `    {\n` +
+        `        float _x = (${input}) * (${dE});\n` +
+        `        ${out} = _x / (1.f + fabsf(_x));\n` +
+        `    }\n`
+      )
+    }
+    return (
+      `    float ${out};\n` +
+      `    {\n` +
+      `        float _x = (${input}) * (${dE});\n` +
+      `        if (_x > 1.f) _x = 1.f; else if (_x < -1.f) _x = -1.f;\n` +
+      `        ${out} = _x;\n` +
+      `    }\n`
+    )
   }
 }
 
@@ -658,8 +744,20 @@ const crossfade: NodeEmitter = {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const a = ctx.inputExpr(ctx.node.id, 'a', '0.f')
     const b = ctx.inputExpr(ctx.node.id, 'b', '0.f')
-    const x = ctx.inputExpr(ctx.node.id, 'x', formatFloat(rawNum(ctx.node, 'x', 0.5)))
-    return `    float ${out} = (${a}) * (1.f - (${x})) + (${b}) * (${x});\n`
+    const cv = ctx.inputExpr(ctx.node.id, 'cv', '0.f')
+    const mix = numParam(ctx.node, 'mix', 0.5)
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const mBase = mixCvExpr === '__NC__'
+      ? `${mix}`
+      : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
+    return (
+      `    float ${out};\n` +
+      `    {\n` +
+      `        float _m = (${mBase}) + (${cv});\n` +
+      `        if (_m < 0.f) _m = 0.f; else if (_m > 1.f) _m = 1.f;\n` +
+      `        ${out} = (${a}) * (1.f - _m) + (${b}) * _m;\n` +
+      `    }\n`
+    )
   }
 }
 
@@ -670,7 +768,18 @@ const ring_mod: NodeEmitter = {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const a = ctx.inputExpr(ctx.node.id, 'a', '0.f')
     const b = ctx.inputExpr(ctx.node.id, 'b', '0.f')
-    return `    float ${out} = (${a}) * (${b});\n`
+    const mix = numParam(ctx.node, 'mix', 1)
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
+    return (
+      `    float ${out};\n` +
+      `    {\n` +
+      `        float _m = (${mixExpr});\n` +
+      `        float _a = (${a});\n` +
+      `        float _b = (${b});\n` +
+      `        ${out} = _a * (1.f - _m) + (_a * _b) * _m;\n` +
+      `    }\n`
+    )
   }
 }
 
@@ -710,14 +819,22 @@ const filter_svf: NodeEmitter = {
     const cv = ctx.inputExpr(ctx.node.id, 'freq_cv', '0.f')
     const freq = numParam(ctx.node, 'frequency', 1000)
     const q = numParam(ctx.node, 'resonance', 0.2)
+    const cutoffExpr = ctx.inputExpr(ctx.node.id, 'cv_cutoff', '__NC__')
+    const resExpr = ctx.inputExpr(ctx.node.id, 'cv_res', '__NC__')
+    const fBase = cutoffExpr === '__NC__'
+      ? `${freq}`
+      : `fmaxf(20.f, fminf(20000.f, ${cutoffExpr}))`
+    const qBase = resExpr === '__NC__'
+      ? `${q}`
+      : `fmaxf(0.f, fminf(1.f, ${resExpr}))`
     return (
       `    float ${lp}, ${hp}, ${bp}, ${notch};\n` +
       `    {\n` +
       `        float _maxF = (float)SAMPLE_RATE * 0.45f;\n` +
-      `        float _fc = ${freq} * powf(2.f, ${cv});\n` +
+      `        float _fc = (${fBase}) * powf(2.f, ${cv});\n` +
       `        if (_fc < 20.f) _fc = 20.f; else if (_fc > _maxF) _fc = _maxF;\n` +
       `        float _f = 2.f * sinf(3.14159265f * _fc / (float)SAMPLE_RATE);\n` +
-      `        float _r = ${q}; if (_r < 0.f) _r = 0.f; else if (_r > 1.f) _r = 1.f;\n` +
+      `        float _r = (${qBase}); if (_r < 0.f) _r = 0.f; else if (_r > 1.f) _r = 1.f;\n` +
       `        float _damp = 2.f * (1.f - _r);\n` +
       `        float _x = (${input});\n` +
       `        float _hpV = _x - ${v}_lpS - _damp * ${v}_bpS;\n` +
@@ -745,15 +862,23 @@ const filter_moog: NodeEmitter = {
     const cv = ctx.inputExpr(ctx.node.id, 'freq_cv', '0.f')
     const freq = numParam(ctx.node, 'frequency', 1000)
     const res = numParam(ctx.node, 'resonance', 0.3)
+    const cutoffExpr = ctx.inputExpr(ctx.node.id, 'cv_cutoff', '__NC__')
+    const resCvExpr = ctx.inputExpr(ctx.node.id, 'cv_res', '__NC__')
+    const fBase = cutoffExpr === '__NC__'
+      ? `${freq}`
+      : `fmaxf(20.f, fminf(20000.f, ${cutoffExpr}))`
+    const rBase = resCvExpr === '__NC__'
+      ? `${res}`
+      : `fmaxf(0.f, fminf(1.f, ${resCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
       `        float _maxF = (float)SAMPLE_RATE * 0.45f;\n` +
-      `        float _fc = ${freq} * powf(2.f, ${cv});\n` +
+      `        float _fc = (${fBase}) * powf(2.f, ${cv});\n` +
       `        if (_fc < 20.f) _fc = 20.f; else if (_fc > _maxF) _fc = _maxF;\n` +
       `        float _f = 2.f * sinf(3.14159265f * _fc / (float)SAMPLE_RATE);\n` +
       `        if (_f > 1.f) _f = 1.f;\n` +
-      `        float _r = ${res}; if (_r < 0.f) _r = 0.f; else if (_r > 1.f) _r = 1.f;\n` +
+      `        float _r = (${rBase}); if (_r < 0.f) _r = 0.f; else if (_r > 1.f) _r = 1.f;\n` +
       `        float _k = _r * 4.f;\n` +
       `        float _fb = tanhf(${v}_s4) * _k;\n` +
       `        float _x = (${input}) - _fb;\n` +
@@ -799,6 +924,10 @@ const formant: NodeEmitter = {
     const morph = numParam(ctx.node, 'morph', 0)
     const q = numParam(ctx.node, 'q', 5)
     const mix = numParam(ctx.node, 'mix', 0.6)
+    const morphCvExpr = ctx.inputExpr(ctx.node.id, 'cv_morph', '__NC__')
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const morphExpr = morphCvExpr === '__NC__' ? `${morph}` : `fmaxf(0.f, fminf(1.f, ${morphCvExpr}))`
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
     const curIdx = Math.max(0, VOWEL_ORDER.indexOf(vowel as 'a'))
     const nxtIdx = (curIdx + 1) % VOWEL_ORDER.length
     const cur = VOWELS[VOWEL_ORDER[curIdx]]
@@ -812,9 +941,11 @@ const formant: NodeEmitter = {
       `        const float _nxt[3] = { ${nxtFs} };\n` +
       `        float _ny = (float)SAMPLE_RATE * 0.45f;\n` +
       `        float _x = (${input});\n` +
+      `        float _morph = (${morphExpr});\n` +
+      `        float _mix = (${mixExpr});\n` +
       `        float _wet = 0.f;\n` +
       `        for (int _k = 0; _k < 3; _k++) {\n` +
-      `            float _f = _cur[_k] * (1.f - ${morph}) + _nxt[_k] * ${morph};\n` +
+      `            float _f = _cur[_k] * (1.f - _morph) + _nxt[_k] * _morph;\n` +
       `            if (_f < 20.f) _f = 20.f; else if (_f > _ny) _f = _ny;\n` +
       `            float _w0 = 6.28318530718f * _f / (float)SAMPLE_RATE;\n` +
       `            float _cosW = cosf(_w0); float _sinW = sinf(_w0);\n` +
@@ -830,7 +961,7 @@ const formant: NodeEmitter = {
       `            _wet += _y;\n` +
       `        }\n` +
       `        _wet *= (1.f / 3.f);\n` +
-      `        ${out} = _x * (1.f - ${mix}) + _wet * ${mix};\n` +
+      `        ${out} = _x * (1.f - _mix) + _wet * _mix;\n` +
       `    }\n`
     )
   }
@@ -852,17 +983,26 @@ const adsr: NodeEmitter = {
     const d = numParam(ctx.node, 'decay', 0.1)
     const s = numParam(ctx.node, 'sustain', 0.6)
     const r = numParam(ctx.node, 'release', 0.2)
+    const atkCvExpr = ctx.inputExpr(ctx.node.id, 'cv_attack', '__NC__')
+    const decCvExpr = ctx.inputExpr(ctx.node.id, 'cv_decay', '__NC__')
+    const susCvExpr = ctx.inputExpr(ctx.node.id, 'cv_sustain', '__NC__')
+    const relCvExpr = ctx.inputExpr(ctx.node.id, 'cv_release', '__NC__')
+    const aExpr = atkCvExpr === '__NC__' ? `${a}` : `fmaxf(0.001f, fminf(4.f, ${atkCvExpr}))`
+    const dExpr = decCvExpr === '__NC__' ? `${d}` : `fmaxf(0.001f, fminf(4.f, ${decCvExpr}))`
+    const sExpr = susCvExpr === '__NC__' ? `${s}` : `fmaxf(0.f, fminf(1.f, ${susCvExpr}))`
+    const rExpr = relCvExpr === '__NC__' ? `${r}` : `fmaxf(0.001f, fminf(8.f, ${relCvExpr}))`
     return (
       `    {\n` +
       `        float _g = (${gate});\n` +
+      `        float _a = (${aExpr}); float _d = (${dExpr}); float _s = (${sExpr}); float _r = (${rExpr});\n` +
       `        if (_g > 0.5f && ${v}_last_gate <= 0.5f) ${v}_stage = 1;\n` +
       `        if (_g <= 0.5f && ${v}_last_gate > 0.5f) ${v}_stage = 4;\n` +
       `        ${v}_last_gate = _g;\n` +
       `        float _dt = 1.f / (float)SAMPLE_RATE;\n` +
-      `        if (${v}_stage == 1) { ${v}_val += _dt / fmaxf(${a}, 1e-4f); if (${v}_val >= 1.f) { ${v}_val = 1.f; ${v}_stage = 2; } }\n` +
-      `        else if (${v}_stage == 2) { ${v}_val -= (1.f - ${s}) * _dt / fmaxf(${d}, 1e-4f); if (${v}_val <= ${s}) { ${v}_val = ${s}; ${v}_stage = 3; } }\n` +
-      `        else if (${v}_stage == 3) { ${v}_val = ${s}; }\n` +
-      `        else if (${v}_stage == 4) { ${v}_val -= ${v}_val * _dt / fmaxf(${r}, 1e-4f); if (${v}_val < 0.001f) { ${v}_val = 0.f; ${v}_stage = 0; } }\n` +
+      `        if (${v}_stage == 1) { ${v}_val += _dt / fmaxf(_a, 1e-4f); if (${v}_val >= 1.f) { ${v}_val = 1.f; ${v}_stage = 2; } }\n` +
+      `        else if (${v}_stage == 2) { ${v}_val -= (1.f - _s) * _dt / fmaxf(_d, 1e-4f); if (${v}_val <= _s) { ${v}_val = _s; ${v}_stage = 3; } }\n` +
+      `        else if (${v}_stage == 3) { ${v}_val = _s; }\n` +
+      `        else if (${v}_stage == 4) { ${v}_val -= ${v}_val * _dt / fmaxf(_r, 1e-4f); if (${v}_val < 0.001f) { ${v}_val = 0.f; ${v}_stage = 0; } }\n` +
       `        float ${out} = ${v}_val;\n` +
       `    }\n`
     )
@@ -881,15 +1021,20 @@ const ar: NodeEmitter = {
     const gate = ctx.inputExpr(ctx.node.id, 'gate', '0.f')
     const a = numParam(ctx.node, 'attack', 0.01)
     const r = numParam(ctx.node, 'release', 0.2)
+    const atkCvExpr = ctx.inputExpr(ctx.node.id, 'cv_attack', '__NC__')
+    const relCvExpr = ctx.inputExpr(ctx.node.id, 'cv_release', '__NC__')
+    const aExpr = atkCvExpr === '__NC__' ? `${a}` : `fmaxf(0.001f, fminf(4.f, ${atkCvExpr}))`
+    const rExpr = relCvExpr === '__NC__' ? `${r}` : `fmaxf(0.001f, fminf(8.f, ${relCvExpr}))`
     return (
       `    {\n` +
       `        float _g = (${gate});\n` +
+      `        float _a = (${aExpr}); float _r = (${rExpr});\n` +
       `        if (_g > 0.5f && ${v}_last_gate <= 0.5f) ${v}_stage = 1;\n` +
       `        if (_g <= 0.5f && ${v}_last_gate > 0.5f) ${v}_stage = 2;\n` +
       `        ${v}_last_gate = _g;\n` +
       `        float _dt = 1.f / (float)SAMPLE_RATE;\n` +
-      `        if (${v}_stage == 1) { ${v}_val += _dt / fmaxf(${a}, 1e-4f); if (${v}_val >= 1.f) { ${v}_val = 1.f; } }\n` +
-      `        else if (${v}_stage == 2) { ${v}_val -= ${v}_val * _dt / fmaxf(${r}, 1e-4f); if (${v}_val < 0.001f) { ${v}_val = 0.f; ${v}_stage = 0; } }\n` +
+      `        if (${v}_stage == 1) { ${v}_val += _dt / fmaxf(_a, 1e-4f); if (${v}_val >= 1.f) { ${v}_val = 1.f; } }\n` +
+      `        else if (${v}_stage == 2) { ${v}_val -= ${v}_val * _dt / fmaxf(_r, 1e-4f); if (${v}_val < 0.001f) { ${v}_val = 0.f; ${v}_stage = 0; } }\n` +
       `        float ${out} = ${v}_val;\n` +
       `    }\n`
     )
@@ -905,11 +1050,15 @@ const envelope_follower: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const a = numParam(ctx.node, 'attack', 0.01)
     const r = numParam(ctx.node, 'release', 0.1)
+    const atkCvExpr = ctx.inputExpr(ctx.node.id, 'cv_attack', '__NC__')
+    const relCvExpr = ctx.inputExpr(ctx.node.id, 'cv_release', '__NC__')
+    const aExpr = atkCvExpr === '__NC__' ? `${a}` : `fmaxf(0.001f, fminf(1.f, ${atkCvExpr}))`
+    const rExpr = relCvExpr === '__NC__' ? `${r}` : `fmaxf(0.001f, fminf(2.f, ${relCvExpr}))`
     return (
       `    {\n` +
       `        float _x = fabsf(${input});\n` +
-      `        float _ca = 1.f - expf(-1.f / ((float)SAMPLE_RATE * fmaxf(${a}, 1e-4f)));\n` +
-      `        float _cr = 1.f - expf(-1.f / ((float)SAMPLE_RATE * fmaxf(${r}, 1e-4f)));\n` +
+      `        float _ca = 1.f - expf(-1.f / ((float)SAMPLE_RATE * fmaxf((${aExpr}), 1e-4f)));\n` +
+      `        float _cr = 1.f - expf(-1.f / ((float)SAMPLE_RATE * fmaxf((${rExpr}), 1e-4f)));\n` +
       `        float _c = (_x > ${v}_state) ? _ca : _cr;\n` +
       `        ${v}_state += (_x - ${v}_state) * _c;\n` +
       `        float ${out} = ${v}_state;\n` +
@@ -927,9 +1076,24 @@ const slew: NodeEmitter = {
     const v = ctx.varName(ctx.node.id)
     const out = ctx.outputVar(ctx.node.id, 'out')
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
-    const rate = numParam(ctx.node, 'rate', 0.01)
+    const rise = numParam(ctx.node, 'rise', 0.05)
+    const fall = numParam(ctx.node, 'fall', 0.05)
+    const riseCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rise', '__NC__')
+    const fallCvExpr = ctx.inputExpr(ctx.node.id, 'cv_fall', '__NC__')
+    const rE = riseCvExpr === '__NC__'
+      ? `${rise}`
+      : `fmaxf(0.f, fminf(2.f, ${riseCvExpr}))`
+    const fE = fallCvExpr === '__NC__'
+      ? `${fall}`
+      : `fmaxf(0.f, fminf(2.f, ${fallCvExpr}))`
     return (
-      `    ${v}_state += ((${input}) - ${v}_state) * fminf(1.f, ${rate});\n` +
+      `    {\n` +
+      `        float _x = (${input});\n` +
+      `        float _cr = 1.f - expf(-1.f / ((float)SAMPLE_RATE * fmaxf((${rE}), 1e-4f)));\n` +
+      `        float _cf = 1.f - expf(-1.f / ((float)SAMPLE_RATE * fmaxf((${fE}), 1e-4f)));\n` +
+      `        float _c = (_x > ${v}_state) ? _cr : _cf;\n` +
+      `        ${v}_state += (_x - ${v}_state) * _c;\n` +
+      `    }\n` +
       `    float ${out} = ${v}_state;\n`
     )
   }
@@ -979,14 +1143,44 @@ const scaleNode: NodeEmitter = {
   }
 }
 
+/** Range remap — Max/PD `scale` with optional clamp. Mirrors the Daisy version. */
+const rangeNode: NodeEmitter = {
+  declare: () => '',
+  init: () => '',
+  process: (ctx) => {
+    const out = ctx.outputVar(ctx.node.id, 'out')
+    const i = ctx.inputExpr(ctx.node.id, 'in', '0.f')
+    const inMin  = numParam(ctx.node, 'in_min',  0)
+    const inMax  = numParam(ctx.node, 'in_max',  1)
+    const outMin = numParam(ctx.node, 'out_min', 0)
+    const outMax = numParam(ctx.node, 'out_max', 1)
+    const clamp = enumParam(ctx.node, 'clamp', 'on') === 'on'
+    const inSpanExpr = `((${inMax}) - (${inMin}))`
+    const outSpanExpr = `((${outMax}) - (${outMin}))`
+    const rawExpr =
+      `((${inSpanExpr}) != 0.f ` +
+      `? ((${outMin}) + ((${i}) - (${inMin})) * (${outSpanExpr}) / (${inSpanExpr})) ` +
+      `: (${outMin}))`
+    const expr = clamp
+      ? `fmaxf(fminf(${outMin}, ${outMax}), fminf(fmaxf(${outMin}, ${outMax}), ${rawExpr}))`
+      : rawExpr
+    return `    float ${out} = ${expr};\n`
+  }
+}
+
 const comparator: NodeEmitter = {
   declare: () => '',
   init: () => '',
   process: (ctx) => {
     const out = ctx.outputVar(ctx.node.id, 'out')
-    const a = ctx.inputExpr(ctx.node.id, 'a', '0.f')
-    const b = ctx.inputExpr(ctx.node.id, 'b', formatFloat(rawNum(ctx.node, 'threshold', 0)))
-    return `    float ${out} = (${a}) > (${b}) ? 1.f : 0.f;\n`
+    const inp = ctx.inputExpr(ctx.node.id, 'in', '0.f')
+    const ref = ctx.inputExpr(ctx.node.id, 'ref', '0.f')
+    const thr = numParam(ctx.node, 'threshold', 0)
+    const thrCvExpr = ctx.inputExpr(ctx.node.id, 'cv_threshold', '__NC__')
+    const tE = thrCvExpr === '__NC__'
+      ? `${thr}`
+      : `fmaxf(-1.f, fminf(1.f, ${thrCvExpr}))`
+    return `    float ${out} = ((${inp}) > ((${ref}) + (${tE}))) ? 1.f : 0.f;\n`
   }
 }
 
@@ -1000,8 +1194,10 @@ const clockNode: NodeEmitter = {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const bpm = numParam(ctx.node, 'bpm', 120)
     const pw = numParam(ctx.node, 'pulse_width', 0.1)
+    const bpmCvExpr = ctx.inputExpr(ctx.node.id, 'cv_bpm', '__NC__')
+    const bpmExpr = bpmCvExpr === '__NC__' ? `${bpm}` : `fmaxf(20.f, fminf(300.f, ${bpmCvExpr}))`
     return (
-      `    ${v}_phase += (${bpm} / 60.f) / (float)SAMPLE_RATE;\n` +
+      `    ${v}_phase += ((${bpmExpr}) / 60.f) / (float)SAMPLE_RATE;\n` +
       `    if (${v}_phase >= 1.f) ${v}_phase -= 1.f;\n` +
       `    float ${out} = (${v}_phase < ${pw}) ? 1.f : 0.f;\n`
     )
@@ -1098,8 +1294,11 @@ const euclidean: NodeEmitter = {
     const rot = Math.max(0, Math.floor(rawNum(ctx.node, 'rotate', 0))) % steps
     const pattern = buildEuclidean(steps, pulses, rot)
     const arr = pattern.map((b) => (b ? '1' : '0')).join(', ')
+    // Runtime-mutable pattern so CV inputs can rebuild it in place.
     return (
-      `static const uint8_t ${v}_pattern[${steps}] = { ${arr} };\n` +
+      `uint8_t ${v}_pattern[${steps}] = { ${arr} };\n` +
+      `int ${v}_last_pulses = ${pulses};\n` +
+      `int ${v}_last_rotate = ${rot};\n` +
       `uint32_t ${v}_step = 0; float ${v}_prev_clk = 0.f; float ${v}_prev_rst = 0.f;`
     )
   },
@@ -1110,7 +1309,43 @@ const euclidean: NodeEmitter = {
     const clk = ctx.inputExpr(ctx.node.id, 'clock', '0.f')
     const rst = ctx.inputExpr(ctx.node.id, 'reset', '0.f')
     const steps = Math.max(2, Math.floor(rawNum(ctx.node, 'steps', 16)))
+    const pulses = Math.max(0, Math.min(steps, Math.floor(rawNum(ctx.node, 'pulses', 4))))
+    const rot = Math.max(0, Math.floor(rawNum(ctx.node, 'rotate', 0))) % steps
+    const pulsesCvExpr = ctx.inputExpr(ctx.node.id, 'cv_pulses', '__NC__')
+    const rotateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rotate', '__NC__')
+    const hasPulsesCv = pulsesCvExpr !== '__NC__'
+    const hasRotateCv = rotateCvExpr !== '__NC__'
+    let rebuildBlock = ''
+    if (hasPulsesCv || hasRotateCv) {
+      const pulsesVal = hasPulsesCv
+        ? `(int)fmaxf(0.f, fminf(32.f, ${pulsesCvExpr}))`
+        : `${pulses}`
+      const rotateVal = hasRotateCv
+        ? `(int)fmaxf(0.f, fminf(31.f, ${rotateCvExpr}))`
+        : `${rot}`
+      rebuildBlock =
+        `    {\n` +
+        `        int _p = ${pulsesVal};\n` +
+        `        int _r = ${rotateVal};\n` +
+        `        if (_p > ${steps}) _p = ${steps};\n` +
+        `        if (_p != ${v}_last_pulses || _r != ${v}_last_rotate) {\n` +
+        `            uint8_t _tmp[${steps}] = {0};\n` +
+        `            int _bucket = 0;\n` +
+        `            for (int _i = 0; _i < ${steps}; _i++) {\n` +
+        `                _bucket += _p;\n` +
+        `                if (_bucket >= ${steps}) { _bucket -= ${steps}; _tmp[_i] = 1; }\n` +
+        `            }\n` +
+        `            int _rr = _r % ${steps}; if (_rr < 0) _rr += ${steps};\n` +
+        `            for (int _i = 0; _i < ${steps}; _i++) {\n` +
+        `                int _src = (_i - _rr + ${steps}) % ${steps};\n` +
+        `                ${v}_pattern[_i] = _tmp[_src];\n` +
+        `            }\n` +
+        `            ${v}_last_pulses = _p; ${v}_last_rotate = _r;\n` +
+        `        }\n` +
+        `    }\n`
+    }
     return (
+      rebuildBlock +
       `    {\n` +
       `        float _ci = ${clk}; float _ri = ${rst};\n` +
       `        if (_ri > 0.5f && ${v}_prev_rst <= 0.5f) ${v}_step = 0;\n` +
@@ -1126,23 +1361,43 @@ const euclidean: NodeEmitter = {
 const randomNode: NodeEmitter = {
   declare: (ctx) => {
     const v = ctx.varName(ctx.node.id)
-    return `uint32_t ${v}_rng = 0x1f2e3d4cu; float ${v}_val = 0.f; float ${v}_prev_clk = 0.f;`
+    return (
+      `uint32_t ${v}_rng = 0x1f2e3d4cu; float ${v}_val = 0.f;\n` +
+      `float ${v}_prev_clk = 0.f; float ${v}_phase = 0.f;`
+    )
   },
   init: () => '',
   process: (ctx) => {
     const v = ctx.varName(ctx.node.id)
     const out = ctx.outputVar(ctx.node.id, 'out')
-    const clk = ctx.inputExpr(ctx.node.id, 'clock', '0.f')
+    const clkExpr = ctx.inputExpr(ctx.node.id, 'clock', '__NC__')
     const range = numParam(ctx.node, 'range', 1)
+    const rate = numParam(ctx.node, 'rate', 2)
+    const rateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const rateExpr = rateCvExpr === '__NC__' ? `${rate}` : `fmaxf(0.1f, fminf(20.f, ${rateCvExpr}))`
+    if (clkExpr !== '__NC__') {
+      return (
+        `    {\n` +
+        `        float _ci = ${clkExpr};\n` +
+        `        if (_ci > 0.5f && ${v}_prev_clk <= 0.5f) {\n` +
+        `            ${v}_rng = ${v}_rng * 1664525u + 1013904223u;\n` +
+        `            float _r = (${v}_rng >> 8) / 16777216.f;\n` +
+        `            ${v}_val = (_r * 2.f - 1.f) * ${range};\n` +
+        `        }\n` +
+        `        ${v}_prev_clk = _ci;\n` +
+        `    }\n` +
+        `    float ${out} = ${v}_val;\n`
+      )
+    }
     return (
       `    {\n` +
-      `        float _ci = ${clk};\n` +
-      `        if (_ci > 0.5f && ${v}_prev_clk <= 0.5f) {\n` +
+      `        ${v}_phase += (${rateExpr}) / (float)SAMPLE_RATE;\n` +
+      `        if (${v}_phase >= 1.f) {\n` +
+      `            ${v}_phase -= 1.f;\n` +
       `            ${v}_rng = ${v}_rng * 1664525u + 1013904223u;\n` +
       `            float _r = (${v}_rng >> 8) / 16777216.f;\n` +
       `            ${v}_val = (_r * 2.f - 1.f) * ${range};\n` +
       `        }\n` +
-      `        ${v}_prev_clk = _ci;\n` +
       `    }\n` +
       `    float ${out} = ${v}_val;\n`
     )
@@ -1156,9 +1411,13 @@ const dust: NodeEmitter = {
     const v = ctx.varName(ctx.node.id)
     const out = ctx.outputVar(ctx.node.id, 'out')
     const density = numParam(ctx.node, 'density', 5)
+    const densityCvExpr = ctx.inputExpr(ctx.node.id, 'cv_density', '__NC__')
+    const dExpr = densityCvExpr === '__NC__'
+      ? `${density}`
+      : `fmaxf(0.1f, fminf(50.f, ${densityCvExpr}))`
     return (
       `    ${v}_rng = ${v}_rng * 1664525u + 1013904223u;\n` +
-      `    float ${out} = (((${v}_rng >> 8) / 16777216.f) < (${density} / (float)SAMPLE_RATE)) ? 1.f : 0.f;\n`
+      `    float ${out} = (((${v}_rng >> 8) / 16777216.f) < ((${dExpr}) / (float)SAMPLE_RATE)) ? 1.f : 0.f;\n`
     )
   }
 }
@@ -1226,16 +1485,31 @@ const delay: NodeEmitter = {
     const time = numParam(ctx.node, 'time', 0.25)
     const fb = numParam(ctx.node, 'feedback', 0.4)
     const mix = numParam(ctx.node, 'mix', 0.5)
+    const legacyTimeCvExpr = ctx.inputExpr(ctx.node.id, 'time_cv', '__NC__')
+    const timeReplaceExpr = ctx.inputExpr(ctx.node.id, 'cv_time', '__NC__')
+    const fbCvExpr = ctx.inputExpr(ctx.node.id, 'cv_feedback', '__NC__')
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    // Replace-semantics cv_time wins; else legacy octave-scaled time_cv; else sidebar.
+    let timeExpr: string
+    if (timeReplaceExpr !== '__NC__') {
+      timeExpr = `fmaxf(0.001f, fminf(2.f, ${timeReplaceExpr}))`
+    } else if (legacyTimeCvExpr !== '__NC__') {
+      timeExpr = `fmaxf(0.001f, fminf(2.f, (${time}) * powf(2.f, ${legacyTimeCvExpr})))`
+    } else {
+      timeExpr = `${time}`
+    }
+    const fbExpr = fbCvExpr === '__NC__' ? `${fb}` : `fmaxf(0.f, fminf(0.95f, ${fbCvExpr}))`
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
-      `        int _len = (int)(${time} * (float)SAMPLE_RATE); if (_len < 1) _len = 1; if (_len > 96000) _len = 96000;\n` +
+      `        int _len = (int)((${timeExpr}) * (float)SAMPLE_RATE); if (_len < 1) _len = 1; if (_len > 96000) _len = 96000;\n` +
       `        int _ri = ${v}_idx - _len; if (_ri < 0) _ri += 96000;\n` +
       `        float _wet = ${v}_buf[_ri];\n` +
       `        float _in = (${input});\n` +
-      `        ${v}_buf[${v}_idx] = _in + _wet * ${fb};\n` +
+      `        ${v}_buf[${v}_idx] = _in + _wet * (${fbExpr});\n` +
       `        ${v}_idx = (${v}_idx + 1) % 96000;\n` +
-      `        ${out} = _in * (1.f - ${mix}) + _wet * ${mix};\n` +
+      `        ${out} = _in * (1.f - (${mixExpr})) + _wet * (${mixExpr});\n` +
       `    }\n`
     )
   }
@@ -1293,12 +1567,18 @@ const reverb: NodeEmitter = {
     const size = numParam(ctx.node, 'size', 0.5)
     const damp = numParam(ctx.node, 'damp', 0.5)
     const mix = numParam(ctx.node, 'mix', 0.3)
+    const sizeCvExpr = ctx.inputExpr(ctx.node.id, 'cv_size', '__NC__')
+    const dampCvExpr = ctx.inputExpr(ctx.node.id, 'cv_damp', '__NC__')
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const sizeExpr = sizeCvExpr === '__NC__' ? `${size}` : `fmaxf(0.f, fminf(1.f, ${sizeCvExpr}))`
+    const dampExpr = dampCvExpr === '__NC__' ? `${damp}` : `fmaxf(0.f, fminf(1.f, ${dampCvExpr}))`
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
-      `        float _size = ${size}; if (_size < 0.f) _size = 0.f; else if (_size > 1.f) _size = 1.f;\n` +
-      `        float _damp = ${damp}; if (_damp < 0.f) _damp = 0.f; else if (_damp > 1.f) _damp = 1.f;\n` +
-      `        float _m = ${mix}; if (_m < 0.f) _m = 0.f; else if (_m > 1.f) _m = 1.f;\n` +
+      `        float _size = (${sizeExpr}); if (_size < 0.f) _size = 0.f; else if (_size > 1.f) _size = 1.f;\n` +
+      `        float _damp = (${dampExpr}); if (_damp < 0.f) _damp = 0.f; else if (_damp > 1.f) _damp = 1.f;\n` +
+      `        float _m = (${mixExpr}); if (_m < 0.f) _m = 0.f; else if (_m > 1.f) _m = 1.f;\n` +
       `        float _roomsize = _size * 0.28f + 0.7f;\n` +
       `        float _d1 = _damp * 0.4f;\n` +
       `        float _d2 = 1.f - _d1;\n` +
@@ -1336,7 +1616,11 @@ const overdrive: NodeEmitter = {
     const out = ctx.outputVar(ctx.node.id, 'out')
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const drive = numParam(ctx.node, 'drive', 0.5)
-    return `    float ${out} = tanhf((${input}) * (1.f + ${drive} * 10.f));\n`
+    const driveCvExpr = ctx.inputExpr(ctx.node.id, 'cv_drive', '__NC__')
+    const dE = driveCvExpr === '__NC__'
+      ? `${drive}`
+      : `fmaxf(0.f, fminf(1.f, ${driveCvExpr}))`
+    return `    float ${out} = tanhf((${input}) * (1.f + (${dE}) * 10.f));\n`
   }
 }
 
@@ -1352,10 +1636,18 @@ const bitcrush: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const bits = numParam(ctx.node, 'bits', 8)
     const rate = numParam(ctx.node, 'rate', 1)
+    const bitsCvExpr = ctx.inputExpr(ctx.node.id, 'cv_bits', '__NC__')
+    const rateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const bE = bitsCvExpr === '__NC__'
+      ? `${bits}`
+      : `fmaxf(1.f, fminf(16.f, ${bitsCvExpr}))`
+    const rE = rateCvExpr === '__NC__'
+      ? `${rate}`
+      : `fmaxf(0.01f, fminf(1.f, ${rateCvExpr}))`
     return (
       `    {\n` +
-      `        int _step = (int)(1.f / fmaxf(${rate}, 0.001f));\n` +
-      `        if (${v}_ctr >= _step) { ${v}_ctr = 0; float _levels = powf(2.f, ${bits}); ${v}_held = floorf((${input}) * _levels) / _levels; }\n` +
+      `        int _step = (int)(1.f / fmaxf((${rE}), 0.001f));\n` +
+      `        if (${v}_ctr >= _step) { ${v}_ctr = 0; float _levels = powf(2.f, (${bE})); ${v}_held = floorf((${input}) * _levels) / _levels; }\n` +
       `        ${v}_ctr++;\n` +
       `        float ${out} = ${v}_held;\n` +
       `    }\n`
@@ -1372,10 +1664,22 @@ const tremolo: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const rate = numParam(ctx.node, 'rate', 4)
     const depth = numParam(ctx.node, 'depth', 0.5)
+    const rateOctExpr = ctx.inputExpr(ctx.node.id, 'rate_cv', '__NC__')
+    const rateReplaceExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const depthCvExpr = ctx.inputExpr(ctx.node.id, 'cv_depth', '__NC__')
+    let rateExpr: string
+    if (rateReplaceExpr !== '__NC__') {
+      rateExpr = `fmaxf(0.1f, fminf(20.f, ${rateReplaceExpr}))`
+    } else if (rateOctExpr !== '__NC__') {
+      rateExpr = `(${rate}) * powf(2.f, ${rateOctExpr})`
+    } else {
+      rateExpr = `${rate}`
+    }
+    const depthExpr = depthCvExpr === '__NC__' ? `${depth}` : `fmaxf(0.f, fminf(1.f, ${depthCvExpr}))`
     return (
-      `    ${v}_phase += ${rate} / (float)SAMPLE_RATE;\n` +
+      `    ${v}_phase += (${rateExpr}) / (float)SAMPLE_RATE;\n` +
       `    if (${v}_phase >= 1.f) ${v}_phase -= 1.f;\n` +
-      `    float ${out} = (${input}) * (1.f - ${depth} * (0.5f - 0.5f * sinf(${v}_phase * 6.28318530718f)));\n`
+      `    float ${out} = (${input}) * (1.f - (${depthExpr}) * (0.5f - 0.5f * sinf(${v}_phase * 6.28318530718f)));\n`
     )
   }
 }
@@ -1398,13 +1702,19 @@ const chorus: NodeEmitter = {
     const rate = numParam(ctx.node, 'rate', 0.8)
     const depth = numParam(ctx.node, 'depth', 0.5)
     const mix = numParam(ctx.node, 'mix', 0.5)
+    const rateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const depthCvExpr = ctx.inputExpr(ctx.node.id, 'cv_depth', '__NC__')
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const rateExpr = rateCvExpr === '__NC__' ? `${rate}` : `fmaxf(0.05f, fminf(8.f, ${rateCvExpr}))`
+    const depthExpr = depthCvExpr === '__NC__' ? `${depth}` : `fmaxf(0.f, fminf(1.f, ${depthCvExpr}))`
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
       `        float _x = (${input});\n` +
       `        ${v}_buf[${v}_wr] = _x;\n` +
       `        float _base = 0.008f * (float)SAMPLE_RATE;\n` +
-      `        float _mod = 0.006f * (float)SAMPLE_RATE * ${depth};\n` +
+      `        float _mod = 0.006f * (float)SAMPLE_RATE * (${depthExpr});\n` +
       `        float _d = _base + sinf(${v}_lfo) * _mod;\n` +
       `        if (_d < 1.f) _d = 1.f; if (_d > 2046.f) _d = 2046.f;\n` +
       `        float _rp = (float)${v}_wr - _d;\n` +
@@ -1414,9 +1724,10 @@ const chorus: NodeEmitter = {
       `        float _d0 = ${v}_buf[_r0 & 2047];\n` +
       `        float _d1 = ${v}_buf[_r1];\n` +
       `        float _dy = _d0 * (1.f - _frac) + _d1 * _frac;\n` +
-      `        ${out} = _x * (1.f - ${mix}) + _dy * ${mix};\n` +
+      `        float _m = (${mixExpr});\n` +
+      `        ${out} = _x * (1.f - _m) + _dy * _m;\n` +
       `        ${v}_wr = (${v}_wr + 1) & 2047;\n` +
-      `        ${v}_lfo += 6.28318530718f * ${rate} / (float)SAMPLE_RATE;\n` +
+      `        ${v}_lfo += 6.28318530718f * (${rateExpr}) / (float)SAMPLE_RATE;\n` +
       `        if (${v}_lfo >= 6.28318530718f) ${v}_lfo -= 6.28318530718f;\n` +
       `    }\n`
     )
@@ -1442,6 +1753,14 @@ const phaser: NodeEmitter = {
     const mix = numParam(ctx.node, 'mix', 0.5)
     const stagesStr = enumParam(ctx.node, 'stages', '4')
     const stages = stagesStr === '6' ? 6 : stagesStr === '8' ? 8 : 4
+    const rateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const depthCvExpr = ctx.inputExpr(ctx.node.id, 'cv_depth', '__NC__')
+    const fbCvExpr = ctx.inputExpr(ctx.node.id, 'cv_feedback', '__NC__')
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const rateExpr = rateCvExpr === '__NC__' ? `${rate}` : `fmaxf(0.05f, fminf(8.f, ${rateCvExpr}))`
+    const depthExpr = depthCvExpr === '__NC__' ? `${depth}` : `fmaxf(0.f, fminf(1.f, ${depthCvExpr}))`
+    const fbExpr = fbCvExpr === '__NC__' ? `${feedback}` : `fmaxf(0.f, fminf(0.9f, ${fbCvExpr}))`
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
@@ -1451,21 +1770,22 @@ const phaser: NodeEmitter = {
       `        float _logMax = 8.2940497f; /* ln(4000) */\n` +
       `        float _center = 0.5f * (_logMin + _logMax);\n` +
       `        float _half = 0.5f * (_logMax - _logMin);\n` +
-      `        float _logF = _center + _lfoV * _half * ${depth};\n` +
+      `        float _logF = _center + _lfoV * _half * (${depthExpr});\n` +
       `        float _f = expf(_logF);\n` +
       `        float _ny = (float)SAMPLE_RATE * 0.45f;\n` +
       `        if (_f < 20.f) _f = 20.f; else if (_f > _ny) _f = _ny;\n` +
       `        float _t = tanf(3.14159265f * _f / (float)SAMPLE_RATE);\n` +
       `        float _a1 = (_t - 1.f) / (_t + 1.f);\n` +
-      `        float _vv = _x + ${v}_fb * ${feedback};\n` +
+      `        float _vv = _x + ${v}_fb * (${fbExpr});\n` +
       `        for (int _s = 0; _s < ${stages}; _s++) {\n` +
       `            float _y = _a1 * _vv + ${v}_z[_s];\n` +
       `            ${v}_z[_s] = _vv - _a1 * _y;\n` +
       `            _vv = _y;\n` +
       `        }\n` +
       `        ${v}_fb = _vv;\n` +
-      `        ${out} = _x * (1.f - ${mix}) + _vv * ${mix};\n` +
-      `        ${v}_lfo += 6.28318530718f * ${rate} / (float)SAMPLE_RATE;\n` +
+      `        float _m = (${mixExpr});\n` +
+      `        ${out} = _x * (1.f - _m) + _vv * _m;\n` +
+      `        ${v}_lfo += 6.28318530718f * (${rateExpr}) / (float)SAMPLE_RATE;\n` +
       `        if (${v}_lfo >= 6.28318530718f) ${v}_lfo -= 6.28318530718f;\n` +
       `    }\n`
     )
@@ -1489,14 +1809,22 @@ const flanger: NodeEmitter = {
     const depth = numParam(ctx.node, 'depth', 0.6)
     const feedback = numParam(ctx.node, 'feedback', 0.5)
     const mix = numParam(ctx.node, 'mix', 0.5)
+    const rateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const depthCvExpr = ctx.inputExpr(ctx.node.id, 'cv_depth', '__NC__')
+    const fbCvExpr = ctx.inputExpr(ctx.node.id, 'cv_feedback', '__NC__')
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const rateExpr = rateCvExpr === '__NC__' ? `${rate}` : `fmaxf(0.05f, fminf(5.f, ${rateCvExpr}))`
+    const depthExpr = depthCvExpr === '__NC__' ? `${depth}` : `fmaxf(0.f, fminf(1.f, ${depthCvExpr}))`
+    const fbExpr = fbCvExpr === '__NC__' ? `${feedback}` : `fmaxf(-0.95f, fminf(0.95f, ${fbCvExpr}))`
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
-      `        float _fb = ${feedback};\n` +
+      `        float _fb = (${fbExpr});\n` +
       `        if (_fb > 0.95f) _fb = 0.95f; else if (_fb < -0.95f) _fb = -0.95f;\n` +
       `        float _x = (${input});\n` +
       `        float _base = 0.0015f * (float)SAMPLE_RATE;\n` +
-      `        float _mod = 0.004f * (float)SAMPLE_RATE * ${depth};\n` +
+      `        float _mod = 0.004f * (float)SAMPLE_RATE * (${depthExpr});\n` +
       `        float _lfoV = (sinf(${v}_lfo) + 1.f) * 0.5f;\n` +
       `        float _d = _base + _lfoV * _mod;\n` +
       `        if (_d < 1.f) _d = 1.f; if (_d > 2046.f) _d = 2046.f;\n` +
@@ -1508,8 +1836,9 @@ const flanger: NodeEmitter = {
       `        float _w = _x + _dy * _fb;\n` +
       `        ${v}_buf[${v}_wr] = _w;\n` +
       `        ${v}_wr = (${v}_wr + 1) & 2047;\n` +
-      `        ${out} = _x * (1.f - ${mix}) + _dy * ${mix};\n` +
-      `        ${v}_lfo += 6.28318530718f * ${rate} / (float)SAMPLE_RATE;\n` +
+      `        float _m = (${mixExpr});\n` +
+      `        ${out} = _x * (1.f - _m) + _dy * _m;\n` +
+      `        ${v}_lfo += 6.28318530718f * (${rateExpr}) / (float)SAMPLE_RATE;\n` +
       `        if (${v}_lfo >= 6.28318530718f) ${v}_lfo -= 6.28318530718f;\n` +
       `    }\n`
     )
@@ -1530,13 +1859,17 @@ const vibrato: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const rate = numParam(ctx.node, 'rate', 6)
     const depth = numParam(ctx.node, 'depth', 0.3)
+    const rateCvExpr = ctx.inputExpr(ctx.node.id, 'cv_rate', '__NC__')
+    const depthCvExpr = ctx.inputExpr(ctx.node.id, 'cv_depth', '__NC__')
+    const rateExpr = rateCvExpr === '__NC__' ? `${rate}` : `fmaxf(0.1f, fminf(15.f, ${rateCvExpr}))`
+    const depthExpr = depthCvExpr === '__NC__' ? `${depth}` : `fmaxf(0.f, fminf(1.f, ${depthCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
       `        float _x = (${input});\n` +
       `        ${v}_buf[${v}_wr] = _x;\n` +
       `        float _centre = 0.005f * (float)SAMPLE_RATE;\n` +
-      `        float _mod = 0.002f * (float)SAMPLE_RATE * ${depth};\n` +
+      `        float _mod = 0.002f * (float)SAMPLE_RATE * (${depthExpr});\n` +
       `        float _d = _centre + sinf(${v}_lfo) * _mod;\n` +
       `        if (_d < 1.f) _d = 1.f; if (_d > 1022.f) _d = 1022.f;\n` +
       `        float _rp = (float)${v}_wr - _d;\n` +
@@ -1545,7 +1878,7 @@ const vibrato: NodeEmitter = {
       `        int _r1 = (_r0 + 1) & 1023;\n` +
       `        ${out} = ${v}_buf[_r0] * (1.f - _frac) + ${v}_buf[_r1] * _frac;\n` +
       `        ${v}_wr = (${v}_wr + 1) & 1023;\n` +
-      `        ${v}_lfo += 6.28318530718f * fmaxf(${rate}, 0.01f) / (float)SAMPLE_RATE;\n` +
+      `        ${v}_lfo += 6.28318530718f * fmaxf((${rateExpr}), 0.01f) / (float)SAMPLE_RATE;\n` +
       `        if (${v}_lfo >= 6.28318530718f) ${v}_lfo -= 6.28318530718f;\n` +
       `    }\n`
     )
@@ -1573,11 +1906,17 @@ const ping_pong: NodeEmitter = {
     const fb = numParam(ctx.node, 'feedback', 0.45)
     const mix = numParam(ctx.node, 'mix', 0.4)
     const width = numParam(ctx.node, 'width', 1)
+    const timeCvExpr = ctx.inputExpr(ctx.node.id, 'cv_time', '__NC__')
+    const fbCvExpr = ctx.inputExpr(ctx.node.id, 'cv_feedback', '__NC__')
+    const mixCvExpr = ctx.inputExpr(ctx.node.id, 'cv_mix', '__NC__')
+    const timeExpr = timeCvExpr === '__NC__' ? `${time}` : `fmaxf(0.02f, fminf(2.f, ${timeCvExpr}))`
+    const fbExpr = fbCvExpr === '__NC__' ? `${fb}` : `fmaxf(0.f, fminf(0.95f, ${fbCvExpr}))`
+    const mixExpr = mixCvExpr === '__NC__' ? `${mix}` : `fmaxf(0.f, fminf(1.f, ${mixCvExpr}))`
     return (
       `    float ${l}, ${r};\n` +
       `    {\n` +
       `        float _x = (${input});\n` +
-      `        float _target = ${time} * (float)SAMPLE_RATE;\n` +
+      `        float _target = (${timeExpr}) * (float)SAMPLE_RATE;\n` +
       `        if (_target < 1.f) _target = 1.f; if (_target > 95998.f) _target = 95998.f;\n` +
       `        if (${v}_smoothed < 1.f) ${v}_smoothed = _target;\n` +
       `        ${v}_smoothed += (_target - ${v}_smoothed) * 0.002f;\n` +
@@ -1588,12 +1927,14 @@ const ping_pong: NodeEmitter = {
       `        int _r1 = (_r0 + 1) % 96000;\n` +
       `        float _delL = ${v}_bufL[_r0] * (1.f - _frac) + ${v}_bufL[_r1] * _frac;\n` +
       `        float _delR = ${v}_bufR[_r0] * (1.f - _frac) + ${v}_bufR[_r1] * _frac;\n` +
-      `        float _wL = _x + _delR * ${fb} * ${width} + _delL * ${fb} * (1.f - ${width});\n` +
-      `        float _wR = _x + _delL * ${fb} * ${width} + _delR * ${fb} * (1.f - ${width});\n` +
+      `        float _fb = (${fbExpr});\n` +
+      `        float _wL = _x + _delR * _fb * ${width} + _delL * _fb * (1.f - ${width});\n` +
+      `        float _wR = _x + _delL * _fb * ${width} + _delR * _fb * (1.f - ${width});\n` +
       `        ${v}_bufL[${v}_idx] = _wL; ${v}_bufR[${v}_idx] = _wR;\n` +
       `        ${v}_idx = (${v}_idx + 1) % 96000;\n` +
-      `        ${l} = _x * (1.f - ${mix}) + _delL * ${mix};\n` +
-      `        ${r} = _x * (1.f - ${mix}) + _delR * ${mix};\n` +
+      `        float _m = (${mixExpr});\n` +
+      `        ${l} = _x * (1.f - _m) + _delL * _m;\n` +
+      `        ${r} = _x * (1.f - _m) + _delR * _m;\n` +
       `    }\n`
     )
   }
@@ -1614,6 +1955,8 @@ const stereo_widener: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const width = numParam(ctx.node, 'width', 1.2)
     const haas = numParam(ctx.node, 'haas_ms', 8)
+    const widthCvExpr = ctx.inputExpr(ctx.node.id, 'cv_width', '__NC__')
+    const widthExpr = widthCvExpr === '__NC__' ? `${width}` : `fmaxf(0.f, fminf(2.f, ${widthCvExpr}))`
     return (
       `    float ${l}, ${r};\n` +
       `    {\n` +
@@ -1628,8 +1971,9 @@ const stereo_widener: NodeEmitter = {
       `        int _r1 = (_r0 + 1) & 2047;\n` +
       `        float _del = ${v}_buf[_r0] * (1.f - _frac) + ${v}_buf[_r1] * _frac;\n` +
       `        ${v}_wr = (${v}_wr + 1) & 2047;\n` +
+      `        float _w = (${widthExpr});\n` +
       `        float _mid = (_x + _del) * 0.5f;\n` +
-      `        float _side = (_x - _del) * 0.5f * ${width};\n` +
+      `        float _side = (_x - _del) * 0.5f * _w;\n` +
       `        ${l} = _mid + _side;\n` +
       `        ${r} = _mid - _side;\n` +
       `    }\n`
@@ -1658,10 +2002,12 @@ const freeze: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const gate = ctx.inputExpr(ctx.node.id, 'gate', '0.f')
     const buffer = numParam(ctx.node, 'buffer_ms', 120)
+    const lenCvExpr = ctx.inputExpr(ctx.node.id, 'cv_length', '__NC__')
+    const lenExpr = lenCvExpr === '__NC__' ? `${buffer}` : `fmaxf(20.f, fminf(500.f, ${lenCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
-      `        float _ms = ${buffer}; if (_ms < 20.f) _ms = 20.f; else if (_ms > 500.f) _ms = 500.f;\n` +
+      `        float _ms = (${lenExpr}); if (_ms < 20.f) _ms = 20.f; else if (_ms > 500.f) _ms = 500.f;\n` +
       `        int _tgt = (int)((_ms / 1000.f) * (float)SAMPLE_RATE);\n` +
       `        if (_tgt > 24000) _tgt = 24000;\n` +
       `        float _x = (${input});\n` +
@@ -1716,10 +2062,12 @@ const pitch_shifter: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const semis = numParam(ctx.node, 'semitones', 0)
     const mix = numParam(ctx.node, 'mix', 1)
+    const pitchCvExpr = ctx.inputExpr(ctx.node.id, 'cv_pitch', '__NC__')
+    const semisExpr = pitchCvExpr === '__NC__' ? `${semis}` : `fmaxf(-24.f, fminf(24.f, ${pitchCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
-      `        float _ratio = powf(2.f, (${semis}) / 12.f);\n` +
+      `        float _ratio = powf(2.f, (${semisExpr}) / 12.f);\n` +
       `        float _step = 1.f - _ratio;\n` +
       `        int _bufLen = DP_PS_SIZE;\n` +
       `        int _L = ${v}_len;\n` +
@@ -1784,14 +2132,24 @@ const granulator: NodeEmitter = {
     const pitch = numParam(ctx.node, 'pitch', 0)
     const jitter = numParam(ctx.node, 'jitter', 0.3)
     const mix = numParam(ctx.node, 'mix', 1)
+    const sizeCvExpr = ctx.inputExpr(ctx.node.id, 'cv_grain_size', '__NC__')
+    const densityCvExpr = ctx.inputExpr(ctx.node.id, 'cv_density', '__NC__')
+    const pitchCvExpr = ctx.inputExpr(ctx.node.id, 'cv_pitch', '__NC__')
+    const sprayCvExpr = ctx.inputExpr(ctx.node.id, 'cv_spray', '__NC__')
+    const grainMsExpr = sizeCvExpr === '__NC__' ? `${grainMs}` : `fmaxf(10.f, fminf(200.f, ${sizeCvExpr}))`
+    const densityExpr = densityCvExpr === '__NC__' ? `${density}` : `fmaxf(1.f, fminf(30.f, ${densityCvExpr}))`
+    const pitchExpr = pitchCvExpr === '__NC__' ? `${pitch}` : `fmaxf(-12.f, fminf(12.f, ${pitchCvExpr}))`
+    const jitterExpr = sprayCvExpr === '__NC__' ? `${jitter}` : `fmaxf(0.f, fminf(1.f, ${sprayCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
       `        float _x = (${input});\n` +
       `        ${v}_buf[${v}_wr] = _x;\n` +
       `        ${v}_wr++; if (${v}_wr >= DP_GR_BUF) ${v}_wr = 0;\n` +
-      `        float _gs = fmaxf(1.f, (${grainMs} / 1000.f) * (float)SAMPLE_RATE);\n` +
-      `        float _spawnInt = (float)SAMPLE_RATE / fmaxf(0.001f, ${density});\n` +
+      `        float _jitter = (${jitterExpr});\n` +
+      `        float _pitchParam = (${pitchExpr});\n` +
+      `        float _gs = fmaxf(1.f, ((${grainMsExpr}) / 1000.f) * (float)SAMPLE_RATE);\n` +
+      `        float _spawnInt = (float)SAMPLE_RATE / fmaxf(0.001f, (${densityExpr}));\n` +
       `        ${v}_spawn_ctr -= 1.f;\n` +
       `        if (${v}_spawn_ctr <= 0.f) {\n` +
       `            int _slot = -1;\n` +
@@ -1801,12 +2159,12 @@ const granulator: NodeEmitter = {
       `                float _r1 = (${v}_rng >> 8) / 16777216.f;\n` +
       `                ${v}_rng = ${v}_rng * 1664525u + 1013904223u;\n` +
       `                float _r2 = (${v}_rng >> 8) / 16777216.f;\n` +
-      `                float _jit = (_r1 * 2.f - 1.f) * ${jitter};\n` +
-      `                float _back = _gs * (1.f + 2.f * ${jitter}) + _r2 * ${jitter} * ((float)DP_GR_BUF - _gs - 2.f);\n` +
+      `                float _jit = (_r1 * 2.f - 1.f) * _jitter;\n` +
+      `                float _back = _gs * (1.f + 2.f * _jitter) + _r2 * _jitter * ((float)DP_GR_BUF - _gs - 2.f);\n` +
       `                float _start = (float)${v}_wr - _gs - _back;\n` +
       `                while (_start < 0.f) _start += (float)DP_GR_BUF;\n` +
       `                while (_start >= (float)DP_GR_BUF) _start -= (float)DP_GR_BUF;\n` +
-      `                float _pj = ${pitch} + _jit * 2.f;\n` +
+      `                float _pj = _pitchParam + _jit * 2.f;\n` +
       `                ${v}_active[_slot] = 1;\n` +
       `                ${v}_gpos[_slot] = 0.f;\n` +
       `                ${v}_gstart[_slot] = _start;\n` +
@@ -1847,14 +2205,38 @@ const compressor: NodeEmitter = {
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
     const thresh = numParam(ctx.node, 'threshold', -20)
     const ratio = numParam(ctx.node, 'ratio', 4)
+    const atk = numParam(ctx.node, 'attack', 0.01)
+    const rel = numParam(ctx.node, 'release', 0.1)
+    const make = numParam(ctx.node, 'makeup', 0)
+    const thrCvExpr = ctx.inputExpr(ctx.node.id, 'cv_threshold', '__NC__')
+    const ratioCvExpr = ctx.inputExpr(ctx.node.id, 'cv_ratio', '__NC__')
+    const atkCvExpr = ctx.inputExpr(ctx.node.id, 'cv_attack', '__NC__')
+    const relCvExpr = ctx.inputExpr(ctx.node.id, 'cv_release', '__NC__')
+    const mkCvExpr = ctx.inputExpr(ctx.node.id, 'cv_makeup', '__NC__')
+    const tE = thrCvExpr === '__NC__' ? `${thresh}` : `fmaxf(-60.f, fminf(0.f, ${thrCvExpr}))`
+    const rE = ratioCvExpr === '__NC__' ? `${ratio}` : `fmaxf(1.f, fminf(20.f, ${ratioCvExpr}))`
+    const aE = atkCvExpr === '__NC__' ? `${atk}` : `fmaxf(0.001f, fminf(0.5f, ${atkCvExpr}))`
+    const rlE = relCvExpr === '__NC__' ? `${rel}` : `fmaxf(0.01f, fminf(3.f, ${relCvExpr}))`
+    const mE = mkCvExpr === '__NC__' ? `${make}` : `fmaxf(0.f, fminf(24.f, ${mkCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
-      `        float _x = fabsf(${input});\n` +
-      `        ${v}_env += (_x - ${v}_env) * 0.01f;\n` +
+      `        float _thr = (${tE});\n` +
+      `        float _ratio = (${rE});\n` +
+      `        float _atk = fmaxf((${aE}), 1e-4f);\n` +
+      `        float _rel = fmaxf((${rlE}), 1e-4f);\n` +
+      `        float _make = (${mE});\n` +
+      `        float _ax = fabsf(${input});\n` +
+      `        float _ca = 1.f - expf(-1.f / (_atk * (float)SAMPLE_RATE));\n` +
+      `        float _cr = 1.f - expf(-1.f / (_rel * (float)SAMPLE_RATE));\n` +
+      `        float _c = (_ax > ${v}_env) ? _ca : _cr;\n` +
+      `        ${v}_env += (_ax - ${v}_env) * _c;\n` +
+      `        if (${v}_env < 0.f) ${v}_env = 0.f;\n` +
       `        float _env_db = 20.f * log10f(fmaxf(${v}_env, 1e-6f));\n` +
-      `        float _gain = 1.f;\n` +
-      `        if (_env_db > ${thresh}) { float _over = _env_db - ${thresh}; float _comp_db = _over * (1.f - 1.f/fmaxf(${ratio},1.f)); _gain = powf(10.f, -_comp_db/20.f); }\n` +
+      `        float _slope = 1.f - 1.f / fmaxf(_ratio, 1.0001f);\n` +
+      `        float _grDb = (_env_db - _thr) * _slope; if (_grDb < 0.f) _grDb = 0.f;\n` +
+      `        float _mkLin = powf(10.f, _make / 20.f);\n` +
+      `        float _gain = powf(10.f, -_grDb / 20.f) * _mkLin;\n` +
       `        ${out} = (${input}) * _gain;\n` +
       `    }\n`
     )
@@ -1862,13 +2244,44 @@ const compressor: NodeEmitter = {
 }
 
 const limiter: NodeEmitter = {
-  declare: () => '',
+  declare: (ctx) => `float ${ctx.varName(ctx.node.id)}_env = 0.f;`,
   init: () => '',
   process: (ctx) => {
+    const v = ctx.varName(ctx.node.id)
     const out = ctx.outputVar(ctx.node.id, 'out')
     const input = ctx.inputExpr(ctx.node.id, 'in', '0.f')
-    const ceil = numParam(ctx.node, 'ceiling', 0.95)
-    return `    float ${out} = tanhf((${input}) * (1.f / fmaxf(${ceil}, 0.001f))) * ${ceil};\n`
+    const ceilDb = numParam(ctx.node, 'ceiling', -0.3)
+    const rel = numParam(ctx.node, 'release', 0.05)
+    const ceilCvExpr = ctx.inputExpr(ctx.node.id, 'cv_ceiling', '__NC__')
+    const relCvExpr = ctx.inputExpr(ctx.node.id, 'cv_release', '__NC__')
+    const cE = ceilCvExpr === '__NC__' ? `${ceilDb}` : `fmaxf(-12.f, fminf(0.f, ${ceilCvExpr}))`
+    const rE = relCvExpr === '__NC__' ? `${rel}` : `fmaxf(0.01f, fminf(2.f, ${relCvExpr}))`
+    return (
+      `    float ${out};\n` +
+      `    {\n` +
+      `        float _cdb = (${cE});\n` +
+      `        float _relS = (${rE});\n` +
+      `        float _ceilLin = powf(10.f, _cdb / 20.f);\n` +
+      `        float _kneeLin = powf(10.f, (_cdb - 2.f) / 20.f);\n` +
+      `        float _atk = 1.f - expf(-1.f / (0.001f * (float)SAMPLE_RATE));\n` +
+      `        float _rl = 1.f - expf(-1.f / (_relS * (float)SAMPLE_RATE));\n` +
+      `        float _x = (${input}); float _ax = fabsf(_x);\n` +
+      `        if (_ax > ${v}_env) ${v}_env += (_ax - ${v}_env) * _atk;\n` +
+      `        else ${v}_env += (_ax - ${v}_env) * _rl;\n` +
+      `        if (${v}_env < 0.f) ${v}_env = 0.f;\n` +
+      `        float _g = 1.f;\n` +
+      `        if (${v}_env > _kneeLin) {\n` +
+      `            if (${v}_env >= _ceilLin) { _g = _ceilLin / ${v}_env; }\n` +
+      `            else { float _t = (${v}_env - _kneeLin) / (_ceilLin - _kneeLin);\n` +
+      `                   float _hg = _ceilLin / ${v}_env;\n` +
+      `                   float _s = _t * _t * (3.f - 2.f * _t);\n` +
+      `                   _g = 1.f * (1.f - _s) + _hg * _s; }\n` +
+      `        }\n` +
+      `        float _y = _x * _g;\n` +
+      `        if (_y > _ceilLin) _y = _ceilLin; else if (_y < -_ceilLin) _y = -_ceilLin;\n` +
+      `        ${out} = _y;\n` +
+      `    }\n`
+    )
   }
 }
 
@@ -1887,15 +2300,21 @@ const noise_gate: NodeEmitter = {
     const attack = numParam(ctx.node, 'attack', 0.005)
     const hold = numParam(ctx.node, 'hold', 0.05)
     const release = numParam(ctx.node, 'release', 0.1)
+    const thrCvExpr = ctx.inputExpr(ctx.node.id, 'cv_threshold', '__NC__')
+    const atkCvExpr = ctx.inputExpr(ctx.node.id, 'cv_attack', '__NC__')
+    const relCvExpr = ctx.inputExpr(ctx.node.id, 'cv_release', '__NC__')
+    const tE = thrCvExpr === '__NC__' ? `${thrDb}` : `fmaxf(-80.f, fminf(0.f, ${thrCvExpr}))`
+    const aE = atkCvExpr === '__NC__' ? `${attack}` : `fmaxf(0.001f, fminf(0.1f, ${atkCvExpr}))`
+    const rE = relCvExpr === '__NC__' ? `${release}` : `fmaxf(0.01f, fminf(2.f, ${relCvExpr}))`
     return (
       `    float ${out};\n` +
       `    {\n` +
       `        float _x = (${input}); float _k = fabsf(${key});\n` +
-      `        float _thr = powf(10.f, (${thrDb}) / 20.f);\n` +
+      `        float _thr = powf(10.f, (${tE}) / 20.f);\n` +
       `        float _detAtk = 1.f - expf(-1.f / (0.001f * (float)SAMPLE_RATE));\n` +
       `        float _detRel = 1.f - expf(-1.f / (0.03f * (float)SAMPLE_RATE));\n` +
-      `        float _gAtk = 1.f - expf(-1.f / (fmaxf(${attack}, 1e-4f) * (float)SAMPLE_RATE));\n` +
-      `        float _gRel = 1.f - expf(-1.f / (fmaxf(${release}, 1e-4f) * (float)SAMPLE_RATE));\n` +
+      `        float _gAtk = 1.f - expf(-1.f / (fmaxf((${aE}), 1e-4f) * (float)SAMPLE_RATE));\n` +
+      `        float _gRel = 1.f - expf(-1.f / (fmaxf((${rE}), 1e-4f) * (float)SAMPLE_RATE));\n` +
       `        int _holdN = (int)(${hold} * (float)SAMPLE_RATE);\n` +
       `        if (_k > ${v}_env) ${v}_env += (_k - ${v}_env) * _detAtk;\n` +
       `        else ${v}_env += (_k - ${v}_env) * _detRel;\n` +
@@ -1933,7 +2352,13 @@ const knob_in: NodeEmitter = {
   process: (ctx) => {
     const v = ctx.varName(ctx.node.id)
     const out = ctx.outputVar(ctx.node.id, 'out')
-    return `    float ${out} = ${v}_val;\n`
+    const lo = typeof ctx.node.params.min === 'number' ? ctx.node.params.min : 0
+    const hi = typeof ctx.node.params.max === 'number' ? ctx.node.params.max : 1
+    const expr =
+      lo === 0 && hi === 1
+        ? `${v}_val`
+        : `${lo.toFixed(4)}f + (${v}_val) * ${(hi - lo).toFixed(4)}f`
+    return `    float ${out} = ${expr};\n`
   }
 }
 
@@ -2339,6 +2764,7 @@ export const ESP32_NODE_EMITTERS: Partial<Record<NodeKind, NodeEmitter>> = {
   sample_hold,
   inverter,
   scale: scaleNode,
+  range: rangeNode,
   comparator,
   // Sequencing / clock
   clock: clockNode,

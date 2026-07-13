@@ -25,6 +25,15 @@
   stroke-width: calc(var(--dp-cable-width) * 1.25);
 }
 
+/*
+ * While the emulator is playing, opacity / stroke-width are driven per-frame
+ * from the source node's analyser tap (see CustomConnection.tsx). The CSS
+ * transition would otherwise re-target on every write and smear the motion.
+ */
+.pathLive {
+  transition: none;
+}
+
 .path-invalid {
   stroke: var(--dp-danger);
   animation: dp-cable-flash var(--dp-motion-normal) var(--dp-ease) infinite alternate;
@@ -39,14 +48,10 @@
   }
 }
 
-/*
- * Clock-cable traveling dot. Rendered as a tiny circle whose position is
- * driven by an <animateMotion> child; color inherits from the cable stroke
- * via `currentColor` so it picks up the signal-kind variable automatically.
- */
-.clockDot {
-  fill: currentColor;
-  pointer-events: none;
-  filter: drop-shadow(0 0 3px currentColor);
-  opacity: 0.95;
+/* Static styling only when the user asks for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .path-invalid {
+    animation: none;
+    opacity: 1;
+  }
 }

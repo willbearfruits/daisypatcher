@@ -105,6 +105,10 @@ const CORE_REGISTRY: Partial<Record<NodeKind, WorkletEntry>> = {
     processorName: 'dp-scale',
     moduleUrl: new URL('./scale.worklet.js', import.meta.url)
   },
+  range: {
+    processorName: 'dp-range',
+    moduleUrl: new URL('./range.worklet.js', import.meta.url)
+  },
   comparator: {
     processorName: 'dp-comparator',
     moduleUrl: new URL('./comparator.worklet.js', import.meta.url)

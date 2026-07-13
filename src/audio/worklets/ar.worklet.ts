@@ -32,16 +32,34 @@ class ArProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const gateIn = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    // Wave 4 CVs: 1=attack, 2=release. Replace semantics.
+    const atkCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const relCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
-    const a = Math.max(0.001, parameters.attack[0] ?? 0.01)
-    const r = Math.max(0.001, parameters.release[0] ?? 0.3)
+    const aBase = Math.max(0.001, parameters.attack[0] ?? 0.01)
+    const rBase = Math.max(0.001, parameters.release[0] ?? 0.3)
 
-    const attackInc = 1 / (a * sampleRate)
-    const releaseDecPerUnit = 1 / (r * sampleRate)
+    const sr = sampleRate
+    const attackIncK = 1 / (aBase * sr)
+    const releaseDecPerUnitK = 1 / (rBase * sr)
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const gv = gateIn ? gateIn[i] : 0
+      let attackInc = attackIncK
+      if (atkCv) {
+        let a = atkCv[i]
+        if (a < 0.001) a = 0.001
+        else if (a > 4) a = 4
+        attackInc = 1 / (a * sr)
+      }
+      let releaseDecPerUnit = releaseDecPerUnitK
+      if (relCv) {
+        let r = relCv[i]
+        if (r < 0.001) r = 0.001
+        else if (r > 8) r = 8
+        releaseDecPerUnit = 1 / (r * sr)
+      }
       const nowHigh = gv >= 0.5
       if (nowHigh !== this.gateHigh) {
         if (nowHigh) {

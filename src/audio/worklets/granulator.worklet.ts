@@ -70,17 +70,20 @@ class GranulatorProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const grainMs = parameters.grain_size[0] ?? 80
-    const density = parameters.density[0] ?? 8
-    const pitch = parameters.pitch[0] ?? 0
-    const jitter = parameters.jitter[0] ?? 0.3
+    const grainSizeCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const densityCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const pitchCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+    const sprayCv = inputs[4] && inputs[4].length > 0 ? inputs[4][0] : undefined
+
+    const grainMsBase = parameters.grain_size[0] ?? 80
+    const densityBase = parameters.density[0] ?? 8
+    const pitchBase = parameters.pitch[0] ?? 0
+    const jitterBase = parameters.jitter[0] ?? 0.3
     const mix = parameters.mix[0] ?? 1
 
     const sr = sampleRate
     const buf = this.buffer
     const bufLen = buf.length
-    const grainSamples = Math.max(1, (grainMs / 1000) * sr)
-    const spawnInterval = sr / Math.max(0.001, density)
 
     const TWO_PI = Math.PI * 2
 
@@ -92,6 +95,33 @@ class GranulatorProcessor extends AudioWorkletProcessor {
       buf[this.writeIdx] = x
       this.writeIdx++
       if (this.writeIdx >= bufLen) this.writeIdx = 0
+
+      let grainMs = grainMsBase
+      if (grainSizeCv) {
+        grainMs = grainSizeCv[i]
+        if (grainMs < 10) grainMs = 10
+        else if (grainMs > 200) grainMs = 200
+      }
+      let density = densityBase
+      if (densityCv) {
+        density = densityCv[i]
+        if (density < 1) density = 1
+        else if (density > 30) density = 30
+      }
+      let pitch = pitchBase
+      if (pitchCv) {
+        pitch = pitchCv[i]
+        if (pitch < -12) pitch = -12
+        else if (pitch > 12) pitch = 12
+      }
+      let jitter = jitterBase
+      if (sprayCv) {
+        jitter = sprayCv[i]
+        if (jitter < 0) jitter = 0
+        else if (jitter > 1) jitter = 1
+      }
+      const grainSamples = Math.max(1, (grainMs / 1000) * sr)
+      const spawnInterval = sr / Math.max(0.001, density)
 
       // Spawn grain if countdown elapsed.
       this.spawnCountdown -= 1

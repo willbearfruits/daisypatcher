@@ -43,10 +43,14 @@ class DelayProcessor extends AudioWorkletProcessor {
     // time_cv at input index 1: effective_time = time * 2^cv, clamped [0.001, 2].
     const timeCv = inputs[1]?.[0]
     const hasTimeCv = !!(timeCv && timeCv.length > 0)
+    // Wave 3 replace-semantics CVs.
+    const timeReplaceCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const fbCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+    const mixCv = inputs[4] && inputs[4].length > 0 ? inputs[4][0] : undefined
 
     const baseTime = parameters.time[0] ?? 0.25
-    const fb = parameters.feedback[0] ?? 0.4
-    const mix = parameters.mix[0] ?? 0.5
+    const fbBase = parameters.feedback[0] ?? 0.4
+    const mixBase = parameters.mix[0] ?? 0.5
 
     const buf = this.buffer
     const bufLen = buf.length
@@ -62,10 +66,26 @@ class DelayProcessor extends AudioWorkletProcessor {
       const x = inCh ? inCh[i] : 0
 
       let effTime = baseTime
-      if (hasTimeCv) {
+      if (timeReplaceCv) {
+        effTime = timeReplaceCv[i]
+        if (effTime < 0.001) effTime = 0.001
+        else if (effTime > MAX_DELAY_SECONDS) effTime = MAX_DELAY_SECONDS
+      } else if (hasTimeCv) {
         effTime = baseTime * Math.pow(2, timeCv![i])
         if (effTime < 0.001) effTime = 0.001
         else if (effTime > MAX_DELAY_SECONDS) effTime = MAX_DELAY_SECONDS
+      }
+      let fb = fbBase
+      if (fbCv) {
+        fb = fbCv[i]
+        if (fb < 0) fb = 0
+        else if (fb > 0.95) fb = 0.95
+      }
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
       }
       const targetSamples = Math.max(1, Math.min(maxSamples, effTime * sampleRate))
       this.smoothedDelaySamples += (targetSamples - this.smoothedDelaySamples) * coef

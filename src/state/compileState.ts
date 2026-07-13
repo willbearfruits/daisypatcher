@@ -20,6 +20,8 @@ import { create } from 'zustand'
 import { generateProject } from '@/codegen/generateProject'
 import { useEditorStore } from '@/state/store'
 import { getTarget } from '@/codegen/targets'
+import { emptyHardwareLayout, type HardwareLayout } from '@/types/hardware'
+import type { AudioGraph } from '@/types/graph'
 import type { BoardTarget, DaisyFlashMode } from '@/types/store'
 
 /** Addresses for the three Daisy flash modes — also used for log output. */
@@ -228,6 +230,22 @@ export interface CompileState {
    */
   seedAvailable: boolean
   esp32Available: boolean
+  /**
+   * Daisy Seed detected as a RUNNING app (USB CDC port visible, no DFU).
+   * Drives the "board is alive — tap RESET to flash" guidance: without
+   * this the pill showed "no device" for a board one button-press away
+   * from flashable. `null` when not running / not present.
+   */
+  seedRunningPort: string | null
+  /** Cross-target truth: a Seed DFU bootloader is present right now. */
+  seedDfuPresent: boolean
+  /**
+   * Armed flash (Daisy only). True while we're polling for the DFU
+   * bootloader after the user clicked Flash with no device present —
+   * "tap RESET whenever you like, we'll catch the window". Cleared on
+   * fire / cancel / timeout. ESP32 never arms (esptool auto-resets).
+   */
+  flashArmed: boolean
   log: LogLine[]
   logPanelOpen: boolean
 }
@@ -250,6 +268,17 @@ export interface CompileActions {
    */
   installEsp32Toolchain(): Promise<void>
   build(): Promise<void>
+  /**
+   * Compile an arbitrary graph (used by the Test-Rig modal) rather than
+   * the one currently loaded in the editor store. Reuses the same codegen
+   * + build pipeline so progress lands in the shared log stream. The
+   * editor's graph/hardware are NOT touched.
+   */
+  buildTestPatch(
+    graph: AudioGraph,
+    hardware?: HardwareLayout,
+    target?: BoardTarget
+  ): Promise<void>
   detectDevice(): Promise<void>
   /**
    * Cross-target autodetection. Polls `window.daisy.device.detect()`,
@@ -259,6 +288,8 @@ export interface CompileActions {
    */
   detectBoards(): Promise<void>
   flash(): Promise<void>
+  /** Cancel an armed flash — clears the DFU poll without flashing. */
+  cancelArm(): void
 }
 
 const LOG_CAP = 2000
@@ -287,6 +318,175 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
    * an implementation detail of the poller, not something the UI renders.
    */
   const recentDetections: (BoardTarget | null)[] = []
+
+  /* ---------- armed flash (Daisy) ----------
+   *
+   * Removes the RESET-timing dance: clicking Flash while the Seed is NOT
+   * in DFU arms a renderer-side poll (setInterval, no new IPC) that runs
+   * `flash.detect` every ARM_POLL_MS for up to ARM_TIMEOUT_MS and fires
+   * the real flash the moment the bootloader enumerates. We poll the
+   * flash bridge — not device.detect — because detectFlashDevices
+   * confirms the device with a synchronous dfu-util pass before
+   * reporting it, so flashing immediately is safe (see the "DFU detect
+   * latency" gotcha in CLAUDE.md). Timer id lives on the closure — an
+   * implementation detail of the poller; `flashArmed` is the UI truth.
+   */
+  const ARM_POLL_MS = 800
+  const ARM_TIMEOUT_MS = 60_000
+
+  let armTimerId: number | null = null
+
+  const clearArmTimer = (): void => {
+    if (armTimerId !== null) {
+      window.clearInterval(armTimerId)
+      armTimerId = null
+    }
+  }
+
+  const disarm = (): void => {
+    clearArmTimer()
+    if (get().flashArmed) set({ flashArmed: false })
+  }
+
+  const setStatusLine = (
+    kind: 'idle' | 'info' | 'warn' | 'error',
+    message: string
+  ): void => {
+    useEditorStore.getState().setStatus({ kind, message })
+  }
+
+  /**
+   * The actual flash — shared by the immediate path (device already
+   * present / ESP32) and the armed path (fires when DFU appears). Guards
+   * re-run here because the armed path fires long after `flash()` was
+   * clicked and the world may have changed (e.g. a failed rebuild wiped
+   * `lastBinaryPath`).
+   */
+  const performFlash = async (flashApi: FlashApi): Promise<void> => {
+    const binary = get().lastBinaryPath
+    if (!binary) {
+      append({
+        stream: 'error',
+        text: '[flash] no binary — run Compile first',
+        t: Date.now()
+      })
+      set({ logPanelOpen: true })
+      return
+    }
+    if (get().flashing) return
+
+    set({ flashing: true, lastFlashSuccess: null })
+    append({ stream: 'flash', text: `[flash] ${binary}`, t: Date.now() })
+
+    try {
+      const target = useEditorStore.getState().target
+      const daisyFlashMode = useEditorStore.getState().daisyFlashMode
+      const result = await flashApi.run(binary, target, daisyFlashMode)
+      const now = Date.now()
+      if (result.success) {
+        set({
+          lastFlashSuccess: true,
+          lastFlashUntilMs: now + 1500
+        })
+        append({
+          stream: 'flash',
+          text: `[flash] ok (${result.durationMs}ms)`,
+          t: now
+        })
+      } else {
+        set({
+          lastFlashSuccess: false,
+          lastFlashUntilMs: now + 1500,
+          logPanelOpen: true
+        })
+        append({
+          stream: 'error',
+          text: `[flash] failed after ${result.durationMs}ms`,
+          t: now
+        })
+      }
+    } catch (err) {
+      const now = Date.now()
+      set({
+        lastFlashSuccess: false,
+        lastFlashUntilMs: now + 1500,
+        logPanelOpen: true
+      })
+      append({
+        stream: 'error',
+        text: `[flash] ${(err as Error).message}`,
+        t: now
+      })
+    } finally {
+      set({ flashing: false })
+    }
+  }
+
+  /** Enter the ARMED state: poll for DFU, fire `performFlash` on sight. */
+  const armFlash = (flashApi: FlashApi): void => {
+    const deadline = Date.now() + ARM_TIMEOUT_MS
+    let polling = false
+
+    set({ flashArmed: true })
+    append({
+      stream: 'flash',
+      text: '[flash] armed — tap RESET on the Seed',
+      t: Date.now()
+    })
+    setStatusLine('info', 'armed — tap RESET on the Seed')
+
+    const tick = async (): Promise<void> => {
+      // Cancelled (or already fired) — the interval is cleared by
+      // disarm(), but a tick may still be queued/in flight; bail quietly.
+      if (!get().flashArmed) return
+      // Arming is Daisy-only; a mid-arm target switch cancels.
+      if (useEditorStore.getState().target !== 'daisy_seed') {
+        disarm()
+        append({
+          stream: 'flash',
+          text: '[flash] arm cancelled — target changed',
+          t: Date.now()
+        })
+        setStatusLine('idle', 'ready')
+        return
+      }
+      if (Date.now() >= deadline) {
+        disarm()
+        append({
+          stream: 'error',
+          text: '[flash] arm timed out after 60s',
+          t: Date.now()
+        })
+        setStatusLine('warn', 'arm timed out after 60s')
+        return
+      }
+      if (polling) return // dfu-util confirm can outlast a tick — don't stack
+      polling = true
+      try {
+        const res = await flashApi.detect('daisy_seed')
+        if (!get().flashArmed) return // cancelled while detect was in flight
+        if ((res.devices ?? []).length > 0) {
+          disarm()
+          set({ deviceAvailable: true, deviceLabel: 'Daisy Seed · DFU' })
+          append({
+            stream: 'flash',
+            text: '[flash] device appeared — flashing',
+            t: Date.now()
+          })
+          setStatusLine('info', 'device appeared — flashing')
+          await performFlash(flashApi)
+        }
+      } catch {
+        // Transient detect failure — skip this tick, keep waiting.
+      } finally {
+        polling = false
+      }
+    }
+
+    armTimerId = window.setInterval(() => {
+      void tick()
+    }, ARM_POLL_MS)
+  }
 
   /* ---------- onProgress listeners ----------
    *
@@ -327,6 +527,9 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
     deviceDetails: null,
     seedAvailable: false,
     esp32Available: false,
+    seedRunningPort: null,
+    seedDfuPresent: false,
+    flashArmed: false,
     log: [],
     logPanelOpen: false,
 
@@ -588,6 +791,95 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
       }
     },
 
+    /* ---------- test rig ---------- */
+
+    async buildTestPatch(graph, hardware, target) {
+      const compile = api().compile
+      if (!compile) {
+        append({ stream: 'error', text: '[compile] bridge unavailable', t: Date.now() })
+        set({ lastBuildSuccess: false, logPanelOpen: true })
+        return
+      }
+      if (get().building) return
+
+      const activeTarget = target ?? useEditorStore.getState().target
+      const daisyFlashMode = useEditorStore.getState().daisyFlashMode
+      const hw =
+        hardware ??
+        emptyHardwareLayout(activeTarget === 'esp32_s3' ? 'esp32_s3_devkitc' : 'daisy_seed')
+
+      set({ building: true, lastBuildSuccess: null })
+      append({
+        stream: 'build',
+        text: `[test] compile ${graph.meta.name}`,
+        t: Date.now()
+      })
+
+      let project: { projectName: string; files: Record<string, string>; warnings: string[] }
+      try {
+        project = generateProject(graph, hw, undefined, activeTarget, { daisyFlashMode })
+      } catch (err) {
+        append({
+          stream: 'error',
+          text: `[codegen] failed: ${(err as Error).message}`,
+          t: Date.now()
+        })
+        set({ building: false, lastBuildSuccess: false, logPanelOpen: true })
+        return
+      }
+
+      for (const w of project.warnings) {
+        append({ stream: 'info', text: `[codegen] ${w}`, t: Date.now() })
+      }
+
+      try {
+        const result = await compile.build({
+          projectName: project.projectName,
+          files: project.files,
+          target: activeTarget
+        })
+        const now = Date.now()
+        if (result.success) {
+          set({
+            lastBuildSuccess: true,
+            lastBuildFlashUntilMs: now + 1500,
+            lastBinaryPath: result.binaryPath ?? null
+          })
+          append({
+            stream: 'build',
+            text: `[test] build ok (${result.binarySize ?? '?'}B, ${result.durationMs}ms)`,
+            t: now
+          })
+        } else {
+          set({
+            lastBuildSuccess: false,
+            lastBuildFlashUntilMs: now + 1500,
+            lastBinaryPath: null,
+            logPanelOpen: true
+          })
+          append({
+            stream: 'error',
+            text: `[test] build failed after ${result.durationMs}ms`,
+            t: now
+          })
+        }
+      } catch (err) {
+        const now = Date.now()
+        set({
+          lastBuildSuccess: false,
+          lastBuildFlashUntilMs: now + 1500,
+          logPanelOpen: true
+        })
+        append({
+          stream: 'error',
+          text: `[test] build ${(err as Error).message}`,
+          t: now
+        })
+      } finally {
+        set({ building: false })
+      }
+    },
+
     /* ---------- flash ---------- */
 
     async detectDevice() {
@@ -649,7 +941,12 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
         // No bridge — nothing detected. Clear everything so stale state
         // from a previous run doesn't linger.
         ed.setDetectedBoard(null)
-        set({ seedAvailable: false, esp32Available: false })
+        set({
+          seedAvailable: false,
+          esp32Available: false,
+          seedRunningPort: null,
+          seedDfuPresent: false
+        })
         recentDetections.length = 0
         return
       }
@@ -660,9 +957,15 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
         const board = (res.detectedBoard ?? null) as BoardTarget | null
 
         // Presence flags are immediate — no debounce needed; they're used
-        // only for the StatusBar secondary indicator and don't mutate the
-        // compile target.
-        set({ seedAvailable: seedPresent, esp32Available: esp32Present })
+        // only for the StatusBar indicators and don't mutate the compile
+        // target. `seedRunningPort` powers the "board is alive, tap RESET"
+        // guidance; DFU wins over running when both flicker during reset.
+        set({
+          seedAvailable: seedPresent,
+          esp32Available: esp32Present,
+          seedRunningPort: res.seedDfu ? null : res.seedSerial?.path ?? null,
+          seedDfuPresent: !!res.seedDfu
+        })
         ed.setDetectedBoard(board)
 
         /*
@@ -692,6 +995,13 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
     },
 
     async flash() {
+      // A second Flash while armed is a cancel — the FlashButton routes
+      // through cancelArm() itself, but anything else calling flash()
+      // directly gets the same toggle semantics.
+      if (get().flashArmed) {
+        get().cancelArm()
+        return
+      }
       const flash = api().flash
       const binary = get().lastBinaryPath
       if (!binary) {
@@ -709,51 +1019,23 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
       }
       if (get().flashing) return
 
-      set({ flashing: true, lastFlashSuccess: null })
-      append({ stream: 'flash', text: `[flash] ${binary}`, t: Date.now() })
-
-      try {
-        const target = useEditorStore.getState().target
-        const daisyFlashMode = useEditorStore.getState().daisyFlashMode
-        const result = await flash.run(binary, target, daisyFlashMode)
-        const now = Date.now()
-        if (result.success) {
-          set({
-            lastFlashSuccess: true,
-            lastFlashUntilMs: now + 1500
-          })
-          append({
-            stream: 'flash',
-            text: `[flash] ok (${result.durationMs}ms)`,
-            t: now
-          })
-        } else {
-          set({
-            lastFlashSuccess: false,
-            lastFlashUntilMs: now + 1500,
-            logPanelOpen: true
-          })
-          append({
-            stream: 'error',
-            text: `[flash] failed after ${result.durationMs}ms`,
-            t: now
-          })
-        }
-      } catch (err) {
-        const now = Date.now()
-        set({
-          lastFlashSuccess: false,
-          lastFlashUntilMs: now + 1500,
-          logPanelOpen: true
-        })
-        append({
-          stream: 'error',
-          text: `[flash] ${(err as Error).message}`,
-          t: now
-        })
-      } finally {
-        set({ flashing: false })
+      // Daisy with no bootloader in sight: ARM instead of failing — the
+      // poll fires the flash the moment a RESET tap brings up DFU. ESP32
+      // flashes immediately (esptool auto-resets, no window to catch).
+      const target = useEditorStore.getState().target
+      if (target === 'daisy_seed' && !get().deviceAvailable) {
+        armFlash(flash)
+        return
       }
+
+      await performFlash(flash)
+    },
+
+    cancelArm() {
+      if (!get().flashArmed) return
+      disarm()
+      append({ stream: 'flash', text: '[flash] arm cancelled', t: Date.now() })
+      setStatusLine('idle', 'ready')
     }
   }
 })

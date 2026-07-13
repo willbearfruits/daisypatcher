@@ -1,7 +1,8 @@
 {
   "name": "daisypatcher",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Visual node-based patcher for the Electro-Smith Daisy Seed — emulate, compile, flash.",
+  "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
@@ -15,6 +16,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test:codegen": "node scripts/codegen-snapshot.mjs",
     "dist": "npm run build:worklets && electron-vite build && electron-builder",
     "dist:linux": "npm run build:worklets && electron-vite build && electron-builder --linux",
     "dist:win": "npm run build:worklets && electron-vite build && electron-builder --win",
@@ -40,33 +42,12 @@
             "x64",
             "arm64"
           ]
-        },
-        {
-          "target": "flatpak",
-          "arch": [
-            "x64"
-          ]
         }
       ],
       "category": "AudioVideo;Audio",
       "synopsis": "Visual node-based patcher for Daisy Seed and ESP32-S3",
       "description": "Patch DSP graphs visually, emulate them in-app, compile and flash to Electro-Smith Daisy Seed or ESP32-S3.",
       "maintainer": "willbearfruits <willbear_fruits@proton.me>"
-    },
-    "flatpak": {
-      "license": "MIT",
-      "runtimeVersion": "23.08",
-      "baseVersion": "23.08",
-      "finishArgs": [
-        "--share=ipc",
-        "--socket=x11",
-        "--socket=wayland",
-        "--device=all",
-        "--share=network",
-        "--filesystem=home",
-        "--talk-name=org.freedesktop.Notifications",
-        "--env=DBUS_SESSION_BUS_ADDRESS="
-      ]
     },
     "win": {
       "target": [

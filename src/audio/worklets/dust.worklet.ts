@@ -19,25 +19,35 @@ class DustProcessor extends AudioWorkletProcessor {
   private samplesRemaining = 0 // samples of gate still to emit as 1
 
   process(
-    _inputs: Float32Array[][],
+    inputs: Float32Array[][],
     outputs: Float32Array[][],
     parameters: Record<string, Float32Array>
   ): boolean {
     const out = outputs[0]?.[0]
     if (!out) return true
 
-    let density = parameters.density[0] ?? 5
-    if (density < 0.1) density = 0.1
-    else if (density > 50) density = 50
+    // Wave 4 CV: 0=density. Replace semantics with clamp.
+    const densCv = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+
+    let densityBase = parameters.density[0] ?? 5
+    if (densityBase < 0.1) densityBase = 0.1
+    else if (densityBase > 50) densityBase = 50
     let width = parameters.width[0] ?? 0.005
     if (width < 0.001) width = 0.001
     else if (width > 0.05) width = 0.05
 
-    const probPerSample = density / sampleRate
-    const widthSamples = Math.max(1, Math.round(width * sampleRate))
+    const sr = sampleRate
+    const widthSamples = Math.max(1, Math.round(width * sr))
 
     const n = out.length
     for (let i = 0; i < n; i++) {
+      let density = densityBase
+      if (densCv) {
+        density = densCv[i]
+        if (density < 0.1) density = 0.1
+        else if (density > 50) density = 50
+      }
+      const probPerSample = density / sr
       if (Math.random() < probPerSample) {
         this.samplesRemaining = widthSamples
       }

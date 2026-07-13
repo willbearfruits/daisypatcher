@@ -45,7 +45,9 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Clock',
     category: 'source',
     description: 'Master clock — tempo-based gate pulses.',
-    inputs: [],
+    inputs: [
+      { id: 'cv_bpm', label: 'bpm', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],
     params: [
       { id: 'bpm', label: 'BPM', kind: 'number', min: 20, max: 300, step: 1, default: 120 },
@@ -108,7 +110,9 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Euclidean rhythm — Bjorklund-distributed pulses over steps.',
     inputs: [
       { id: 'clock', label: 'clk', signal: 'gate' },
-      { id: 'reset', label: 'rst', signal: 'gate' }
+      { id: 'reset', label: 'rst', signal: 'gate' },
+      { id: 'cv_pulses', label: 'pulses', signal: 'cv' },
+      { id: 'cv_rotate', label: 'rot', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],
     params: [
@@ -123,7 +127,10 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Random',
     category: 'source',
     description: 'Random CV stepper — free-run or clocked, with slew.',
-    inputs: [{ id: 'clock', label: 'clk', signal: 'gate' }],
+    inputs: [
+      { id: 'clock', label: 'clk', signal: 'gate' },
+      { id: 'cv_rate', label: 'rate', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
       { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 20, step: 0.1, default: 2, unit: 'Hz' },
@@ -137,7 +144,9 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Dust',
     category: 'source',
     description: 'Random impulse generator — Poisson-distributed gate pulses.',
-    inputs: [],
+    inputs: [
+      { id: 'cv_density', label: 'dens', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],
     params: [
       { id: 'density', label: 'Dens', kind: 'number', min: 0.1, max: 50, step: 0.1, default: 5, unit: 'Hz' },
@@ -195,7 +204,8 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Ring modulator — dry A blended with A*B product.',
     inputs: [
       { id: 'a', label: 'a', signal: 'audio' },
-      { id: 'b', label: 'b', signal: 'audio' }
+      { id: 'b', label: 'b', signal: 'audio' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -210,7 +220,9 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Amplitude modulation — internal LFO, CV-modulated rate.',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'rate_cv', label: 'rate', signal: 'cv' }
+      { id: 'rate_cv', label: 'rate', signal: 'cv' },
+      { id: 'cv_rate', label: 'rate*', signal: 'cv' },
+      { id: 'cv_depth', label: 'depth', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -235,7 +247,11 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Vibrato',
     category: 'process',
     description: 'Pitch modulation — short modulated delay line.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_rate', label: 'rate', signal: 'cv' },
+      { id: 'cv_depth', label: 'depth', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 15, step: 0.01, default: 6, unit: 'Hz' },

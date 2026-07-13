@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
-import { readFile, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { getSdkStatus, installSdk, installEsp32Toolchain, WORKSPACE } from './sdk'
 import { buildProject, isInside, type BuildInput } from './buildService'
 import { detectFlashDevices, flashBinary } from './flashService'
@@ -22,15 +22,24 @@ const FILE_FILTERS = [
 ]
 
 /**
- * Minimal extension gate for the renderer-side fs bridge. We only let the
- * renderer read/write `.dpatch` and `.json` paths — every other path is
- * rejected. This is not a security boundary (a compromised renderer could
- * still bypass via other APIs), it's a foot-gun guard so bugs in the
- * frontend can't scribble on arbitrary files.
+ * Paths the user explicitly granted through a native open/save dialog this
+ * session. The fs bridge only touches files on this list — which makes it a
+ * real security boundary, not just a foot-gun guard: a compromised renderer
+ * cannot read or clobber arbitrary `*.json` on disk, only files the user
+ * has personally picked in a dialog. Every renderer flow (save, open)
+ * starts with a dialog, so nothing legitimate is blocked.
  */
+const grantedPaths = new Set<string>()
+
+function grantPath(p: string | undefined): void {
+  if (p) grantedPaths.add(resolve(p))
+}
+
 function isAllowedPath(p: string): boolean {
-  const lower = p.toLowerCase()
-  return lower.endsWith('.dpatch') || lower.endsWith('.json')
+  const abs = resolve(p)
+  const lower = abs.toLowerCase()
+  const extOk = lower.endsWith('.dpatch') || lower.endsWith('.json')
+  return extOk && grantedPaths.has(abs)
 }
 
 function registerIpcHandlers(): void {
@@ -47,6 +56,7 @@ function registerIpcHandlers(): void {
           defaultPath: defaultName || 'untitled.dpatch',
           filters: FILE_FILTERS
         })
+    if (!result.canceled) grantPath(result.filePath)
     return { canceled: result.canceled, path: result.filePath }
   })
 
@@ -63,19 +73,20 @@ function registerIpcHandlers(): void {
           properties: ['openFile'],
           filters: FILE_FILTERS
         })
+    if (!result.canceled) grantPath(result.filePaths[0])
     return { canceled: result.canceled, path: result.filePaths[0] }
   })
 
   ipcMain.handle('fs:writeFile', async (_evt, path: string, content: string) => {
     if (!isAllowedPath(path)) {
-      throw new Error(`refusing to write non-patch file: ${path}`)
+      throw new Error(`refusing to write file not granted via a dialog: ${path}`)
     }
     await writeFile(path, content, 'utf8')
   })
 
   ipcMain.handle('fs:readFile', async (_evt, path: string) => {
     if (!isAllowedPath(path)) {
-      throw new Error(`refusing to read non-patch file: ${path}`)
+      throw new Error(`refusing to read file not granted via a dialog: ${path}`)
     }
     return await readFile(path, 'utf8')
   })
@@ -98,7 +109,17 @@ function registerIpcHandlers(): void {
     return await getSdkStatus()
   })
 
+  // Re-entrancy guards. The renderer's `building` flag is UI state, not a
+  // gate — a second window, a devtools call, or a re-render race could
+  // invoke these while a child process is still running, and two builds in
+  // one project dir race cleanProjectDir deleting sources mid-compile.
+  let sdkBusy = false
+  let buildBusy = false
+  let flashBusy = false
+
   ipcMain.handle('sdk:install', async (evt) => {
+    if (sdkBusy) throw new Error('an SDK install is already running')
+    sdkBusy = true
     const emit = emitter('sdk:progress', evt)
     try {
       await installSdk(emit)
@@ -110,12 +131,16 @@ function registerIpcHandlers(): void {
       // `catch` sees a real error. Previously we returned {success:false}
       // silently which made the modal look like nothing happened.
       throw new Error(msg)
+    } finally {
+      sdkBusy = false
     }
   })
 
   // ESP32 toolchain install reuses the sdk:progress channel so the modal's
   // existing log-tail UI picks up output without a second subscription path.
   ipcMain.handle('esp32:install', async (evt) => {
+    if (sdkBusy) throw new Error('an SDK install is already running')
+    sdkBusy = true
     const emit = emitter('sdk:progress', evt)
     try {
       await installEsp32Toolchain(emit)
@@ -124,15 +149,23 @@ function registerIpcHandlers(): void {
       const msg = (err as Error).message || String(err)
       emit(`[error] ${msg}`)
       throw new Error(msg)
+    } finally {
+      sdkBusy = false
     }
   })
 
   ipcMain.handle('build:run', async (evt, input: BuildInput) => {
-    const emit = emitter('build:progress', evt)
-    const result = await buildProject(input, emit)
-    // Log still goes over the wire so the caller can store scrollback
-    // without a second round-trip — it's already tail-bounded.
-    return result
+    if (buildBusy) throw new Error('a build is already running')
+    buildBusy = true
+    try {
+      const emit = emitter('build:progress', evt)
+      const result = await buildProject(input, emit)
+      // Log still goes over the wire so the caller can store scrollback
+      // without a second round-trip — it's already tail-bounded.
+      return result
+    } finally {
+      buildBusy = false
+    }
   })
 
   ipcMain.handle('flash:detect', async (_evt, target?: 'daisy_seed' | 'esp32_s3') => {
@@ -155,25 +188,31 @@ function registerIpcHandlers(): void {
         daisyFlashMode?: 'internal' | 'qspi' | 'sram'
       }
     ) => {
-      const emit = emitter('flash:progress', evt)
-      // Back-compat: accept a bare string as the Daisy path for callers
-      // that haven't adopted the new payload yet.
-      const binaryPath = typeof payload === 'string' ? payload : payload.binaryPath
-      const target: 'daisy_seed' | 'esp32_s3' =
-        typeof payload === 'string' ? 'daisy_seed' : payload.target ?? 'daisy_seed'
-      const daisyFlashMode: 'internal' | 'qspi' | 'sram' =
-        typeof payload === 'string' ? 'qspi' : payload.daisyFlashMode ?? 'qspi'
+      if (flashBusy) throw new Error('a flash is already running')
+      flashBusy = true
+      try {
+        const emit = emitter('flash:progress', evt)
+        // Back-compat: accept a bare string as the Daisy path for callers
+        // that haven't adopted the new payload yet.
+        const binaryPath = typeof payload === 'string' ? payload : payload.binaryPath
+        const target: 'daisy_seed' | 'esp32_s3' =
+          typeof payload === 'string' ? 'daisy_seed' : payload.target ?? 'daisy_seed'
+        const daisyFlashMode: 'internal' | 'qspi' | 'sram' =
+          typeof payload === 'string' ? 'qspi' : payload.daisyFlashMode ?? 'qspi'
 
-      // Defense in depth: refuse to flash anything outside WORKSPACE. Stops
-      // a compromised renderer from asking us to spawn dfu-util against an
-      // arbitrary file on disk.
-      const workspaceAbs = resolve(WORKSPACE)
-      const fileAbs = resolve(binaryPath)
-      if (!isInside(workspaceAbs, fileAbs)) {
-        throw new Error(`refusing to flash outside workspace: ${binaryPath}`)
+        // Defense in depth: refuse to flash anything outside WORKSPACE. Stops
+        // a compromised renderer from asking us to spawn dfu-util against an
+        // arbitrary file on disk.
+        const workspaceAbs = resolve(WORKSPACE)
+        const fileAbs = resolve(binaryPath)
+        if (!isInside(workspaceAbs, fileAbs)) {
+          throw new Error(`refusing to flash outside workspace: ${binaryPath}`)
+        }
+
+        return await flashBinary(binaryPath, emit, target, daisyFlashMode)
+      } finally {
+        flashBusy = false
       }
-
-      return await flashBinary(binaryPath, emit, target, daisyFlashMode)
     }
   )
 
@@ -207,6 +246,37 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('serial:write', async (_evt, payload: { text: string }) => {
     await writeSerial(payload.text)
+  })
+
+  // ---- Verification table ----
+  //
+  // Persists the per-(kind, target) test-rig pass/fail table. File lives
+  // next to the app's other user data so it travels with the install.
+  // Read returns {} when the file doesn't exist yet — the renderer treats
+  // "no entry" as unknown status.
+  const VERIFICATION_PATH = join(app.getPath('userData'), 'verified.json')
+
+  ipcMain.handle('verification:load', async () => {
+    try {
+      const content = await readFile(VERIFICATION_PATH, 'utf8')
+      const parsed = JSON.parse(content)
+      if (parsed && typeof parsed === 'object') return parsed
+      return {}
+    } catch {
+      // File missing or corrupt — return an empty table, do not throw.
+      return {}
+    }
+  })
+
+  ipcMain.handle('verification:save', async (_evt, table: unknown) => {
+    // Defensive: reject anything that isn't a plain object so a rogue
+    // payload can't blow up the file with unserialisable content.
+    if (!table || typeof table !== 'object') {
+      throw new Error('verification:save expects an object table')
+    }
+    const text = JSON.stringify(table, null, 2)
+    await mkdir(dirname(VERIFICATION_PATH), { recursive: true })
+    await writeFile(VERIFICATION_PATH, text, 'utf8')
   })
 }
 
@@ -245,7 +315,11 @@ function createWindow(): void {
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    // Web links only — never forward file:// or custom protocol handlers
+    // to the OS from renderer-controlled URLs.
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      shell.openExternal(url)
+    }
     return { action: 'deny' }
   })
 
@@ -256,14 +330,28 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
-  registerIpcHandlers()
-  createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+// Two instances share one workspace and SDK dir — a second app racing the
+// first mid-build corrupts project dirs. Single-instance, focus the first.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
   })
-})
+
+  app.whenReady().then(() => {
+    registerIpcHandlers()
+    createWindow()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
+  })
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

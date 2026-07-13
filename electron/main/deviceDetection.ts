@@ -22,6 +22,7 @@
  * collapses to `null` and the renderer lets the user pick manually.
  */
 import { execFile } from 'node:child_process'
+import { readdir, readFile } from 'node:fs/promises'
 import { listSerialPorts, type SerialPortInfo } from './serialService'
 
 export type DetectedBoard = 'daisy_seed' | 'esp32_s3'
@@ -78,13 +79,41 @@ function isEsp32Serial(p: SerialPortInfo): boolean {
 }
 
 /**
- * Probe `dfu-util -l` and report whether a Daisy DFU device is present.
- * Non-zero exit is expected when nothing is attached — we swallow it and
- * treat empty output as "not present". If `dfu-util` is missing from PATH,
- * execFile rejects and we return false; autodetection silently falls back
- * to serial-only detection in that case.
+ * Linux-only sysfs probe for `0483:df11` — a few file reads vs. a
+ * process spawn. Returns `undefined` when we can't use it (non-Linux
+ * or sysfs fs unavailable) so the caller falls back to `dfu-util`.
+ */
+async function linuxSysfsHasDaisyDfu(): Promise<boolean | undefined> {
+  if (process.platform !== 'linux') return undefined
+  const base = '/sys/bus/usb/devices'
+  let entries: string[] = []
+  try {
+    entries = await readdir(base)
+  } catch {
+    return undefined
+  }
+  for (const e of entries) {
+    if (e.includes(':')) continue // interface entries
+    try {
+      const [vid, pid] = await Promise.all([
+        readFile(`${base}/${e}/idVendor`, 'utf8'),
+        readFile(`${base}/${e}/idProduct`, 'utf8')
+      ])
+      if (vid.trim() === '0483' && pid.trim() === 'df11') return true
+    } catch { /* skip */ }
+  }
+  return false
+}
+
+/**
+ * Probe whether a Daisy DFU device is present. Fast path: read
+ * idVendor / idProduct under /sys/bus/usb/devices on Linux (~5 ms).
+ * Fallback: `dfu-util -l` on other platforms or when sysfs is
+ * unavailable.
  */
 async function probeSeedDfu(): Promise<boolean> {
+  const fast = await linuxSysfsHasDaisyDfu()
+  if (fast !== undefined) return fast
   return new Promise((resolve) => {
     execFile(
       'dfu-util',

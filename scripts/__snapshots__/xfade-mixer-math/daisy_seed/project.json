@@ -1,0 +1,150 @@
+{
+  "nodes": [
+    {
+      "id": "osc1",
+      "kind": "oscillator",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "params": {
+        "frequency": 220,
+        "amplitude": 0.5,
+        "waveform": "sine"
+      }
+    },
+    {
+      "id": "noise1",
+      "kind": "noise",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "params": {
+        "amplitude": 0.3,
+        "color": "white"
+      }
+    },
+    {
+      "id": "lfo1",
+      "kind": "lfo",
+      "position": {
+        "x": 0,
+        "y": 400
+      },
+      "params": {
+        "frequency": 1,
+        "depth": 1,
+        "offset": 0,
+        "waveform": "sine"
+      }
+    },
+    {
+      "id": "xf1",
+      "kind": "crossfade",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "params": {
+        "mix": 0.5
+      }
+    },
+    {
+      "id": "mix1",
+      "kind": "mixer4",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "params": {
+        "gain1": 1,
+        "gain2": 1,
+        "gain3": 1,
+        "gain4": 1
+      }
+    },
+    {
+      "id": "out1",
+      "kind": "audio_output",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": {
+        "nodeId": "osc1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "xf1",
+        "socketId": "a"
+      }
+    },
+    {
+      "id": "c2",
+      "from": {
+        "nodeId": "noise1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "xf1",
+        "socketId": "b"
+      }
+    },
+    {
+      "id": "c3",
+      "from": {
+        "nodeId": "lfo1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "xf1",
+        "socketId": "cv_mix"
+      }
+    },
+    {
+      "id": "c4",
+      "from": {
+        "nodeId": "xf1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "mix1",
+        "socketId": "in1"
+      }
+    },
+    {
+      "id": "c5",
+      "from": {
+        "nodeId": "mix1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "left"
+      }
+    },
+    {
+      "id": "c6",
+      "from": {
+        "nodeId": "mix1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "right"
+      }
+    }
+  ],
+  "meta": {
+    "name": "xfade_mixer_math",
+    "sampleRate": 48000,
+    "blockSize": 48
+  }
+}

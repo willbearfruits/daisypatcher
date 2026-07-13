@@ -48,6 +48,7 @@ export type NodeKind =
   | 'sample_hold'
   | 'inverter'
   | 'scale'
+  | 'range'
   | 'comparator'
   // ---- Sequencing / clock ----
   | 'clock'

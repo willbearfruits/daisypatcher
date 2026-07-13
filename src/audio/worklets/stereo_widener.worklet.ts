@@ -37,7 +37,9 @@ class StereoWidenerProcessor extends AudioWorkletProcessor {
     if (!outL || !outR) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const width = parameters.width[0] ?? 1.2
+    const widthCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+
+    const widthBase = parameters.width[0] ?? 1.2
     let haasMs = parameters.haas_ms[0] ?? 8
     if (haasMs < 0) haasMs = 0
     else if (haasMs > 30) haasMs = 30
@@ -54,6 +56,13 @@ class StereoWidenerProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
       buf[this.writeIdx] = x
+
+      let width = widthBase
+      if (widthCv) {
+        width = widthCv[i]
+        if (width < 0) width = 0
+        else if (width > 2) width = 2
+      }
 
       let readPos = this.writeIdx - delaySamples
       while (readPos < 0) readPos += bufLen

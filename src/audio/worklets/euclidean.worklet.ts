@@ -82,6 +82,30 @@ class EuclideanProcessor extends AudioWorkletProcessor {
 
     const clkCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const rstCh = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    // Wave 4 CVs: 2=pulses, 3=rotate. Replace semantics, block-rate sampling
+    // since changing the pattern is integer-valued and recomputes the bitmap.
+    const pulsesCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const rotateCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+
+    if (pulsesCv || rotateCv) {
+      const prevPulses = this.pulsesCount
+      const prevRotate = this.rotate
+      if (pulsesCv) {
+        let p = Math.round(pulsesCv[0])
+        if (p < 0) p = 0
+        else if (p > this.maxSteps) p = this.maxSteps
+        this.pulsesCount = p
+      }
+      if (rotateCv) {
+        let r = Math.round(rotateCv[0])
+        if (r < 0) r = 0
+        else if (r > 31) r = 31
+        this.rotate = r
+      }
+      if (this.pulsesCount !== prevPulses || this.rotate !== prevRotate) {
+        this.recompute()
+      }
+    }
 
     const steps = this.stepsCount
     for (let i = 0; i < n; i++) {

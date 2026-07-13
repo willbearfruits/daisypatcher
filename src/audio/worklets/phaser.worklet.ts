@@ -50,27 +50,56 @@ class PhaserProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const rate = parameters.rate[0] ?? 0.5
-    const depth = parameters.depth[0] ?? 0.7
-    const fb = parameters.feedback[0] ?? 0.5
-    const mix = parameters.mix[0] ?? 0.5
+    const rateCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const depthCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const fbCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+    const mixCv = inputs[4] && inputs[4].length > 0 ? inputs[4][0] : undefined
+
+    const rateBase = parameters.rate[0] ?? 0.5
+    const depthBase = parameters.depth[0] ?? 0.7
+    const fbBase = parameters.feedback[0] ?? 0.5
+    const mixBase = parameters.mix[0] ?? 0.5
 
     const sr = sampleRate
-    const phaseInc = (this.TWO_PI * rate) / sr
     const stages = this.stages
     const z = this.z
 
     // Log-sweep between 200 Hz and 4000 Hz. LFO in [-1,1] scaled by depth.
-    const minF = 200
-    const maxF = 4000
-    const logMin = Math.log(minF)
-    const logMax = Math.log(maxF)
+    const logMin = Math.log(200)
+    const logMax = Math.log(4000)
     const center = (logMin + logMax) * 0.5
     const halfRange = (logMax - logMin) * 0.5
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+
+      let rate = rateBase
+      if (rateCv) {
+        rate = rateCv[i]
+        if (rate < 0.05) rate = 0.05
+        else if (rate > 8) rate = 8
+      }
+      let depth = depthBase
+      if (depthCv) {
+        depth = depthCv[i]
+        if (depth < 0) depth = 0
+        else if (depth > 1) depth = 1
+      }
+      let fb = fbBase
+      if (fbCv) {
+        fb = fbCv[i]
+        if (fb < 0) fb = 0
+        else if (fb > 0.9) fb = 0.9
+      }
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
+      }
+      const phaseInc = (this.TWO_PI * rate) / sr
+
       const lfo = Math.sin(this.lfoPhase)
       const logF = center + lfo * halfRange * depth
       let f = Math.exp(logF)

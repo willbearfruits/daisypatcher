@@ -5,6 +5,11 @@
  * 2, 3, 4.16, 5.43, 6.79, 8.21 times a 40 Hz base) summed and passed
  * through a bandpass centered around 8 kHz * tone. Amp env is exp decay.
  *
+ * Inputs:
+ *   0  trigger  — gate
+ *   1  cv_decay — replaces sidebar `decay` (s, clamped 0.01..0.5)
+ *   2  cv_tone  — replaces sidebar `tone` (bandpass brightness, clamped 0.3..1)
+ *
  * Registered as `'dp-drum-hat'`.
  */
 
@@ -38,9 +43,21 @@ class DrumHatProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const trigCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    const decayCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const toneCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
-    const decay = Math.max(0.01, parameters.decay[0] ?? 0.08)
-    const tone = parameters.tone[0] ?? 0.7
+    let decay = parameters.decay[0] ?? 0.08
+    if (decayCv) {
+      decay = decayCv[0]
+    }
+    if (decay < 0.01) decay = 0.01
+    else if (decay > 0.5) decay = 0.5
+    let tone = parameters.tone[0] ?? 0.7
+    if (toneCv) {
+      tone = toneCv[0]
+      if (tone < 0.3) tone = 0.3
+      else if (tone > 1) tone = 1
+    }
 
     const ampCoef = Math.exp(-1 / (decay * sampleRate))
     const twoPi = this.TWO_PI

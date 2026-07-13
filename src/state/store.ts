@@ -24,6 +24,7 @@ import type { AudioGraph, Connection, NodeInstance, NodeKind } from '@/types/gra
 import { emptyGraph } from '@/types/graph'
 import type { BoardPin, HardwareKind, HardwareLayout, PlacedComponent } from '@/types/hardware'
 import { emptyHardwareLayout, KIND_ROLES } from '@/types/hardware'
+import { getBoardPinout } from '@/hardware/boardPinout'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
 import { boardForTarget, targetForBoard } from '@/codegen/targets'
 
@@ -132,6 +133,41 @@ function pushHistory(
   const next = past.length >= HISTORY_LIMIT ? past.slice(1) : past.slice()
   next.push(prev)
   return { past: next, future: [] }
+}
+
+/**
+ * Roles that share a bus with other devices and must NOT be excluded just
+ * because another component already uses the pin. I2C `sda`/`scl` are the
+ * primary case: an OLED + a gyroscope + a ToF sensor can and should share
+ * the same two pins. Everything else (wiper, io, signal, anode, rx, ...)
+ * is single-ownership.
+ */
+const SHARED_BUS_ROLES = new Set(['sda', 'scl', 'sck', 'mclk'])
+
+/**
+ * Map a patch-side NodeKind to the HardwareKind it represents physically.
+ * Used by `addNode` to auto-create a paired `PlacedComponent` whenever a
+ * hardware-category node is dropped in the patch. Returns null for DSP
+ * nodes that have no physical counterpart. Multiple node kinds can map to
+ * the same hardware kind (e.g. three MIDI node kinds all share one
+ * `midi_jack`); first-drop creates, subsequent drops still spawn a new
+ * one — users can manually coalesce via the hardware view if desired.
+ */
+export function hardwareKindForNodeKind(nodeKind: NodeKind): HardwareKind | null {
+  switch (nodeKind) {
+    case 'knob_in':       return 'pot'
+    case 'gate_in':       return 'gate_jack'
+    case 'button':        return 'button'
+    case 'led':           return 'led'
+    case 'switch_3way':   return 'switch_3way'
+    case 'i2s_in':        return 'i2s_codec'
+    case 'i2s_out':       return 'i2s_codec'
+    case 'midi_in_note':  return 'midi_jack'
+    case 'midi_in_cc':    return 'midi_jack'
+    case 'midi_out_note': return 'midi_jack'
+    case 'oled':          return 'oled_ssd1306'
+    default:              return null
+  }
 }
 
 /** Default labels for newly-placed hardware components. */
@@ -286,8 +322,84 @@ export const useEditorStore = create<EditorStore>((set, get) => {
 
     addNode(kind, position) {
       const id = nanoid(8)
-      const node: NodeInstance = { id, kind, position, params: initialParams(kind) }
-      mutate((s) => ({ graph: { ...s.graph, nodes: [...s.graph.nodes, node] } }))
+      const params = initialParams(kind)
+
+      /*
+       * Auto-link hardware-category nodes to a paired `PlacedComponent`.
+       * Dropping a `knob_in` also creates a `pot` in the hardware layout,
+       * and the new node's `bindingId` points at it — so the user's intent
+       * ("this parameter is driven by a physical control") is expressed
+       * once, in the patch, and the hardware view just needs a pin
+       * assignment. Both mutations go through the same `mutate()` so undo
+       * reverts the pair atomically.
+       */
+      const hwKind = hardwareKindForNodeKind(kind)
+      let hwComponent: PlacedComponent | null = null
+      if (hwKind) {
+        const hwId = nanoid(8)
+        const existingOfKind = get().hardware.components.filter((c) => c.kind === hwKind)
+        // Auto-number the label: "Pot 1", "Pot 2" — match `addHardware`.
+        let n = 1
+        for (const c of existingOfKind) {
+          const m = c.label.match(/\b(\d+)\s*$/)
+          if (m) n = Math.max(n, Number(m[1]) + 1)
+          else n = Math.max(n, existingOfKind.length + 1)
+        }
+        // Cascade placement so multiple drops don't stack exactly on top
+        // of each other in the hardware view. User moves them later.
+        const totalPlaced = get().hardware.components.length
+        /*
+         * Auto-assign each required role to the first free compatible
+         * pin on the active board. I2C-ish roles (sda/scl/sck/mclk)
+         * share buses — an OLED placed when another I2C sensor already
+         * occupies SDA/SCL will reuse the same pins (that's the point
+         * of a bus). Single-ownership roles exclude any pin already
+         * bound for that role by another component. If no compatible
+         * pin is free, the role stays unassigned — user wires manually
+         * in the hardware view.
+         */
+        const pinout = getBoardPinout(get().hardware.board)
+        const allExisting = get().hardware.components
+        const usedSingleOwnershipPins = new Set<string>()
+        for (const c of allExisting) {
+          for (const [role, pin] of Object.entries(c.pins)) {
+            if (!pin) continue
+            if (!SHARED_BUS_ROLES.has(role)) usedSingleOwnershipPins.add(pin as string)
+          }
+        }
+        const assigned: Record<string, string> = {}
+        for (const role of KIND_ROLES[hwKind]) {
+          const candidates = pinout.pinsForRole(role, hwKind)
+          const shared = SHARED_BUS_ROLES.has(role)
+          const chosen = candidates.find((p) =>
+            shared ? true : !usedSingleOwnershipPins.has(p)
+          )
+          if (chosen) {
+            assigned[role] = chosen
+            if (!shared) usedSingleOwnershipPins.add(chosen)
+          }
+        }
+
+        hwComponent = {
+          id: hwId,
+          kind: hwKind,
+          label: `${defaultHardwareLabel(hwKind)} ${n}`,
+          position: { x: 100 + totalPlaced * 40, y: 100 + totalPlaced * 40 },
+          pins: assigned,
+          config: defaultHardwareConfig(hwKind)
+        }
+        params.bindingId = hwId
+      }
+
+      const node: NodeInstance = { id, kind, position, params }
+
+      mutate((s) => ({
+        graph: { ...s.graph, nodes: [...s.graph.nodes, node] },
+        hardware: hwComponent
+          ? { ...s.hardware, components: [...s.hardware.components, hwComponent] }
+          : undefined
+      }))
+
       // Track the drop in the palette's recent-kinds strip. This is a UI
       // pref (not history-tracked), so we patch `layout` directly rather
       // than routing through `mutate`.
@@ -302,15 +414,33 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     },
 
     removeNode(id) {
-      mutate((s) => ({
-        graph: {
+      // If this node auto-created a paired hardware component and no other
+      // graph node still references that component, remove the hardware
+      // side too — symmetric with the auto-link in `addNode`. Preserves
+      // the rule: hardware components that live in the layout are exactly
+      // the ones the patch graph wants. Undo restores both halves.
+      mutate((s) => {
+        const leaving = s.graph.nodes.find((n) => n.id === id)
+        const bindingId = leaving?.params.bindingId
+        const stillReferenced = bindingId
+          ? s.graph.nodes.some((n) => n.id !== id && n.params.bindingId === bindingId)
+          : false
+        const nextGraph = {
           ...s.graph,
           nodes: s.graph.nodes.filter((n) => n.id !== id),
           connections: s.graph.connections.filter(
             (c) => c.from.nodeId !== id && c.to.nodeId !== id
           )
         }
-      }))
+        const dropHw = bindingId && !stillReferenced
+        const nextHardware = dropHw
+          ? {
+              ...s.hardware,
+              components: s.hardware.components.filter((c) => c.id !== bindingId)
+            }
+          : undefined
+        return { graph: nextGraph, hardware: nextHardware }
+      })
       const sel = new Set(get().selection)
       if (sel.delete(id)) set(syncedSelection(sel))
     },

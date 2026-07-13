@@ -43,9 +43,13 @@ class PingPongProcessor extends AudioWorkletProcessor {
     if (!outL || !outR) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const time = parameters.time[0] ?? 0.3
-    const fb = parameters.feedback[0] ?? 0.45
-    const mix = parameters.mix[0] ?? 0.4
+    const timeCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const fbCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const mixCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+
+    const timeBase = parameters.time[0] ?? 0.3
+    const fbBase = parameters.feedback[0] ?? 0.45
+    const mixBase = parameters.mix[0] ?? 0.4
     const width = parameters.width[0] ?? 1
 
     const bufL = this.bufL
@@ -55,14 +59,32 @@ class PingPongProcessor extends AudioWorkletProcessor {
     const coef = this.SMOOTH_COEF
 
     if (this.smoothedDelay === 0) {
-      this.smoothedDelay = Math.max(1, Math.min(maxSamples, time * sampleRate))
+      this.smoothedDelay = Math.max(1, Math.min(maxSamples, timeBase * sampleRate))
     }
-
-    const targetSamples = Math.max(1, Math.min(maxSamples, time * sampleRate))
 
     const n = outL.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+
+      let time = timeBase
+      if (timeCv) {
+        time = timeCv[i]
+        if (time < 0.02) time = 0.02
+        else if (time > 2) time = 2
+      }
+      let fb = fbBase
+      if (fbCv) {
+        fb = fbCv[i]
+        if (fb < 0) fb = 0
+        else if (fb > 0.95) fb = 0.95
+      }
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
+      }
+      const targetSamples = Math.max(1, Math.min(maxSamples, time * sampleRate))
       this.smoothedDelay += (targetSamples - this.smoothedDelay) * coef
       const delaySamples = this.smoothedDelay
 

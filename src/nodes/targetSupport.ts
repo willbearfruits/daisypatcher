@@ -12,11 +12,10 @@
  * and the little coloured dots on palette cards (amber = stub, red = not
  * available).
  *
- * Source of truth today: everything is 'native' on daisy_seed. On esp32_s3
- * a handful of kinds are implemented as stubs while a parallel agent ports
- * the real DSP; the list is enumerated below. When the port lands, flip
- * each entry to 'native' and the palette adjusts automatically — no other
- * wiring needed.
+ * Source of truth today: everything is 'native' on daisy_seed. The big
+ * ESP32 DSP parity port has LANDED (inline-C++ emitters for all DaisySP-
+ * backed kinds, real USB-MIDI, real SSD1306 OLED draw) — the remaining
+ * ESP32 stubs are enumerated below with their reasons.
  *
  * A missing entry is treated as 'native' (the default), which matches the
  * Daisy Seed reality without us having to enumerate 80+ kinds twice.
@@ -28,38 +27,18 @@ import type { BoardTarget } from '@/types/store'
 export type SupportLevel = 'native' | 'stub' | 'unsupported'
 
 /**
- * Kinds that run as stubs on the ESP32-S3 target today. Keep this in one
+ * Kinds that still run as stubs on the ESP32-S3 target. Keep this in one
  * place so flipping a kind to 'native' is a single-line edit.
  */
 const ESP32_STUBS: NodeKind[] = [
-  // synthesis
-  'karplus',
-  'fm_op',
-  'fm2',
-  'wavetable',
-  'drum_kick',
-  'drum_snare',
-  'drum_hat',
-  // filters
-  'formant',
-  // effects
-  'reverb',
-  'chorus',
-  'phaser',
-  'flanger',
-  'pitch_shifter',
-  'vibrato',
-  'freeze',
-  'stereo_widener',
-  'ping_pong',
-  'granulator',
-  // dynamics
-  'noise_gate',
-  // IO — MIDI and OLED aren't hooked up on ESP32 yet
-  'midi_in_note',
-  'midi_in_cc',
-  'midi_out_note',
-  'oled'
+  // audio_in compiles but the target's I2S input path delivers silence
+  // (in_l/in_r hardwired 0 in targets/esp32s3.ts) — flip when real I2S
+  // input lands.
+  'audio_in',
+  // explicit unsupported(): warn + passthrough by design
+  'i2s_in',   // use audio_in / I2S codec binding instead
+  'i2s_out',  // use audio_output — I2S is the default sink
+  'expression' // no expression-to-C++ transpile on ESP32 yet
 ]
 
 /**

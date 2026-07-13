@@ -61,16 +61,24 @@ class ClipProcessor extends AudioWorkletProcessor {
     const outCh = output[0]
     if (!outCh) return true
 
-    const drive = parameters.drive[0] ?? 1
+    const driveParam = parameters.drive[0] ?? 1
     const input = inputs[0]
     const inCh = input && input.length > 0 ? input[0] : undefined
+    // Wave 2 cv_drive at index 1 — replace-semantics override, clamped 1..20.
+    const driveCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
     const n = outCh.length
 
     if (!inCh) {
       outCh.fill(0)
     } else {
       for (let i = 0; i < n; i++) {
-        outCh[i] = this.shape(inCh[i] * drive)
+        let d = driveParam
+        if (driveCv) {
+          d = driveCv[i]
+          if (d < 1) d = 1
+          else if (d > 20) d = 20
+        }
+        outCh[i] = this.shape(inCh[i] * d)
       }
     }
 

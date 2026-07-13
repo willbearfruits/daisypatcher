@@ -43,7 +43,7 @@ const FLASH_MODE_LABEL: Record<DaisyFlashMode, string> = {
   sram: 'SRAM'
 }
 
-type PillState = 'none' | 'dfu' | 'serial'
+type PillState = 'none' | 'running' | 'dfu' | 'serial'
 
 export function StatusBar() {
   const isPlaying = useEditorStore((s) => s.isPlaying)
@@ -55,6 +55,7 @@ export function StatusBar() {
   const deviceLabel = useCompileStore((s) => s.deviceLabel)
   const seedAvailable = useCompileStore((s) => s.seedAvailable)
   const esp32Available = useCompileStore((s) => s.esp32Available)
+  const seedRunningPort = useCompileStore((s) => s.seedRunningPort)
   const toggleLogPanel = useCompileStore((s) => s.toggleLogPanel)
   const detectDevice = useCompileStore((s) => s.detectDevice)
   const target = useEditorStore((s) => s.target)
@@ -74,25 +75,36 @@ export function StatusBar() {
           ? styles.messageError
           : styles.messageIdle
 
+  // Fourth state: the Seed is alive and running its app \u2014 not flashable
+  // yet, but one RESET tap away. Without it a running board reads as
+  // "no device", which is the single most confusing thing in the flash flow.
+  const seedRunning = target === 'daisy_seed' && !deviceAvailable && !!seedRunningPort
+
   const pillState: PillState = serialConnected
     ? 'serial'
     : deviceAvailable
       ? 'dfu'
-      : 'none'
+      : seedRunning
+        ? 'running'
+        : 'none'
 
   const pillClass =
     pillState === 'serial'
       ? styles.pillSerial
       : pillState === 'dfu'
         ? styles.pillDfu
-        : styles.pillNone
+        : pillState === 'running'
+          ? styles.pillRunning
+          : styles.pillNone
 
   const pillLabel =
     pillState === 'serial'
       ? 'Daisy Seed \u00B7 Serial'
       : pillState === 'dfu'
-        ? (deviceLabel ?? (target === 'esp32_s3' ? 'ESP32 \u00B7 Port' : 'Daisy Seed \u00B7 DFU'))
-        : 'no device'
+        ? (deviceLabel ?? (target === 'esp32_s3' ? 'ESP32 \u00B7 Ready' : 'Daisy Seed \u00B7 DFU'))
+        : pillState === 'running'
+          ? 'Daisy Seed \u00B7 Running'
+          : 'no device'
 
   /*
    * "Other board also available" secondary indicator. When the user's
@@ -156,7 +168,7 @@ export function StatusBar() {
           type="button"
           className={`${styles.pill} ${pillClass}`}
           onClick={onPillClick}
-          aria-label={`Device: ${pillLabel}. Click to open details, double-click toggles serial monitor, Ctrl+click toggles build log.`}
+          aria-label={`Device: ${pillLabel}. Click to refresh + open details, double-click toggles serial monitor, Ctrl+click toggles build log.`}
           title={`${pillLabel} \u2014 click: details, double-click: serial monitor, ctrl+click: build log`}
         >
           <svg
@@ -235,6 +247,8 @@ function DevicePopover({ onClose }: { onClose: () => void }) {
   const daisyFlashMode = useEditorStore((s) => s.daisyFlashMode)
   const setDaisyFlashMode = useEditorStore((s) => s.setDaisyFlashMode)
   const deviceDetails = useCompileStore((s) => s.deviceDetails)
+  const deviceAvailable = useCompileStore((s) => s.deviceAvailable)
+  const seedRunningPort = useCompileStore((s) => s.seedRunningPort)
   const toggleMonitor = useSerialStore((s) => s.toggleMonitor)
   const baud = useSerialStore((s) => s.baud)
   const setBaud = useSerialStore((s) => s.setBaud)
@@ -293,6 +307,11 @@ function DevicePopover({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className={styles.popoverBody}>
+        <StateBanner
+          target={target}
+          dfuReady={target === 'daisy_seed' ? dfuDevices.length > 0 : deviceAvailable}
+          runningPort={seedRunningPort}
+        />
         {target === 'daisy_seed' ? (
           <>
             <Row label="Bootloader" value={bootloader} />
@@ -423,6 +442,86 @@ function Esp32Popover({
         </select>
       </div>
     </>
+  )
+}
+
+/**
+ * StateBanner — plain-language summary of the board's state and the exact
+ * next step. Sits above the technical detail rows so a first-time user
+ * reads THIS first: ready / running (tap RESET) / not detected (+ fix).
+ */
+function StateBanner({
+  target,
+  dfuReady,
+  runningPort
+}: {
+  target: string
+  dfuReady: boolean
+  runningPort: string | null
+}) {
+  if (target === 'esp32_s3') {
+    return dfuReady ? (
+      <div className={styles.stateBanner}>
+        <span className={`${styles.stateChip} ${styles.stateChipOk}`}>
+          ready to flash
+        </span>
+        <span className={styles.stateHint}>
+          ESP32 flashes over serial — esptool auto-resets the board, no
+          buttons needed.
+        </span>
+      </div>
+    ) : (
+      <div className={styles.stateBanner}>
+        <span className={`${styles.stateChip} ${styles.stateChipDim}`}>
+          not detected
+        </span>
+        <span className={styles.stateHint}>
+          Connect the DevKit over USB. If the port never appears, the
+          CH340/CP210x bridge driver may be missing.
+        </span>
+      </div>
+    )
+  }
+  // Daisy Seed
+  if (dfuReady) {
+    return (
+      <div className={styles.stateBanner}>
+        <span className={`${styles.stateChip} ${styles.stateChipOk}`}>
+          ready to flash · DFU
+        </span>
+        <span className={styles.stateHint}>
+          The bootloader is waiting. Hit Flash — the write goes to the
+          address shown below.
+        </span>
+      </div>
+    )
+  }
+  if (runningPort) {
+    return (
+      <div className={styles.stateBanner}>
+        <span className={`${styles.stateChip} ${styles.stateChipWarn}`}>
+          running · app firmware
+        </span>
+        <span className={styles.stateHint}>
+          Board is alive on <kbd>{runningPort}</kbd> but not flashable yet.
+          To flash: tap <kbd>RESET</kbd> — the Daisy bootloader gives a
+          short window. No bootloader installed? Hold <kbd>BOOT</kbd>, tap{' '}
+          <kbd>RESET</kbd>, release for system DFU.
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className={styles.stateBanner}>
+      <span className={`${styles.stateChip} ${styles.stateChipDim}`}>
+        not detected
+      </span>
+      <span className={styles.stateHint}>
+        Connect the Seed over USB. Already plugged in? Enter DFU with{' '}
+        <kbd>BOOT</kbd>+<kbd>RESET</kbd>. On Linux, DFU access needs a udev
+        rule — see the README.
+      </span>
+    </div>
   )
 }
 

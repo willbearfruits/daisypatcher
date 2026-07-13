@@ -1,0 +1,45 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "midi1",
+        "kind": "midi_in_note",
+        "position": { "x": 0, "y": 0 },
+        "params": { "channel": "1", "test_note": "none" }
+      },
+      {
+        "id": "osc1",
+        "kind": "oscillator",
+        "position": { "x": 300, "y": 0 },
+        "params": { "frequency": 220, "amplitude": 0.5, "waveform": "sine" }
+      },
+      {
+        "id": "adsr1",
+        "kind": "adsr",
+        "position": { "x": 300, "y": 250 },
+        "params": { "attack": 0.01, "decay": 0.1, "sustain": 0.7, "release": 0.3 }
+      },
+      {
+        "id": "vca1",
+        "kind": "vca",
+        "position": { "x": 600, "y": 0 },
+        "params": { "bias": 0 }
+      },
+      {
+        "id": "out1",
+        "kind": "audio_output",
+        "position": { "x": 900, "y": 0 },
+        "params": {}
+      }
+    ],
+    "connections": [
+      { "id": "c1", "from": { "nodeId": "midi1", "socketId": "pitch" }, "to": { "nodeId": "osc1", "socketId": "pitch_cv" } },
+      { "id": "c2", "from": { "nodeId": "midi1", "socketId": "gate" }, "to": { "nodeId": "adsr1", "socketId": "gate" } },
+      { "id": "c3", "from": { "nodeId": "osc1", "socketId": "out" }, "to": { "nodeId": "vca1", "socketId": "in" } },
+      { "id": "c4", "from": { "nodeId": "adsr1", "socketId": "out" }, "to": { "nodeId": "vca1", "socketId": "cv" } },
+      { "id": "c5", "from": { "nodeId": "vca1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "left" } },
+      { "id": "c6", "from": { "nodeId": "vca1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "right" } }
+    ],
+    "meta": { "name": "midi_note_osc", "sampleRate": 48000, "blockSize": 48 }
+  }
+}

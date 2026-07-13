@@ -27,23 +27,33 @@ class OverdriveProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const drive = parameters.drive[0] ?? 0.3
+    // Wave 2 cv_drive at index 1 — replace-semantics override, clamped 0..1.
+    const driveCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const driveBase = parameters.drive[0] ?? 0.3
     const tone = parameters.tone[0] ?? 0.5
 
-    // Gain goes 1..20 so tanh has something to bite at high drive.
-    const gain = 1 + drive * 19
-    // Normalize post-saturation so low drive stays near unity.
-    const normalize = 1 / Math.tanh(gain)
-
-    // Tone: one-pole LP, cutoff from ~500 Hz to ~10 kHz.
+    // Tone: one-pole LP, cutoff from ~500 Hz to ~10 kHz. Block-rate.
     const cutoff = 500 + tone * 9500
     const rc = 1 / (2 * Math.PI * cutoff)
     const dt = 1 / sampleRate
     const alpha = dt / (rc + dt)
 
+    // Precompute block-rate saturation coefs when no CV.
+    const gainK = 1 + driveBase * 19
+    const normalizeK = 1 / Math.tanh(gainK)
+
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+      let gain = gainK
+      let normalize = normalizeK
+      if (driveCv) {
+        let d = driveCv[i]
+        if (d < 0) d = 0
+        else if (d > 1) d = 1
+        gain = 1 + d * 19
+        normalize = 1 / Math.tanh(gain)
+      }
       const sat = Math.tanh(x * gain) * normalize
       this.lpZ = this.lpZ + alpha * (sat - this.lpZ)
       outCh[i] = this.lpZ

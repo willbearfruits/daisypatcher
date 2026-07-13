@@ -56,18 +56,33 @@ class TremoloProcessor extends AudioWorkletProcessor {
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const cvCh = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const rateReplaceCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const depthCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
-    let rate = parameters.rate[0] ?? 4
-    if (rate < 0.01) rate = 0.01
-    let depth = parameters.depth[0] ?? 0.5
-    if (depth < 0) depth = 0
-    else if (depth > 1) depth = 1
+    let rateBase = parameters.rate[0] ?? 4
+    if (rateBase < 0.01) rateBase = 0.01
+    const depthBase0 = parameters.depth[0] ?? 0.5
+    const depthBase = depthBase0 < 0 ? 0 : depthBase0 > 1 ? 1 : depthBase0
 
     const invSr = 1 / sampleRate
     const n = out.length
     for (let i = 0; i < n; i++) {
-      const cv = cvCh ? cvCh[i] : 0
-      const effRate = rate * Math.pow(2, cv)
+      let effRate: number
+      if (rateReplaceCv) {
+        let r = rateReplaceCv[i]
+        if (r < 0.1) r = 0.1
+        else if (r > 20) r = 20
+        effRate = r
+      } else {
+        const cv = cvCh ? cvCh[i] : 0
+        effRate = rateBase * Math.pow(2, cv)
+      }
+      let depth = depthBase
+      if (depthCv) {
+        depth = depthCv[i]
+        if (depth < 0) depth = 0
+        else if (depth > 1) depth = 1
+      }
       this.phase += effRate * invSr
       if (this.phase >= 1) this.phase -= Math.floor(this.phase)
       else if (this.phase < 0) this.phase -= Math.floor(this.phase)

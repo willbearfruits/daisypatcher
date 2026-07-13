@@ -1,0 +1,43 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "clk1",
+        "kind": "clock",
+        "position": { "x": 0, "y": 0 },
+        "params": { "bpm": 120, "pulse_width": 0.1 }
+      },
+      {
+        "id": "seq1",
+        "kind": "step_seq",
+        "position": { "x": 300, "y": 0 },
+        "params": {
+          "s1": 0, "s2": 0.2, "s3": 0.4, "s4": 0.1,
+          "s5": 0, "s6": 0, "s7": 0, "s8": 0,
+          "g1": "on", "g2": "on", "g3": "on", "g4": "on",
+          "g5": "off", "g6": "off", "g7": "off", "g8": "off"
+        }
+      },
+      {
+        "id": "kp1",
+        "kind": "karplus",
+        "position": { "x": 600, "y": 0 },
+        "params": { "frequency": 220, "damping": 0.5, "feedback": 0.99, "retrigger": "manual" }
+      },
+      {
+        "id": "out1",
+        "kind": "audio_output",
+        "position": { "x": 900, "y": 0 },
+        "params": {}
+      }
+    ],
+    "connections": [
+      { "id": "c1", "from": { "nodeId": "clk1", "socketId": "out" }, "to": { "nodeId": "seq1", "socketId": "clock" } },
+      { "id": "c2", "from": { "nodeId": "seq1", "socketId": "gate" }, "to": { "nodeId": "kp1", "socketId": "trigger" } },
+      { "id": "c3", "from": { "nodeId": "seq1", "socketId": "cv" }, "to": { "nodeId": "kp1", "socketId": "cv_pitch" } },
+      { "id": "c4", "from": { "nodeId": "kp1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "left" } },
+      { "id": "c5", "from": { "nodeId": "kp1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "right" } }
+    ],
+    "meta": { "name": "karplus_seq", "sampleRate": 48000, "blockSize": 48 }
+  }
+}

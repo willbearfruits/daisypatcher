@@ -23,6 +23,7 @@ import {
 import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
+import { useVerificationStore } from '@/state/verificationStore'
 // Imported for its side effect: the updateState store registers its IPC
 // listeners at construction time so update events that fire during
 // first-paint work are captured even before any UI subscribes.
@@ -125,14 +126,20 @@ export default function App() {
     // the first autodetect guess.
     void c.detectBoards()
     void s.refreshPorts()
-    // Single 3s poller drives target-scoped DFU detection, cross-target
-    // autodetect, and port enumeration. One timer, one cadence — no
-    // double-polling or drift between them.
+    // Load the persisted verification table once so the Inspector's
+    // Test-status dot + the VerificationPanel render a non-empty table
+    // on first paint.
+    void useVerificationStore.getState().loadFromDisk()
+    // Single 1s poller drives target-scoped DFU detection, cross-target
+    // autodetect, and port enumeration. Tight cadence because entering DFU
+    // mode (boot+reset) is interactive — a 3s gap made the app feel slow
+    // to notice the board had come up. 1s keeps the CPU cost bounded
+    // (dfu-util -l is ~50–200 ms on Linux/macOS) and the feedback tight.
     const id = window.setInterval(() => {
       void useCompileStore.getState().detectDevice()
       void useCompileStore.getState().detectBoards()
       void useSerialStore.getState().refreshPorts()
-    }, 3000)
+    }, 1000)
     return () => window.clearInterval(id)
   }, [])
 

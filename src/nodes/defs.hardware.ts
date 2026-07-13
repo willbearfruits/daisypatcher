@@ -70,7 +70,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   button: {
     kind: 'button',
     label: 'Button',
-    category: 'io',
+    category: 'hardware',
     description: 'Hardware pushbutton → gate (emulator: value param drives output).',
     inputs: [],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],
@@ -96,7 +96,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   led: {
     kind: 'led',
     label: 'LED',
-    category: 'io',
+    category: 'hardware',
     description: 'Digital LED sink (emulator: silent, hardware: GPIO/PWM out).',
     // cv accepts cv/gate/audio from the store perspective via signal-kind
     // matching; the worklet just ignores the value (no audible output).
@@ -122,7 +122,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   switch_3way: {
     kind: 'switch_3way',
     label: 'Switch 3-way',
-    category: 'io',
+    category: 'hardware',
     description: '3-position toggle → discrete CV (-1 / 0 / +1).',
     inputs: [],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
@@ -146,7 +146,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   i2s_in: {
     kind: 'i2s_in',
     label: 'I2S In',
-    category: 'io',
+    category: 'hardware',
     description: 'External I2S codec stereo input (emulator: silence).',
     inputs: [],
     outputs: [
@@ -159,7 +159,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   i2s_out: {
     kind: 'i2s_out',
     label: 'I2S Out',
-    category: 'io',
+    category: 'hardware',
     description: 'External I2S codec stereo output (emulator: silent tap).',
     inputs: [
       { id: 'left', label: 'L', signal: 'audio' },
@@ -173,7 +173,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   midi_in_note: {
     kind: 'midi_in_note',
     label: 'MIDI Note In',
-    category: 'io',
+    category: 'hardware',
     description: 'Web MIDI note-on/off → pitch (v/oct) + gate + velocity CV.',
     inputs: [],
     outputs: [
@@ -202,7 +202,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   midi_in_cc: {
     kind: 'midi_in_cc',
     label: 'MIDI CC In',
-    category: 'io',
+    category: 'hardware',
     description: 'Web MIDI CC → normalized CV (0..1).',
     inputs: [],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
@@ -222,7 +222,7 @@ export const HARDWARE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   midi_out_note: {
     kind: 'midi_out_note',
     label: 'MIDI Note Out',
-    category: 'io',
+    category: 'hardware',
     description: 'CV/gate/velocity → Web MIDI note-on/off on gate rising edge.',
     inputs: [
       { id: 'pitch', label: 'pitch', signal: 'cv' },

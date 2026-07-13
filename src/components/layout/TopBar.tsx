@@ -15,7 +15,10 @@ import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { newPatch, openPatch, savePatch } from '@/state/patchFile'
 import type { DaisyFlashMode } from '@/types/store'
+import type { NodeKind } from '@/types/graph'
 import { UpdateBadge, UpdateMenu } from './UpdateBadge'
+import { VerificationPanel } from './VerificationPanel'
+import { TestRigModal } from './TestRigModal'
 import styles from './TopBar.module.css'
 
 /* ---------- inline 16x16 icons ---------- */
@@ -77,6 +80,17 @@ function IconCompile() {
   )
 }
 
+/* Checkmark in a circle — "node verified on hardware" / opens the
+   global verification panel. */
+function IconVerify() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5 8.25l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /* Lightning: "send over the wire". */
 function IconFlash() {
   return (
@@ -116,6 +130,15 @@ export function TopBar() {
 
   const canUndo = pastLen > 0
   const canRedo = futureLen > 0
+
+  /*
+   * Verification panel + test-rig modal live here so the checklist can
+   * launch the modal directly from a row's "Test" button without
+   * plumbing a ref through the app. The modal is global — only one
+   * at a time — so two siblings holding it would never collide.
+   */
+  const [verificationOpen, setVerificationOpen] = useState(false)
+  const [testKind, setTestKind] = useState<NodeKind | null>(null)
 
   return (
     <div className={styles.root}>
@@ -161,6 +184,12 @@ export function TopBar() {
 
       <div className={styles.right}>
         <UpdateMenu />
+        <IconButton
+          label="Verification checklist"
+          onClick={() => setVerificationOpen(true)}
+        >
+          <IconVerify />
+        </IconButton>
         <select
           className={styles.select}
           value={skinId}
@@ -188,6 +217,15 @@ export function TopBar() {
           {isPlaying ? '\u25A0' : '\u25B6'}
         </button>
       </div>
+      <VerificationPanel
+        open={verificationOpen}
+        onClose={() => setVerificationOpen(false)}
+        onRetest={(kind) => {
+          setVerificationOpen(false)
+          setTestKind(kind)
+        }}
+      />
+      <TestRigModal kind={testKind} onClose={() => setTestKind(null)} />
     </div>
   )
 }
@@ -266,22 +304,42 @@ function CompileButton() {
 
 function FlashButton() {
   const flashing = useCompileStore((s) => s.flashing)
+  const flashArmed = useCompileStore((s) => s.flashArmed)
   const deviceAvailable = useCompileStore((s) => s.deviceAvailable)
+  const seedRunningPort = useCompileStore((s) => s.seedRunningPort)
   const lastBuildSuccess = useCompileStore((s) => s.lastBuildSuccess)
   const lastFlashSuccess = useCompileStore((s) => s.lastFlashSuccess)
   const glowUntil = useCompileStore((s) => s.lastFlashUntilMs)
   const flash = useCompileStore((s) => s.flash)
+  const cancelArm = useCompileStore((s) => s.cancelArm)
+  const target = useEditorStore((s) => s.target)
 
   const glowing = useGlowPhase(glowUntil)
-  const disabled = flashing || !deviceAvailable || lastBuildSuccess !== true
+  // Daisy is always clickable once a build exists: no DFU just means the
+  // click ARMS (poll for the bootloader, auto-flash on sight). ESP32
+  // still needs its serial port up front \u2014 esptool flashes immediately.
+  const disabled =
+    flashing ||
+    lastBuildSuccess !== true ||
+    (!deviceAvailable && target !== 'daisy_seed')
 
+  // The tooltip is the pre-flight readout: say exactly WHY flashing is
+  // blocked (or what a click will do), not just that it is.
   const title = flashing
     ? 'Flashing\u2026'
-    : !deviceAvailable
-      ? 'No Daisy Seed in DFU mode detected'
+    : flashArmed
+      ? 'Waiting for RESET tap\u2026 click to cancel'
       : lastBuildSuccess !== true
         ? 'Compile successfully before flashing'
-        : 'Flash binary to Daisy Seed'
+        : !deviceAvailable
+          ? target === 'daisy_seed'
+            ? seedRunningPort
+              ? 'Click to arm, then tap RESET \u2014 flashes the moment the bootloader appears'
+              : 'Click to arm \u2014 connect the Seed and tap RESET; flashes when DFU appears'
+            : 'No ESP32 serial port detected \u2014 check cable/driver'
+          : target === 'esp32_s3'
+            ? 'Flash binary to ESP32-S3'
+            : 'Flash binary to Daisy Seed'
 
   const glowClass =
     glowing && lastFlashSuccess === true
@@ -293,10 +351,10 @@ function FlashButton() {
   return (
     <button
       type="button"
-      className={`${styles.bigBtn} ${styles.flashBtn} ${flashing ? styles.busyFlash : ''} ${glowClass}`}
-      onClick={() => void flash()}
+      className={`${styles.bigBtn} ${styles.flashBtn} ${flashing ? styles.busyFlash : ''} ${flashArmed ? styles.armedFlash : ''} ${glowClass}`}
+      onClick={() => (flashArmed ? cancelArm() : void flash())}
       disabled={disabled}
-      aria-label="Flash"
+      aria-label={flashArmed ? 'Cancel armed flash' : 'Flash'}
       aria-busy={flashing || undefined}
       title={title}
     >

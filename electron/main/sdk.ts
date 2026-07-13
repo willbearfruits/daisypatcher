@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
-import { access, mkdir, stat } from 'node:fs/promises'
+import { access, mkdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
@@ -31,7 +31,14 @@ export interface SdkStatus {
   libDaisy: boolean
   daisySP: boolean
   libDaisyBuilt: boolean
-  toolchain: { gcc: boolean; make: boolean; dfuUtil: boolean; pio?: boolean; python3?: boolean }
+  toolchain: {
+    gcc: boolean
+    make: boolean
+    dfuUtil: boolean
+    pio?: boolean
+    python3?: boolean
+    git?: boolean
+  }
   /** Per-target readiness flags. Lets the renderer gate UI without another IPC. */
   esp32Ready?: boolean
   issues: string[]
@@ -75,12 +82,13 @@ function whichBin(name: string): Promise<boolean> {
 }
 
 export async function getSdkStatus(): Promise<SdkStatus> {
-  const [gcc, make, dfuUtil, pio, python3] = await Promise.all([
+  const [gcc, make, dfuUtil, pio, python3, git] = await Promise.all([
     whichBin('arm-none-eabi-gcc'),
     whichBin('make'),
     whichBin('dfu-util'),
     whichBin('pio'),
-    whichBin('python3')
+    whichBin('python3'),
+    whichBin('git')
   ])
 
   const [libDaisyDir, daisySPDir] = await Promise.all([
@@ -104,6 +112,7 @@ export async function getSdkStatus(): Promise<SdkStatus> {
     (await exists(join(DAISYSP_PATH, 'DaisySP-LGPL', 'build', 'libdaisysp-lgpl.a')))
 
   const issues: string[] = []
+  if (!git) issues.push('git not found on PATH — required to install the SDK')
   if (!gcc) issues.push('arm-none-eabi-gcc not found on PATH')
   if (!make) issues.push('make not found on PATH')
   if (!dfuUtil) issues.push('dfu-util not found on PATH')
@@ -118,7 +127,7 @@ export async function getSdkStatus(): Promise<SdkStatus> {
   if (!pio) issues.push('platformio (pio) not found on PATH — run `pip install platformio`')
   if (!python3) issues.push('python3 not found on PATH')
 
-  const toolchain = { gcc, make, dfuUtil, pio, python3 }
+  const toolchain = { gcc, make, dfuUtil, pio, python3, git }
   const ready =
     gcc && make && dfuUtil && libDaisyDir && daisySPDir &&
     libDaisyBuilt && daisySPBuilt && daisySPLgplBuilt
@@ -187,41 +196,65 @@ function runStreamed(
   })
 }
 
+async function cloneFresh(
+  repoUrl: string,
+  destPath: string,
+  emit: (line: string) => void
+): Promise<void> {
+  emit(`[git] cloning ${repoUrl} -> ${destPath}`)
+  await runStreamed(
+    'git',
+    [
+      'clone',
+      '--depth', '1',
+      '--recurse-submodules',
+      '--shallow-submodules',
+      repoUrl,
+      destPath
+    ],
+    { timeoutMs: 15 * 60 * 1000 },
+    emit
+  )
+}
+
 async function ensureRepo(
   repoUrl: string,
   destPath: string,
   emit: (line: string) => void
 ): Promise<void> {
+  // Interrupted-clone recovery: a dir WITHOUT `.git` (clone killed mid-way,
+  // timeouts use SIGKILL) wedges `git clone` forever with "destination path
+  // already exists". Delete it and start clean.
+  if (!(await isDir(join(destPath, '.git'))) && (await isDir(destPath))) {
+    emit(`[git] removing partial clone at ${destPath}`)
+    await rm(destPath, { recursive: true, force: true })
+  }
+
   if (await isDir(join(destPath, '.git'))) {
-    emit(`[git] updating ${destPath}`)
-    // Update to latest on default branch. Electro-Smith uses `master`.
-    await runStreamed(
-      'git',
-      ['-C', destPath, 'fetch', '--depth', '1', 'origin'],
-      { timeoutMs: 5 * 60 * 1000 },
-      emit
-    )
-    await runStreamed(
-      'git',
-      ['-C', destPath, 'reset', '--hard', 'origin/master'],
-      { timeoutMs: 60 * 1000 },
-      emit
-    )
+    try {
+      emit(`[git] updating ${destPath}`)
+      // Update to latest on default branch. Electro-Smith uses `master`.
+      await runStreamed(
+        'git',
+        ['-C', destPath, 'fetch', '--depth', '1', 'origin'],
+        { timeoutMs: 5 * 60 * 1000 },
+        emit
+      )
+      await runStreamed(
+        'git',
+        ['-C', destPath, 'reset', '--hard', 'origin/master'],
+        { timeoutMs: 60 * 1000 },
+        emit
+      )
+    } catch (err) {
+      // Corrupt repo (killed mid-fetch, broken objects) — fetch/reset can't
+      // heal it. One recovery path: wipe and re-clone.
+      emit(`[git] update failed (${(err as Error).message}) — re-cloning fresh`)
+      await rm(destPath, { recursive: true, force: true })
+      await cloneFresh(repoUrl, destPath, emit)
+    }
   } else {
-    emit(`[git] cloning ${repoUrl} -> ${destPath}`)
-    await runStreamed(
-      'git',
-      [
-        'clone',
-        '--depth', '1',
-        '--recurse-submodules',
-        '--shallow-submodules',
-        repoUrl,
-        destPath
-      ],
-      { timeoutMs: 15 * 60 * 1000 },
-      emit
-    )
+    await cloneFresh(repoUrl, destPath, emit)
   }
 
   // Always ensure submodules are populated. libDaisy's Makefile pulls
@@ -245,6 +278,12 @@ async function ensureRepo(
 }
 
 export async function installSdk(emit: (msg: string) => void): Promise<void> {
+  // Preflight: a missing git otherwise surfaces as a raw `spawn git ENOENT`
+  // in the install modal.
+  if (!(await whichBin('git'))) {
+    throw new Error('git not found on PATH — install git, then retry the SDK install')
+  }
+
   await mkdir(SDK_ROOT, { recursive: true })
   await mkdir(WORKSPACE, { recursive: true })
 

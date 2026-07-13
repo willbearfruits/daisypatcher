@@ -28,12 +28,18 @@ import { supportLevel, type SupportLevel } from '@/nodes/targetSupport'
 import styles from './Palette.module.css'
 import { matchScore } from './palettefuzzy'
 
-const CATEGORY_ORDER: NodeDefinition['category'][] = ['source', 'process', 'io']
+const CATEGORY_ORDER: NodeDefinition['category'][] = [
+  'source',
+  'process',
+  'io',
+  'hardware'
+]
 
 const CATEGORY_LABEL: Record<NodeDefinition['category'], string> = {
   source: 'Sources',
   process: 'Process',
-  io: 'I/O'
+  io: 'I/O',
+  hardware: 'Hardware'
 }
 
 export const NODE_DRAG_MIME = 'application/x-dp-node-kind'

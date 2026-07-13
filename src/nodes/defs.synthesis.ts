@@ -18,7 +18,10 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     category: 'source',
     description: 'Karplus-Strong plucked string — noise-burst fed delay loop.',
     inputs: [
-      { id: 'trigger', label: 'trig', signal: 'gate' }
+      { id: 'trigger', label: 'trig', signal: 'gate' },
+      { id: 'cv_pitch', label: 'pitch', signal: 'cv' },
+      { id: 'cv_decay', label: 'decay', signal: 'cv' },
+      { id: 'cv_damp', label: 'damp', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -47,7 +50,9 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Single FM operator — sine with phase-mod input and feedback.',
     inputs: [
       { id: 'mod', label: 'mod', signal: 'audio' },
-      { id: 'pitch_cv', label: 'pitch', signal: 'cv' }
+      { id: 'pitch_cv', label: 'pitch', signal: 'cv' },
+      { id: 'cv_amp', label: 'amp', signal: 'cv' },
+      { id: 'cv_mod_index', label: 'idx', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -65,7 +70,8 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: '2-operator FM — modulator drives carrier, DX7-style voice.',
     inputs: [
       { id: 'pitch_cv', label: 'pitch', signal: 'cv' },
-      { id: 'amp_cv', label: 'amp', signal: 'cv' }
+      { id: 'amp_cv', label: 'amp', signal: 'cv' },
+      { id: 'cv_mod_index', label: 'idx', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -100,7 +106,8 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'West-coast sinusoidal wavefolder, y = sin(π·(x+bias)·fold).',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'fold_cv', label: 'fold', signal: 'cv' }
+      { id: 'fold_cv', label: 'fold', signal: 'cv' },
+      { id: 'cv_bias', label: 'bias', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -114,7 +121,12 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Kick',
     category: 'source',
     description: 'Kick drum — sweeping sine with amp/pitch envelopes.',
-    inputs: [{ id: 'trigger', label: 'trig', signal: 'gate' }],
+    inputs: [
+      { id: 'trigger', label: 'trig', signal: 'gate' },
+      { id: 'cv_tune', label: 'tune', signal: 'cv' },
+      { id: 'cv_decay', label: 'decay', signal: 'cv' },
+      { id: 'cv_punch', label: 'punch', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'tune', label: 'Tune', kind: 'number', min: 30, max: 200, step: 1, default: 60, unit: 'Hz' },
@@ -129,7 +141,12 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Snare',
     category: 'source',
     description: 'Snare — two detuned tri bodies plus HP-filtered noise.',
-    inputs: [{ id: 'trigger', label: 'trig', signal: 'gate' }],
+    inputs: [
+      { id: 'trigger', label: 'trig', signal: 'gate' },
+      { id: 'cv_tune', label: 'tune', signal: 'cv' },
+      { id: 'cv_decay', label: 'decay', signal: 'cv' },
+      { id: 'cv_noise', label: 'noise', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'tune', label: 'Tune', kind: 'number', min: 100, max: 400, step: 1, default: 200, unit: 'Hz' },
@@ -143,7 +160,11 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Hat',
     category: 'source',
     description: 'Hi-hat — six inharmonic squares through a bandpass.',
-    inputs: [{ id: 'trigger', label: 'trig', signal: 'gate' }],
+    inputs: [
+      { id: 'trigger', label: 'trig', signal: 'gate' },
+      { id: 'cv_decay', label: 'decay', signal: 'cv' },
+      { id: 'cv_tone', label: 'tone', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'decay', label: 'Decay', kind: 'number', min: 0.01, max: 0.5, step: 0.01, default: 0.08, unit: 's' },

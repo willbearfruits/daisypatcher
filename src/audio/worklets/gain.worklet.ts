@@ -32,10 +32,12 @@ class GainProcessor extends AudioWorkletProcessor {
     const gainValues = parameters.gain
     const aRate = gainValues.length === outCh.length
 
-    // CV input at index 1: symmetric mod — effective gain = gain * (cv * 0.5 + 1)
+    // CV input at index 1: legacy symmetric mod — effective gain = gain * (cv * 0.5 + 1)
     // so cv=-1 halves, cv=0 unchanged, cv=+1 adds 50%. No cable → bypass entirely.
     const cvCh = inputs[1]?.[0]
     const hasCv = !!(cvCh && cvCh.length > 0)
+    // Wave 2 cv_gain at index 2 — replace semantics, clamped to 0..2.
+    const gainCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
     if (!input || input.length === 0 || !input[0]) {
       // No input connected — emit silence.
@@ -43,17 +45,17 @@ class GainProcessor extends AudioWorkletProcessor {
     } else {
       const inCh = input[0]
       const n = outCh.length
-      if (aRate) {
-        for (let i = 0; i < n; i++) {
-          const g = gainValues[i] * (hasCv ? (cvCh![i] * 0.5 + 1) : 1)
-          outCh[i] = inCh[i] * g
+      for (let i = 0; i < n; i++) {
+        let base: number
+        if (gainCv) {
+          base = gainCv[i]
+          if (base < 0) base = 0
+          else if (base > 2) base = 2
+        } else {
+          base = aRate ? gainValues[i] : gainValues[0]
         }
-      } else {
-        const base = gainValues[0]
-        for (let i = 0; i < n; i++) {
-          const g = base * (hasCv ? (cvCh![i] * 0.5 + 1) : 1)
-          outCh[i] = inCh[i] * g
-        }
+        const g = base * (hasCv ? (cvCh![i] * 0.5 + 1) : 1)
+        outCh[i] = inCh[i] * g
       }
     }
 

@@ -320,6 +320,27 @@
   50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--dp-signal-gate) 8%, transparent); }
 }
 
+/*
+ * Flash armed: waiting for the RESET tap. A slower warning-colored
+ * "breathe" than the busy pulse so it reads as watching, not working.
+ */
+.armedFlash {
+  color: var(--dp-warning);
+  border-color: var(--dp-warning);
+  animation: dp-pulse-armed 1.6s var(--dp-ease) infinite;
+}
+
+@keyframes dp-pulse-armed {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dp-warning) 40%, transparent);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--dp-warning) 7%, transparent);
+    opacity: 0.75;
+  }
+}
+
 .glowSuccess {
   border-color: var(--dp-success);
   color: var(--dp-success);

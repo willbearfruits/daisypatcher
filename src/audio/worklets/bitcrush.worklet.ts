@@ -29,16 +29,34 @@ class BitcrushProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const bits = Math.max(1, Math.min(16, Math.round(parameters.bits[0] ?? 8)))
-    const rate = Math.max(0.01, Math.min(1, parameters.rate[0] ?? 0.5))
+    // Wave 2: cv_bits idx 1, cv_rate idx 2. Replace semantics, clamped.
+    const bitsCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const rateCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const bitsBase = Math.max(1, Math.min(16, Math.round(parameters.bits[0] ?? 8)))
+    const rateBase = Math.max(0.01, Math.min(1, parameters.rate[0] ?? 0.5))
     const mix = parameters.mix[0] ?? 1
 
-    const levels = Math.pow(2, bits - 1)
-    const step = 1 / levels
+    const stepK = 1 / Math.pow(2, bitsBase - 1)
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+
+      let step = stepK
+      if (bitsCv) {
+        let b = bitsCv[i]
+        if (b < 1) b = 1
+        else if (b > 16) b = 16
+        // Round to nearest integer; bits is quantized for clarity.
+        b = Math.round(b)
+        step = 1 / Math.pow(2, b - 1)
+      }
+      let rate = rateBase
+      if (rateCv) {
+        rate = rateCv[i]
+        if (rate < 0.01) rate = 0.01
+        else if (rate > 1) rate = 1
+      }
 
       // Advance the downsampling phase. When it crosses 1, we grab a new
       // sample, quantize, and hold it until the next crossing.

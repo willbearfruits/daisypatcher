@@ -2,8 +2,12 @@
 
 /**
  * Sinusoidal wavefolder — y = sin(π · (x + bias) · fold). Smooth, bounded,
- * CPU-friendly. `fold_cv` adds to the `fold` amount. Registered as
- * `'dp-wavefolder'`.
+ * CPU-friendly. Registered as `'dp-wavefolder'`.
+ *
+ * Inputs:
+ *   0  in      — audio
+ *   1  fold_cv — additive fold amount (offset semantics, preserved)
+ *   2  cv_bias — replaces sidebar `bias` (-1..1)
  */
 
 class WavefolderProcessor extends AudioWorkletProcessor {
@@ -28,9 +32,10 @@ class WavefolderProcessor extends AudioWorkletProcessor {
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const foldCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const biasCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
     const baseFold = parameters.fold[0] ?? 1
-    const bias = parameters.bias[0] ?? 0
+    const sidebarBias = parameters.bias[0] ?? 0
     const pi = this.PI
     const n = outCh.length
 
@@ -39,6 +44,13 @@ class WavefolderProcessor extends AudioWorkletProcessor {
       let fold = baseFold + (foldCv ? foldCv[i] : 0)
       if (fold < 0) fold = 0
       else if (fold > 16) fold = 16
+      // Replace-semantics: CV overrides sidebar bias when connected.
+      let bias = sidebarBias
+      if (biasCv) {
+        bias = biasCv[i]
+        if (bias < -1) bias = -1
+        else if (bias > 1) bias = 1
+      }
       let y = Math.sin(pi * (x + bias) * fold)
       if (!isFinite(y)) y = 0
       if (y > 1) y = 1

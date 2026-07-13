@@ -5,6 +5,12 @@
  * noise highpassed at ~1 kHz. `tone` blends body↔noise. Amp envelope is a
  * short attack and exponential decay.
  *
+ * Inputs:
+ *   0  trigger  — gate
+ *   1  cv_tune  — replaces sidebar `tune` (Hz, clamped 100..400)
+ *   2  cv_decay — replaces sidebar `decay` (s, clamped 0.05..1)
+ *   3  cv_noise — replaces sidebar `tone` (0..1, noise mix)
+ *
  * Registered as `'dp-drum-snare'`.
  */
 
@@ -43,10 +49,28 @@ class DrumSnareProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const trigCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    const tuneCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const decayCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const noiseCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
-    const tune = parameters.tune[0] ?? 200
-    const decay = Math.max(0.05, parameters.decay[0] ?? 0.2)
-    const tone = parameters.tone[0] ?? 0.5
+    let tune = parameters.tune[0] ?? 200
+    if (tuneCv) {
+      tune = tuneCv[0]
+      if (tune < 100) tune = 100
+      else if (tune > 400) tune = 400
+    }
+    let decay = parameters.decay[0] ?? 0.2
+    if (decayCv) {
+      decay = decayCv[0]
+    }
+    if (decay < 0.05) decay = 0.05
+    else if (decay > 1) decay = 1
+    let tone = parameters.tone[0] ?? 0.5
+    if (noiseCv) {
+      tone = noiseCv[0]
+      if (tone < 0) tone = 0
+      else if (tone > 1) tone = 1
+    }
 
     const ampCoef = Math.exp(-1 / (decay * sampleRate))
     // HP cutoff ~ 1 kHz. Simple 1-pole LP coef for the "lowband" we subtract.

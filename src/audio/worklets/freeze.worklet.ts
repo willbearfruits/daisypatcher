@@ -42,18 +42,25 @@ class FreezeProcessor extends AudioWorkletProcessor {
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const gateCh = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const lenCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
-    let bufMs = parameters.buffer_ms[0] ?? 120
-    if (bufMs < 20) bufMs = 20
-    else if (bufMs > FREEZE_MAX_MS) bufMs = FREEZE_MAX_MS
-    const targetSamples = Math.min(this.buffer.length - 2, Math.floor((bufMs / 1000) * sampleRate))
+    const bufBase = parameters.buffer_ms[0] ?? 120
 
     const buf = this.buffer
+    const bufCapacity = this.buffer.length - 2
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
       const g = gateCh ? gateCh[i] : 0
       const gateHigh = g > 0.5
+
+      let bufMs = bufBase
+      if (lenCv) {
+        bufMs = lenCv[i]
+      }
+      if (bufMs < 20) bufMs = 20
+      else if (bufMs > FREEZE_MAX_MS) bufMs = FREEZE_MAX_MS
+      const targetSamples = Math.min(bufCapacity, Math.floor((bufMs / 1000) * sampleRate))
 
       // Rising edge: start a fresh record.
       if (gateHigh && this.prevGate <= 0.5) {

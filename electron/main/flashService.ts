@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { readdir } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import { listSerialPorts } from './serialService'
 
@@ -38,6 +38,43 @@ export const DAISY_FLASH_ADDRS: Record<DaisyFlashMode, string> = {
 
 const DFU_TIMEOUT_MS = 2 * 60 * 1000
 const DETECT_TIMEOUT_MS = 10 * 1000
+
+/**
+ * Fast Linux sysfs probe for the Daisy Seed's DFU enumeration. Reads
+ * `/sys/bus/usb/devices/<n>/idVendor` + `/idProduct` to see if a device
+ * with vendor `0483` and product `df11` is present. Runs in single-digit
+ * milliseconds — compared to `dfu-util -l -v` which regularly takes 200
+ * ms to several seconds depending on USB bus state. Good enough for the
+ * 1 Hz poll; the richer dfu-util details (alt names, DfuSe interface,
+ * bcdDevice) are only needed when the user opens the device popover or
+ * initiates a flash.
+ *
+ * Returns `undefined` on non-Linux so callers fall back to dfu-util.
+ */
+async function linuxHasDaisyDfu(): Promise<boolean | undefined> {
+  if (process.platform !== 'linux') return undefined
+  const base = '/sys/bus/usb/devices'
+  let entries: string[] = []
+  try {
+    entries = await readdir(base)
+  } catch {
+    return undefined
+  }
+  for (const e of entries) {
+    // Skip interface entries like "1-2:1.0" — device nodes have no ':'.
+    if (e.includes(':')) continue
+    try {
+      const [vid, pid] = await Promise.all([
+        readFile(`${base}/${e}/idVendor`, 'utf8'),
+        readFile(`${base}/${e}/idProduct`, 'utf8')
+      ])
+      if (vid.trim() === '0483' && pid.trim() === 'df11') return true
+    } catch {
+      // Device entry without idVendor/idProduct (hubs, interfaces). Skip.
+    }
+  }
+  return false
+}
 
 export interface FlashDevice {
   busId: string
@@ -249,6 +286,45 @@ export async function detectFlashDevices(target: FlashTarget = 'daisy_seed'): Pr
     return { dfuUtilInstalled: false, devices: [], esp32Ports: [], serialPorts, target }
   }
 
+  /*
+   * Fast path: on Linux, check sysfs for `0483:df11`. When absent we
+   * return instantly — the 1 Hz poll stays cheap and the cache clears.
+   *
+   * When sysfs says present but we don't yet have a dfu-util cache, run
+   * dfu-util synchronously THIS ONCE so the device is truly confirmed
+   * reachable before we flag `deviceAvailable=true`. Reason: sysfs sees
+   * the device a moment before libusb/dfu-util can actually open it, so
+   * an earlier version of this code flipped the Flash button on too
+   * early and clicking it raced libusb. Subsequent polls (with a warm
+   * cache) short-circuit — no dfu-util spawn while the device stays
+   * plugged in.
+   */
+  const sysfsPresent = await linuxHasDaisyDfu()
+  if (sysfsPresent === false) {
+    dfuDetailsCache = []
+    const serialPorts = await enumerateSerialInfo()
+    return { dfuUtilInstalled: true, devices: [], esp32Ports: [], serialPorts, target }
+  }
+  if (sysfsPresent === true) {
+    if (dfuDetailsCache.length === 0) {
+      await refreshDfuDetails()
+    } else {
+      // Cache is warm — let a background refresh keep it current so
+      // alts / DfuSe names stay accurate across re-plugs.
+      void refreshDfuDetails()
+    }
+    const serialPorts = await enumerateSerialInfo()
+    return {
+      dfuUtilInstalled: true,
+      devices: dfuDetailsCache,
+      esp32Ports: [],
+      serialPorts,
+      target
+    }
+  }
+  // sysfs unavailable (non-Linux or fs read failed) — fall through to
+  // the synchronous dfu-util path.
+
   // Prefer verbose output — that's where `DfuSe interface name:` lives,
   // which we use to distinguish the Daisy Bootloader from STMicro's
   // system bootloader. Non-zero exit is expected when nothing is
@@ -269,6 +345,39 @@ export async function detectFlashDevices(target: FlashTarget = 'daisy_seed'): Pr
   const devices = all.filter((d) => d.busId === '0483:df11')
   const serialPorts = await enumerateSerialInfo()
   return { dfuUtilInstalled: true, devices, esp32Ports: [], serialPorts, target }
+}
+
+/* ------------------------------------------------------------------
+ * Background dfu-util details cache.
+ *
+ * The sysfs probe tells us presence in milliseconds, but the rich
+ * details (alts, DfuSe interface name, bcdDevice) only come from
+ * `dfu-util -l -v`. We keep the last dfu-util result in a module
+ * cache and refresh it asynchronously so the detect() path never
+ * blocks waiting on dfu-util.
+ * ------------------------------------------------------------------ */
+let dfuDetailsCache: FlashDevice[] = []
+let dfuRefreshInFlight = false
+
+async function refreshDfuDetails(): Promise<void> {
+  if (dfuRefreshInFlight) return
+  dfuRefreshInFlight = true
+  try {
+    const output = await new Promise<string>((resolve) => {
+      execFile(
+        'dfu-util',
+        ['-l', '-v'],
+        { timeout: DETECT_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
+        (_err, stdout, stderr) => resolve(`${stdout ?? ''}\n${stderr ?? ''}`)
+      )
+    })
+    const all = parseDfuList(output)
+    dfuDetailsCache = all.filter((d) => d.busId === '0483:df11')
+  } catch {
+    // Leave the cache as-is on failure; the next sysfs-false sweep clears it.
+  } finally {
+    dfuRefreshInFlight = false
+  }
 }
 
 export async function flashBinary(
@@ -352,8 +461,11 @@ export async function flashBinary(
  * for `pio run --target upload`.
  */
 function findProjectDirFor(binaryPath: string): string | undefined {
-  const pioMarker = '/.pio/'
-  const idx = binaryPath.indexOf(pioMarker)
+  // Normalize separators before searching — on Windows join() produces
+  // backslashes and a '/.pio/' literal never matches, which used to leave
+  // cwd undefined and run `pio run -t upload` in the app's own directory.
+  const normalized = binaryPath.replace(/\\/g, '/')
+  const idx = normalized.indexOf('/.pio/')
   if (idx < 0) return undefined
   return binaryPath.slice(0, idx)
 }

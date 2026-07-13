@@ -16,7 +16,13 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Phaser',
     category: 'process',
     description: 'Cascaded allpass phaser with LFO sweep and feedback.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_rate', label: 'rate', signal: 'cv' },
+      { id: 'cv_depth', label: 'depth', signal: 'cv' },
+      { id: 'cv_feedback', label: 'fb', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 8, step: 0.01, default: 0.5, unit: 'Hz' },
@@ -42,7 +48,13 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Flanger',
     category: 'process',
     description: 'Short modulated delay with signed feedback — metallic shimmer.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_rate', label: 'rate', signal: 'cv' },
+      { id: 'cv_depth', label: 'depth', signal: 'cv' },
+      { id: 'cv_feedback', label: 'fb', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 5, step: 0.01, default: 0.3, unit: 'Hz' },
@@ -57,7 +69,12 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Ping-Pong',
     category: 'process',
     description: 'Stereo ping-pong delay with cross-feedback.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_time', label: 'time', signal: 'cv' },
+      { id: 'cv_feedback', label: 'fb', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
+    ],
     outputs: [
       { id: 'left', label: 'L', signal: 'audio' },
       { id: 'right', label: 'R', signal: 'audio' }
@@ -75,7 +92,10 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Widener',
     category: 'process',
     description: 'Haas stereo widener with mid/side boost.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_width', label: 'width', signal: 'cv' }
+    ],
     outputs: [
       { id: 'left', label: 'L', signal: 'audio' },
       { id: 'right', label: 'R', signal: 'audio' }
@@ -93,7 +113,8 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Grab a buffer on gate and loop it; passthrough otherwise.',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'gate', label: 'gate', signal: 'gate' }
+      { id: 'gate', label: 'gate', signal: 'gate' },
+      { id: 'cv_length', label: 'len', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -106,7 +127,13 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Granulator',
     category: 'process',
     description: 'Granular texture — spawns Hann-windowed grains from a 4s buffer.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_grain_size', label: 'size', signal: 'cv' },
+      { id: 'cv_density', label: 'dens', signal: 'cv' },
+      { id: 'cv_pitch', label: 'pitch', signal: 'cv' },
+      { id: 'cv_spray', label: 'spray', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'grain_size', label: 'Size', kind: 'number', min: 10, max: 200, step: 1, default: 80, unit: 'ms' },
@@ -122,7 +149,10 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Pitch Shift',
     category: 'process',
     description: 'Granular 2-tap overlap-add pitch shifter.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_pitch', label: 'pitch', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'semitones', label: 'St', kind: 'number', min: -24, max: 24, step: 0.1, default: 0 },
@@ -135,7 +165,11 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Formant',
     category: 'process',
     description: 'Three parallel bandpass filters tuned to vowel formants.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_morph', label: 'vowel', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       {
@@ -162,7 +196,14 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Compressor',
     category: 'process',
     description: 'Peak-detector feedforward compressor with makeup gain.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_threshold', label: 'thr', signal: 'cv' },
+      { id: 'cv_ratio', label: 'ratio', signal: 'cv' },
+      { id: 'cv_attack', label: 'atk', signal: 'cv' },
+      { id: 'cv_release', label: 'rel', signal: 'cv' },
+      { id: 'cv_makeup', label: 'make', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'threshold', label: 'Thr', kind: 'number', min: -60, max: 0, step: 0.1, default: -20, unit: 'dB' },
@@ -178,7 +219,11 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Limiter',
     category: 'process',
     description: 'Fast-attack brickwall limiter with soft knee at ceiling.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_ceiling', label: 'ceil', signal: 'cv' },
+      { id: 'cv_release', label: 'rel', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'ceiling', label: 'Ceil', kind: 'number', min: -12, max: 0, step: 0.1, default: -0.3, unit: 'dB' },
@@ -193,7 +238,10 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Envelope-driven gate with hold time and optional sidechain key.',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'key', label: 'key', signal: 'audio' }
+      { id: 'key', label: 'key', signal: 'audio' },
+      { id: 'cv_threshold', label: 'thr', signal: 'cv' },
+      { id: 'cv_attack', label: 'atk', signal: 'cv' },
+      { id: 'cv_release', label: 'rel', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [

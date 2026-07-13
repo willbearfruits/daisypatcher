@@ -38,20 +38,44 @@ class ChorusProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const rate = parameters.rate[0] ?? 0.8
-    const depth = parameters.depth[0] ?? 0.5
-    const mix = parameters.mix[0] ?? 0.5
+    const rateCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const depthCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const mixCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+
+    const rateBase = parameters.rate[0] ?? 0.8
+    const depthBase = parameters.depth[0] ?? 0.5
+    const mixBase = parameters.mix[0] ?? 0.5
 
     const buf = this.buffer
     const bufLen = buf.length
     const sr = sampleRate
     const baseSamples = (BASE_DELAY_MS / 1000) * sr
-    const modSamples = (MOD_RANGE_MS / 1000) * sr * depth
-    const phaseInc = (CHORUS_TWO_PI * rate) / sr
+    const modRange = (MOD_RANGE_MS / 1000) * sr
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+
+      let rate = rateBase
+      if (rateCv) {
+        rate = rateCv[i]
+        if (rate < 0.05) rate = 0.05
+        else if (rate > 8) rate = 8
+      }
+      let depth = depthBase
+      if (depthCv) {
+        depth = depthCv[i]
+        if (depth < 0) depth = 0
+        else if (depth > 1) depth = 1
+      }
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
+      }
+      const modSamples = modRange * depth
+      const phaseInc = (CHORUS_TWO_PI * rate) / sr
 
       // Write dry input into delay line.
       buf[this.writeIdx] = x

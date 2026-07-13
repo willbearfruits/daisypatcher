@@ -1,0 +1,23 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "osc1",
+        "kind": "oscillator",
+        "position": { "x": 0, "y": 0 },
+        "params": { "frequency": 220, "amplitude": 0.5, "waveform": "sine" }
+      },
+      {
+        "id": "out1",
+        "kind": "audio_output",
+        "position": { "x": 300, "y": 0 },
+        "params": {}
+      }
+    ],
+    "connections": [
+      { "id": "c1", "from": { "nodeId": "osc1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "left" } },
+      { "id": "c2", "from": { "nodeId": "osc1", "socketId": "out" }, "to": { "nodeId": "out1", "socketId": "right" } }
+    ],
+    "meta": { "name": "bare_osc_out", "sampleRate": 48000, "blockSize": 48 }
+  }
+}

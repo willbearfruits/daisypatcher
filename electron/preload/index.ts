@@ -206,6 +206,12 @@ const api = {
       onObjectChannel<UpdateStatusPayload>('update:status', cb),
     onProgress: (cb: (payload: UpdateProgressPayload) => void): (() => void) =>
       onObjectChannel<UpdateProgressPayload>('update:progress', cb)
+  },
+  verification: {
+    load: (): Promise<Record<string, unknown>> =>
+      ipcRenderer.invoke('verification:load'),
+    save: (table: Record<string, unknown>): Promise<void> =>
+      ipcRenderer.invoke('verification:save', table)
   }
 }
 

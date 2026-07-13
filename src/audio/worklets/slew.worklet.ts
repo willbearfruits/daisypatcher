@@ -27,15 +27,33 @@ class SlewProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    // Wave 2 CV: cv_rise at index 1, cv_fall at index 2.
+    const riseCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const fallCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
-    const rise = parameters.rise[0] ?? 0.05
-    const fall = parameters.fall[0] ?? 0.05
-    const riseCoeff = rise > 0 ? Math.exp(-1 / (rise * sampleRate)) : 0
-    const fallCoeff = fall > 0 ? Math.exp(-1 / (fall * sampleRate)) : 0
+    const riseBase = parameters.rise[0] ?? 0.05
+    const fallBase = parameters.fall[0] ?? 0.05
+    // Precompute block-rate coeffs; recomputed per-sample if CV is present.
+    const riseCoeffK = riseBase > 0 ? Math.exp(-1 / (riseBase * sampleRate)) : 0
+    const fallCoeffK = fallBase > 0 ? Math.exp(-1 / (fallBase * sampleRate)) : 0
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+      let riseCoeff = riseCoeffK
+      if (riseCv) {
+        let r = riseCv[i]
+        if (r < 0) r = 0
+        else if (r > 2) r = 2
+        riseCoeff = r > 0 ? Math.exp(-1 / (r * sampleRate)) : 0
+      }
+      let fallCoeff = fallCoeffK
+      if (fallCv) {
+        let f = fallCv[i]
+        if (f < 0) f = 0
+        else if (f > 2) f = 2
+        fallCoeff = f > 0 ? Math.exp(-1 / (f * sampleRate)) : 0
+      }
       const coeff = x > this.state ? riseCoeff : fallCoeff
       this.state = x + (this.state - x) * coeff
       outCh[i] = this.state

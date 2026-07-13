@@ -7,6 +7,12 @@
  * on the trigger input also plucks. The `retrigger` enum schedules periodic
  * auto-plucks so the node is audible with no gate wired.
  *
+ * Inputs:
+ *   0  trigger  — gate, rising edge plucks
+ *   1  cv_pitch — when connected, replaces sidebar `frequency` (Hz, clamped)
+ *   2  cv_decay — when connected, replaces sidebar `feedback` (loop decay, clamped 0.9..0.999)
+ *   3  cv_damp  — when connected, replaces sidebar `damping` (0..1)
+ *
  * Registered as `'dp-karplus'`.
  */
 
@@ -80,23 +86,48 @@ class KarplusProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const trigCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    const pitchCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const decayCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const dampCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
-    const freq = parameters.frequency[0] ?? 220
-    const damping = parameters.damping[0] ?? 0.5
-    const feedback = parameters.feedback[0] ?? 0.99
+    const sidebarFreq = parameters.frequency[0] ?? 220
+    const sidebarDamping = parameters.damping[0] ?? 0.5
+    const sidebarFeedback = parameters.feedback[0] ?? 0.99
 
-    const targetLen = Math.max(2, Math.min(this.buffer.length - 1, Math.floor(sampleRate / freq)))
-    this.lineLen = targetLen
-
-    // One-pole LP coef: damping 0 → no LP (coef 0), damping 1 → very dark.
-    const lpCoef = damping * 0.95
     const autoPeriod = this.autoPeriodSamples()
 
     const buf = this.buffer
-    const len = this.lineLen
     const n = outCh.length
 
     for (let i = 0; i < n; i++) {
+      // Replace-semantics CV: when connected, CV value overrides sidebar.
+      // Clamp to the sidebar's min/max to keep the DSP stable.
+      let freq = sidebarFreq
+      if (pitchCv) {
+        freq = pitchCv[i]
+        if (freq < 20) freq = 20
+        else if (freq > 2000) freq = 2000
+      }
+      let feedback = sidebarFeedback
+      if (decayCv) {
+        feedback = decayCv[i]
+        if (feedback < 0.9) feedback = 0.9
+        else if (feedback > 0.999) feedback = 0.999
+      }
+      let damping = sidebarDamping
+      if (dampCv) {
+        damping = dampCv[i]
+        if (damping < 0) damping = 0
+        else if (damping > 1) damping = 1
+      }
+
+      const targetLen = Math.max(2, Math.min(this.buffer.length - 1, Math.floor(sampleRate / freq)))
+      this.lineLen = targetLen
+      const len = this.lineLen
+
+      // One-pole LP coef: damping 0 → no LP (coef 0), damping 1 → very dark.
+      const lpCoef = damping * 0.95
+
       // Trigger handling.
       const tv = trigCh ? trigCh[i] : 0
       const nowHigh = tv >= 0.5

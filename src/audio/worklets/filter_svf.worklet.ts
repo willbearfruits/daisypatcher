@@ -41,6 +41,9 @@ class FilterSvfProcessor extends AudioWorkletProcessor {
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const freqCv = inputs[1]?.[0]
     const hasCv = !!(freqCv && freqCv.length > 0)
+    // Replace-semantics CV (Wave 2): when connected, overrides sidebar.
+    const cutoffCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const resCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
     const lp = outputs[0]?.[0]
     const hp = outputs[1]?.[0]
@@ -60,10 +63,11 @@ class FilterSvfProcessor extends AudioWorkletProcessor {
     const twoPiOverSr = (2 * Math.PI) / sampleRate // only used if we wanted exact; Chamberlin uses 2*sin(PI*f/sr)
     void twoPiOverSr
 
-    // Precompute block-rate coefficients when CV is inactive and params are k-rate.
+    // Precompute block-rate coefficients when no CV at all and params are k-rate.
     let fCoeff = 0
     let dampCoeff = 0
-    if (!hasCv && !freqIsA && !resIsA) {
+    const perSample = hasCv || freqIsA || resIsA || !!cutoffCv || !!resCv
+    if (!perSample) {
       let freq = freqArr[0]
       if (freq < 20) freq = 20
       else if (freq > maxFreq) freq = maxFreq
@@ -83,14 +87,16 @@ class FilterSvfProcessor extends AudioWorkletProcessor {
 
       let f = fCoeff
       let damp = dampCoeff
-      if (hasCv || freqIsA || resIsA) {
-        let freq = freqIsA ? freqArr[i] : freqArr[0]
+      if (perSample) {
+        // cv_cutoff overrides sidebar directly; freq_cv still applies as
+        // octave-scaling on top (legacy behavior per Wave 2 policy).
+        let freq = cutoffCv ? cutoffCv[i] : (freqIsA ? freqArr[i] : freqArr[0])
         if (hasCv) freq = freq * Math.pow(2, freqCv![i])
         if (freq < 20) freq = 20
         else if (freq > maxFreq) freq = maxFreq
         f = 2 * Math.sin((Math.PI * freq) / sampleRate)
 
-        let r = resIsA ? resArr[i] : resArr[0]
+        let r = resCv ? resCv[i] : (resIsA ? resArr[i] : resArr[0])
         if (r < 0) r = 0
         else if (r > 1) r = 1
         damp = 2 * (1 - r)

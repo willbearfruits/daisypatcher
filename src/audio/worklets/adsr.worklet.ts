@@ -37,16 +37,21 @@ class AdsrProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const gateIn = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    // Wave 4 CVs: 1=attack, 2=decay, 3=sustain, 4=release. Replace semantics.
+    const atkCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const decCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const susCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
+    const relCv = inputs[4] && inputs[4].length > 0 ? inputs[4][0] : undefined
 
-    const a = Math.max(0.001, parameters.attack[0] ?? 0.01)
-    const d = Math.max(0.001, parameters.decay[0] ?? 0.1)
-    const s = parameters.sustain[0] ?? 0.7
-    const r = Math.max(0.001, parameters.release[0] ?? 0.3)
+    const aBase = Math.max(0.001, parameters.attack[0] ?? 0.01)
+    const dBase = Math.max(0.001, parameters.decay[0] ?? 0.1)
+    const sBase = parameters.sustain[0] ?? 0.7
+    const rBase = Math.max(0.001, parameters.release[0] ?? 0.3)
 
-    const attackInc = 1 / (a * sampleRate)
-    const decayDec = (1 - s) / (d * sampleRate)
-    // Release per-sample decrement depends on level at note-off.
-    const releaseDecPerUnit = 1 / (r * sampleRate)
+    const sr = sampleRate
+    const attackIncK = 1 / (aBase * sr)
+    const decayDecK = (1 - sBase) / (dBase * sr)
+    const releaseDecPerUnitK = 1 / (rBase * sr)
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
@@ -60,6 +65,36 @@ class AdsrProcessor extends AudioWorkletProcessor {
           this.releaseFrom = this.value
         }
         this.gateHigh = nowHigh
+      }
+
+      // Per-sample effective params (replace semantics when CV wired; clamp to param ranges).
+      let s = sBase
+      if (susCv) {
+        s = susCv[i]
+        if (s < 0) s = 0
+        else if (s > 1) s = 1
+      }
+
+      let attackInc = attackIncK
+      if (atkCv) {
+        let a = atkCv[i]
+        if (a < 0.001) a = 0.001
+        else if (a > 4) a = 4
+        attackInc = 1 / (a * sr)
+      }
+      let decayDec = susCv ? (1 - s) / (dBase * sr) : decayDecK
+      if (decCv) {
+        let d = decCv[i]
+        if (d < 0.001) d = 0.001
+        else if (d > 4) d = 4
+        decayDec = (1 - s) / (d * sr)
+      }
+      let releaseDecPerUnit = releaseDecPerUnitK
+      if (relCv) {
+        let r = relCv[i]
+        if (r < 0.001) r = 0.001
+        else if (r > 8) r = 8
+        releaseDecPerUnit = 1 / (r * sr)
       }
 
       switch (this.stage) {

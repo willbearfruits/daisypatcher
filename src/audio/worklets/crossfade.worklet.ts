@@ -29,11 +29,21 @@ class CrossfadeProcessor extends AudioWorkletProcessor {
     const a = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const b = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
     const cv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    // Wave 2 cv_mix at index 3 — replace-semantics override of `mix`.
+    const mixCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
     const mix = parameters.mix[0] ?? 0.5
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
-      let t = cv ? cv[i] + mix : mix
+      // When cv_mix is connected, it replaces the sidebar mix entirely.
+      // Legacy `cv` input stays as additive offset for back-compat.
+      let base = mix
+      if (mixCv) {
+        base = mixCv[i]
+        if (base < 0) base = 0
+        else if (base > 1) base = 1
+      }
+      let t = cv ? cv[i] + base : base
       if (t < 0) t = 0
       else if (t > 1) t = 1
       const theta = t * XF_HALF_PI

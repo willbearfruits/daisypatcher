@@ -25,17 +25,23 @@ class RingModProcessor extends AudioWorkletProcessor {
 
     const aCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const bCh = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const mixCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
-    let mix = parameters.mix[0] ?? 1
-    if (mix < 0) mix = 0
-    else if (mix > 1) mix = 1
-    const inv = 1 - mix
+    let mixBase = parameters.mix[0] ?? 1
+    if (mixBase < 0) mixBase = 0
+    else if (mixBase > 1) mixBase = 1
 
     const n = out.length
     for (let i = 0; i < n; i++) {
       const a = aCh ? aCh[i] : 0
       const b = bCh ? bCh[i] : 0
-      out[i] = a * inv + (a * b) * mix
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
+      }
+      out[i] = a * (1 - mix) + (a * b) * mix
     }
 
     for (let c = 1; c < (outputs[0]?.length ?? 1); c++) outputs[0][c].set(out)

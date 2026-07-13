@@ -62,9 +62,12 @@ class FormantProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const morph = parameters.morph[0] ?? 0
+    const morphCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const mixCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+
+    const morphBase = parameters.morph[0] ?? 0
     const q = parameters.q[0] ?? 5
-    const mix = parameters.mix[0] ?? 0.6
+    const mixBase = parameters.mix[0] ?? 0.6
 
     // Determine blended formant frequencies.
     const curIdx = FORMANT_ORDER.indexOf(this.vowel)
@@ -82,19 +85,25 @@ class FormantProcessor extends AudioWorkletProcessor {
     const b2 = this.b2
     const a1 = this.a1
     const a2 = this.a2
-    for (let f = 0; f < 3; f++) {
-      let freq = cur[f] * (1 - morph) + nxt[f] * morph
-      if (freq < 20) freq = 20
-      else if (freq > nyquistCap) freq = nyquistCap
-      const w0 = (2 * Math.PI * freq) / sr
-      const cosW = Math.cos(w0)
-      const sinW = Math.sin(w0)
-      const alpha = sinW / (2 * q)
-      const a0 = 1 + alpha
-      b0[f] = alpha / a0
-      b2[f] = -alpha / a0
-      a1[f] = (-2 * cosW) / a0
-      a2[f] = (1 - alpha) / a0
+    const computeCoefs = (morphV: number): void => {
+      for (let f = 0; f < 3; f++) {
+        let freq = cur[f] * (1 - morphV) + nxt[f] * morphV
+        if (freq < 20) freq = 20
+        else if (freq > nyquistCap) freq = nyquistCap
+        const w0 = (2 * Math.PI * freq) / sr
+        const cosW = Math.cos(w0)
+        const sinW = Math.sin(w0)
+        const alpha = sinW / (2 * q)
+        const a0 = 1 + alpha
+        b0[f] = alpha / a0
+        b2[f] = -alpha / a0
+        a1[f] = (-2 * cosW) / a0
+        a2[f] = (1 - alpha) / a0
+      }
+    }
+
+    if (!morphCv) {
+      computeCoefs(morphBase)
     }
 
     const z1 = this.z1
@@ -103,6 +112,18 @@ class FormantProcessor extends AudioWorkletProcessor {
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
+      if (morphCv) {
+        let m = morphCv[i]
+        if (m < 0) m = 0
+        else if (m > 1) m = 1
+        computeCoefs(m)
+      }
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
+      }
       let wet = 0
       for (let f = 0; f < 3; f++) {
         const y = b0[f] * x + z1[f]

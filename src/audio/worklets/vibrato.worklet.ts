@@ -31,17 +31,18 @@ class VibratoProcessor extends AudioWorkletProcessor {
     if (!out) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    const rateCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const depthCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
-    let rate = parameters.rate[0] ?? 6
-    if (rate < 0.01) rate = 0.01
-    let depth = parameters.depth[0] ?? 0.3
-    if (depth < 0) depth = 0
-    else if (depth > 1) depth = 1
+    let rateBase = parameters.rate[0] ?? 6
+    if (rateBase < 0.01) rateBase = 0.01
+    let depthBase = parameters.depth[0] ?? 0.3
+    if (depthBase < 0) depthBase = 0
+    else if (depthBase > 1) depthBase = 1
 
     const sr = sampleRate
     const centreSamples = 0.005 * sr // 5 ms
-    const modSamples = 0.002 * sr * depth // ±2ms * depth
-    const phaseInc = (Math.PI * 2 * rate) / sr
+    const modRange = 0.002 * sr // ±2ms base, scaled by depth
     const buf = this.buffer
     const bufLen = this.bufSize
     const maxDelay = bufLen - 2
@@ -50,6 +51,21 @@ class VibratoProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
       buf[this.writeIdx] = x
+
+      let rate = rateBase
+      if (rateCv) {
+        rate = rateCv[i]
+        if (rate < 0.1) rate = 0.1
+        else if (rate > 15) rate = 15
+      }
+      let depth = depthBase
+      if (depthCv) {
+        depth = depthCv[i]
+        if (depth < 0) depth = 0
+        else if (depth > 1) depth = 1
+      }
+      const modSamples = modRange * depth
+      const phaseInc = (Math.PI * 2 * rate) / sr
 
       let delaySamples = centreSamples + Math.sin(this.lfoPhase) * modSamples
       if (delaySamples < 1) delaySamples = 1

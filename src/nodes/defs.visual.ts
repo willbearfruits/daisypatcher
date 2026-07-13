@@ -73,7 +73,7 @@ export const VISUAL_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   oled: {
     kind: 'oled',
     label: 'OLED',
-    category: 'io',
+    category: 'hardware',
     description: 'SSD1306 0.96" display — compose its contents inside the node.',
     inputs: [
       { id: 'a', label: 'A', signal: 'cv' },

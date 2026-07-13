@@ -1,0 +1,82 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "knob1",
+        "kind": "knob_in",
+        "position": { "x": 0, "y": 0 },
+        "params": { "bindingId": "hwpot1", "channel": "1", "value": 0.5, "min": 0, "max": 1 }
+      },
+      {
+        "id": "btn1",
+        "kind": "button",
+        "position": { "x": 0, "y": 200 },
+        "params": { "bindingId": "hwbtn1", "mode": "momentary", "value": 0 }
+      },
+      {
+        "id": "led1",
+        "kind": "led",
+        "position": { "x": 300, "y": 200 },
+        "params": { "bindingId": "hwled1", "threshold": 0.5, "mode": "gate" }
+      },
+      {
+        "id": "oled1",
+        "kind": "oled",
+        "position": { "x": 300, "y": 0 },
+        "params": {
+          "bindingId": "hwoled1",
+          "elements": "[{\"kind\":\"text\",\"x\":0,\"y\":0,\"text\":\"DAISY\",\"size\":1},{\"kind\":\"value\",\"x\":0,\"y\":16,\"binding\":\"a\",\"decimals\":2,\"unit\":\"\"}]"
+        }
+      },
+      {
+        "id": "out1",
+        "kind": "audio_output",
+        "position": { "x": 600, "y": 0 },
+        "params": {}
+      }
+    ],
+    "connections": [
+      { "id": "c1", "from": { "nodeId": "knob1", "socketId": "out" }, "to": { "nodeId": "oled1", "socketId": "a" } },
+      { "id": "c2", "from": { "nodeId": "btn1", "socketId": "out" }, "to": { "nodeId": "led1", "socketId": "in" } }
+    ],
+    "meta": { "name": "hw_oled_knob_button", "sampleRate": 48000, "blockSize": 48 }
+  },
+  "hardware": {
+    "board": "daisy_seed",
+    "components": [
+      {
+        "id": "hwpot1",
+        "kind": "pot",
+        "label": "Cutoff Knob",
+        "position": { "x": 40, "y": 40 },
+        "pins": { "wiper": "D15" },
+        "config": {}
+      },
+      {
+        "id": "hwbtn1",
+        "kind": "button",
+        "label": "Trig Button",
+        "position": { "x": 80, "y": 40 },
+        "pins": { "io": "D0" },
+        "config": {}
+      },
+      {
+        "id": "hwled1",
+        "kind": "led",
+        "label": "Status LED",
+        "position": { "x": 120, "y": 40 },
+        "pins": { "anode": "D13" },
+        "config": {}
+      },
+      {
+        "id": "hwoled1",
+        "kind": "oled_ssd1306",
+        "label": "Main OLED",
+        "position": { "x": 160, "y": 40 },
+        "pins": { "sda": "D12", "scl": "D11" },
+        "config": {}
+      }
+    ],
+    "meta": { "name": "hw_oled_knob_button" }
+  }
+}

@@ -28,7 +28,7 @@ export interface ParamDef {
 export interface NodeDefinition {
   kind: NodeKind
   label: string
-  category: 'source' | 'process' | 'io'
+  category: 'source' | 'process' | 'io' | 'hardware'
   description: string
   inputs: Socket[]
   outputs: Socket[]
@@ -98,7 +98,11 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'LFO',
     category: 'source',
     description: 'Low-frequency oscillator emitting CV.',
-    inputs: [],
+    inputs: [
+      { id: 'cv_rate', label: 'rate', signal: 'cv' },
+      { id: 'cv_depth', label: 'depth', signal: 'cv' },
+      { id: 'cv_offset', label: 'offset', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
       { id: 'frequency', label: 'Rate', kind: 'number', min: 0.01, max: 20, step: 0.01, default: 1, unit: 'Hz' },
@@ -139,7 +143,8 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Linear amplifier.',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'cv', label: 'cv', signal: 'cv' }
+      { id: 'cv', label: 'cv', signal: 'cv' },
+      { id: 'cv_gain', label: 'gain', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -171,7 +176,11 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
       { id: 'in1', label: '1', signal: 'audio' },
       { id: 'in2', label: '2', signal: 'audio' },
       { id: 'in3', label: '3', signal: 'audio' },
-      { id: 'in4', label: '4', signal: 'audio' }
+      { id: 'in4', label: '4', signal: 'audio' },
+      { id: 'cv_level1', label: 'lvl1', signal: 'cv' },
+      { id: 'cv_level2', label: 'lvl2', signal: 'cv' },
+      { id: 'cv_level3', label: 'lvl3', signal: 'cv' },
+      { id: 'cv_level4', label: 'lvl4', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -189,7 +198,8 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Stereo panner with optional CV.',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'cv', label: 'cv', signal: 'cv' }
+      { id: 'cv', label: 'cv', signal: 'cv' },
+      { id: 'cv_pan', label: 'pan', signal: 'cv' }
     ],
     outputs: [
       { id: 'left', label: 'L', signal: 'audio' },
@@ -205,7 +215,10 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Clip',
     category: 'process',
     description: 'Hard clipper / saturator.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_drive', label: 'drive', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'drive', label: 'Drive', kind: 'number', min: 1, max: 20, step: 0.1, default: 1 },
@@ -259,7 +272,8 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     inputs: [
       { id: 'a', label: 'a', signal: 'audio' },
       { id: 'b', label: 'b', signal: 'audio' },
-      { id: 'cv', label: 'cv', signal: 'cv' }
+      { id: 'cv', label: 'cv', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -275,7 +289,9 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'State-variable filter (LP/HP/BP/Notch).',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'freq_cv', label: 'freq', signal: 'cv' }
+      { id: 'freq_cv', label: 'freq', signal: 'cv' },
+      { id: 'cv_cutoff', label: 'cutoff', signal: 'cv' },
+      { id: 'cv_res', label: 'res', signal: 'cv' }
     ],
     outputs: [
       { id: 'lp', label: 'LP', signal: 'audio' },
@@ -296,7 +312,9 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Moog-style ladder lowpass filter.',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'freq_cv', label: 'freq', signal: 'cv' }
+      { id: 'freq_cv', label: 'freq', signal: 'cv' },
+      { id: 'cv_cutoff', label: 'cutoff', signal: 'cv' },
+      { id: 'cv_res', label: 'res', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -311,7 +329,13 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'ADSR',
     category: 'process',
     description: 'ADSR envelope, gated CV output.',
-    inputs: [{ id: 'gate', label: 'gate', signal: 'gate' }],
+    inputs: [
+      { id: 'gate', label: 'gate', signal: 'gate' },
+      { id: 'cv_attack', label: 'atk', signal: 'cv' },
+      { id: 'cv_decay', label: 'dec', signal: 'cv' },
+      { id: 'cv_sustain', label: 'sus', signal: 'cv' },
+      { id: 'cv_release', label: 'rel', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
       { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.01, unit: 's' },
@@ -326,7 +350,11 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'AR',
     category: 'process',
     description: 'Attack-release envelope, gated CV output.',
-    inputs: [{ id: 'gate', label: 'gate', signal: 'gate' }],
+    inputs: [
+      { id: 'gate', label: 'gate', signal: 'gate' },
+      { id: 'cv_attack', label: 'atk', signal: 'cv' },
+      { id: 'cv_release', label: 'rel', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
       { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.01, unit: 's' },
@@ -339,7 +367,11 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Env Follower',
     category: 'process',
     description: 'Audio → CV envelope of |in|.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_attack', label: 'atk', signal: 'cv' },
+      { id: 'cv_release', label: 'rel', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
       { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 1, step: 0.001, default: 0.01, unit: 's' },
@@ -353,7 +385,11 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Slew',
     category: 'process',
     description: 'Asymmetric slew limiter / portamento.',
-    inputs: [{ id: 'in', label: 'in', signal: 'cv' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'cv' },
+      { id: 'cv_rise', label: 'rise', signal: 'cv' },
+      { id: 'cv_fall', label: 'fall', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
       { id: 'rise', label: 'Rise', kind: 'number', min: 0, max: 2, step: 0.001, default: 0.05, unit: 's' },
@@ -397,6 +433,34 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ]
   },
 
+  range: {
+    kind: 'range',
+    label: 'Range',
+    category: 'process',
+    description:
+      'Remap an input range to an output range (Max/PD-style `scale`). ' +
+      'out = out_min + (in - in_min) * (out_max - out_min) / (in_max - in_min). ' +
+      'Clamp toggle to keep the output in bounds.',
+    inputs: [{ id: 'in', label: 'in', signal: 'cv' }],
+    outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
+    params: [
+      { id: 'in_min',  label: 'In Min',  kind: 'number', min: -48000, max: 48000, step: 0.01, default: 0 },
+      { id: 'in_max',  label: 'In Max',  kind: 'number', min: -48000, max: 48000, step: 0.01, default: 1 },
+      { id: 'out_min', label: 'Out Min', kind: 'number', min: -48000, max: 48000, step: 0.01, default: 0 },
+      { id: 'out_max', label: 'Out Max', kind: 'number', min: -48000, max: 48000, step: 0.01, default: 1 },
+      {
+        id: 'clamp',
+        label: 'Clamp',
+        kind: 'enum',
+        default: 'on',
+        options: [
+          { value: 'on', label: 'On' },
+          { value: 'off', label: 'Off' }
+        ]
+      }
+    ]
+  },
+
   comparator: {
     kind: 'comparator',
     label: 'Compare',
@@ -404,7 +468,8 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'CV → gate; high when in > ref + threshold.',
     inputs: [
       { id: 'in', label: 'in', signal: 'cv' },
-      { id: 'ref', label: 'ref', signal: 'cv' }
+      { id: 'ref', label: 'ref', signal: 'cv' },
+      { id: 'cv_threshold', label: 'thr', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],
     params: [
@@ -420,7 +485,10 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     description: 'Delay line with feedback.',
     inputs: [
       { id: 'in', label: 'in', signal: 'audio' },
-      { id: 'time_cv', label: 'time', signal: 'cv' }
+      { id: 'time_cv', label: 'time', signal: 'cv' },
+      { id: 'cv_time', label: 'time*', signal: 'cv' },
+      { id: 'cv_feedback', label: 'fb', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
@@ -434,8 +502,13 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     kind: 'reverb',
     label: 'Reverb',
     category: 'process',
-    description: 'Simple reverb (stub pass-through for now).',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    description: 'Reverb — DaisySP ReverbSc on Seed, Freeverb-style combs+allpasses on ESP32.',
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_size', label: 'size', signal: 'cv' },
+      { id: 'cv_damp', label: 'damp', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'size', label: 'Size', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
@@ -449,7 +522,10 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Overdrive',
     category: 'process',
     description: 'Overdrive with tone shaping.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_drive', label: 'drive', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'drive', label: 'Drive', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.3 },
@@ -462,7 +538,12 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Chorus',
     category: 'process',
     description: 'LFO-modulated short delay chorus.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_rate', label: 'rate', signal: 'cv' },
+      { id: 'cv_depth', label: 'depth', signal: 'cv' },
+      { id: 'cv_mix', label: 'mix', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 8, step: 0.01, default: 0.8, unit: 'Hz' },
@@ -476,7 +557,11 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     label: 'Bitcrush',
     category: 'process',
     description: 'Bit + sample-rate reduction.',
-    inputs: [{ id: 'in', label: 'in', signal: 'audio' }],
+    inputs: [
+      { id: 'in', label: 'in', signal: 'audio' },
+      { id: 'cv_bits', label: 'bits', signal: 'cv' },
+      { id: 'cv_rate', label: 'rate', signal: 'cv' }
+    ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'bits', label: 'Bits', kind: 'number', min: 1, max: 16, step: 1, default: 8 },
@@ -515,8 +600,11 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
   knob_in: {
     kind: 'knob_in',
     label: 'Knob',
-    category: 'io',
-    description: 'Hardware knob → CV (emulator: value param drives output).',
+    category: 'hardware',
+    description:
+      'Hardware knob → CV. `min`/`max` set the output range: 0..1 normalized ' +
+      '(default), 0..4095 for raw 12-bit ADC, 20..20000 for Hz, etc. In the ' +
+      'emulator `value` (0..1) is linearly mapped into that range.',
     inputs: [],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
@@ -534,14 +622,16 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
           { value: '6', label: '6' }
         ]
       },
-      { id: 'value', label: 'Val', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 }
+      { id: 'value', label: 'Val', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
+      { id: 'min',   label: 'Min', kind: 'number', min: -48000, max: 48000, step: 0.01, default: 0 },
+      { id: 'max',   label: 'Max', kind: 'number', min: -48000, max: 48000, step: 0.01, default: 1 }
     ]
   },
 
   gate_in: {
     kind: 'gate_in',
     label: 'Gate In',
-    category: 'io',
+    category: 'hardware',
     description: 'Hardware gate input (emulator: value param drives output).',
     inputs: [],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],

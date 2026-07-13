@@ -32,20 +32,41 @@ class LimiterProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const ceilDb = parameters.ceiling[0] ?? -0.3
-    const release = parameters.release[0] ?? 0.05
+    // Wave 2 CVs: cv_ceiling at idx 1, cv_release at idx 2 (replace semantics).
+    const ceilCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const relCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const ceilDbBase = parameters.ceiling[0] ?? -0.3
+    const releaseBase = parameters.release[0] ?? 0.05
 
-    const ceilLin = Math.pow(10, ceilDb / 20)
     const sr = sampleRate
     const atkCoef = 1 - Math.exp(-1 / (LIMITER_ATTACK * sr))
-    const relCoef = 1 - Math.exp(-1 / (release * sr))
-    // Soft-knee onset: start easing gain starting knee dB below ceiling.
-    const kneeStartLin = Math.pow(10, (ceilDb - LIMITER_KNEE_DB) / 20)
+    // Precompute when no CV is wired.
+    const ceilLinK = Math.pow(10, ceilDbBase / 20)
+    const kneeStartLinK = Math.pow(10, (ceilDbBase - LIMITER_KNEE_DB) / 20)
+    const relCoefK = 1 - Math.exp(-1 / (releaseBase * sr))
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
       const absX = x < 0 ? -x : x
+
+      let ceilLin = ceilLinK
+      let kneeStartLin = kneeStartLinK
+      if (ceilCv) {
+        let cdb = ceilCv[i]
+        if (cdb < -12) cdb = -12
+        else if (cdb > 0) cdb = 0
+        ceilLin = Math.pow(10, cdb / 20)
+        kneeStartLin = Math.pow(10, (cdb - LIMITER_KNEE_DB) / 20)
+      }
+      let relCoef = relCoefK
+      if (relCv) {
+        let r = relCv[i]
+        if (r < 0.01) r = 0.01
+        else if (r > 2) r = 2
+        relCoef = 1 - Math.exp(-1 / (r * sr))
+      }
+
       if (absX > this.env) this.env += (absX - this.env) * atkCoef
       else this.env += (absX - this.env) * relCoef
       if (!isFinite(this.env) || this.env < 0) this.env = 0

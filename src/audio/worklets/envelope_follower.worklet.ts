@@ -27,15 +27,33 @@ class EnvelopeFollowerProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    // Wave 4 CVs: 1=attack, 2=release. Replace semantics.
+    const atkCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const relCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
 
-    const aT = Math.max(0.001, parameters.attack[0] ?? 0.01)
-    const rT = Math.max(0.001, parameters.release[0] ?? 0.1)
-    const aCoeff = Math.exp(-1 / (aT * sampleRate))
-    const rCoeff = Math.exp(-1 / (rT * sampleRate))
+    const aBase = Math.max(0.001, parameters.attack[0] ?? 0.01)
+    const rBase = Math.max(0.001, parameters.release[0] ?? 0.1)
+    const sr = sampleRate
+    const aCoeffK = Math.exp(-1 / (aBase * sr))
+    const rCoeffK = Math.exp(-1 / (rBase * sr))
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? Math.abs(inCh[i]) : 0
+      let aCoeff = aCoeffK
+      if (atkCv) {
+        let a = atkCv[i]
+        if (a < 0.001) a = 0.001
+        else if (a > 1) a = 1
+        aCoeff = Math.exp(-1 / (a * sr))
+      }
+      let rCoeff = rCoeffK
+      if (relCv) {
+        let r = relCv[i]
+        if (r < 0.001) r = 0.001
+        else if (r > 2) r = 2
+        rCoeff = Math.exp(-1 / (r * sr))
+      }
       const coeff = x > this.env ? aCoeff : rCoeff
       this.env = x + (this.env - x) * coeff
       let v = this.env

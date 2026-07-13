@@ -46,15 +46,10 @@ class PitchShifterProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
-    const semis = parameters.semitones[0] ?? 0
-    const mix = parameters.mix[0] ?? 1
+    const pitchCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
 
-    const ratio = Math.pow(2, semis / 12)
-    // Read advance per sample, relative to write: if ratio > 1 (up-pitch),
-    // read heads advance faster than 1, so they approach write and wrap more.
-    // Delta = 1 - ratio: negative for up-pitch means read falls behind write
-    // which means we reach fresher samples faster. Standard formulation.
-    const readStep = 1 - ratio
+    const semisBase = parameters.semitones[0] ?? 0
+    const mix = parameters.mix[0] ?? 1
 
     const buf = this.buffer
     const bufLen = buf.length
@@ -65,6 +60,15 @@ class PitchShifterProcessor extends AudioWorkletProcessor {
       const x = inCh ? inCh[i] : 0
 
       buf[this.writeIdx] = x
+
+      let semis = semisBase
+      if (pitchCv) {
+        semis = pitchCv[i]
+        if (semis < -24) semis = -24
+        else if (semis > 24) semis = 24
+      }
+      const ratio = Math.pow(2, semis / 12)
+      const readStep = 1 - ratio
 
       // Head positions are offsets BEHIND the write pointer.
       // Advance the head offsets.

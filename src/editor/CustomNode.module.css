@@ -116,6 +116,10 @@
   background: var(--dp-signal-gate);
 }
 
+.accent-hardware {
+  background: var(--dp-signal-clock);
+}
+
 .body {
   display: flex;
   flex-direction: column;

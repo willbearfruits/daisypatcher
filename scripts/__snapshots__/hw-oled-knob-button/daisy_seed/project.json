@@ -1,0 +1,95 @@
+{
+  "nodes": [
+    {
+      "id": "knob1",
+      "kind": "knob_in",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "params": {
+        "bindingId": "hwpot1",
+        "channel": "1",
+        "value": 0.5,
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
+      "id": "btn1",
+      "kind": "button",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "params": {
+        "bindingId": "hwbtn1",
+        "mode": "momentary",
+        "value": 0
+      }
+    },
+    {
+      "id": "led1",
+      "kind": "led",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "params": {
+        "bindingId": "hwled1",
+        "threshold": 0.5,
+        "mode": "gate"
+      }
+    },
+    {
+      "id": "oled1",
+      "kind": "oled",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "params": {
+        "bindingId": "hwoled1",
+        "elements": "[{\"kind\":\"text\",\"x\":0,\"y\":0,\"text\":\"DAISY\",\"size\":1},{\"kind\":\"value\",\"x\":0,\"y\":16,\"binding\":\"a\",\"decimals\":2,\"unit\":\"\"}]"
+      }
+    },
+    {
+      "id": "out1",
+      "kind": "audio_output",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": {
+        "nodeId": "knob1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "oled1",
+        "socketId": "a"
+      }
+    },
+    {
+      "id": "c2",
+      "from": {
+        "nodeId": "btn1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "led1",
+        "socketId": "in"
+      }
+    }
+  ],
+  "meta": {
+    "name": "hw_oled_knob_button",
+    "sampleRate": 48000,
+    "blockSize": 48
+  }
+}

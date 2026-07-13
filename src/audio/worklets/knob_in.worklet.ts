@@ -20,6 +20,24 @@ class KnobInProcessor extends AudioWorkletProcessor {
         minValue: 0,
         maxValue: 1,
         automationRate: 'k-rate'
+      },
+      {
+        // Output-range endpoints. `value` (0..1) linearly maps onto
+        // [min, max]; defaults preserve the historical 0..1 behaviour.
+        // Any real numbers accepted — user sets 0..4095 for raw 12-bit
+        // ADC range, 20..20000 for Hz, -1..1 for bipolar CV, etc.
+        name: 'min',
+        defaultValue: 0,
+        minValue: -1e6,
+        maxValue: 1e6,
+        automationRate: 'k-rate'
+      },
+      {
+        name: 'max',
+        defaultValue: 1,
+        minValue: -1e6,
+        maxValue: 1e6,
+        automationRate: 'k-rate'
       }
     ]
   }
@@ -52,7 +70,12 @@ class KnobInProcessor extends AudioWorkletProcessor {
     if (!ch) return true
 
     const v = parameters.value[0] ?? 0.5
-    ch.fill(v)
+    const lo = parameters.min[0] ?? 0
+    const hi = parameters.max[0] ?? 1
+    // Linear map [0, 1] → [min, max]. Works unchanged for inverted
+    // ranges (e.g. max < min) — useful for ranges where knob-up means
+    // "less of the thing".
+    ch.fill(lo + v * (hi - lo))
     for (let c = 1; c < output.length; c++) output[c].set(ch)
     return true
   }

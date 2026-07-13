@@ -45,6 +45,9 @@ class FilterMoogProcessor extends AudioWorkletProcessor {
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const freqCv = inputs[1]?.[0]
     const hasCv = !!(freqCv && freqCv.length > 0)
+    // Wave 2 replace-semantics CV.
+    const cutoffCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const resCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
     const freqArr = parameters.frequency
     const resArr = parameters.resonance
@@ -55,7 +58,8 @@ class FilterMoogProcessor extends AudioWorkletProcessor {
 
     let fCoeff = 0
     let kCoeff = 0
-    if (!hasCv && !freqIsA && !resIsA) {
+    const perSample = hasCv || freqIsA || resIsA || !!cutoffCv || !!resCv
+    if (!perSample) {
       let freq = freqArr[0]
       if (freq < 20) freq = 20
       else if (freq > maxFreq) freq = maxFreq
@@ -78,14 +82,16 @@ class FilterMoogProcessor extends AudioWorkletProcessor {
 
       let f = fCoeff
       let k = kCoeff
-      if (hasCv || freqIsA || resIsA) {
-        let freq = freqIsA ? freqArr[i] : freqArr[0]
+      if (perSample) {
+        // cv_cutoff replaces sidebar directly; freq_cv still applies as
+        // octave-scaling on top (legacy behavior).
+        let freq = cutoffCv ? cutoffCv[i] : (freqIsA ? freqArr[i] : freqArr[0])
         if (hasCv) freq = freq * Math.pow(2, freqCv![i])
         if (freq < 20) freq = 20
         else if (freq > maxFreq) freq = maxFreq
         f = 2 * Math.sin((Math.PI * freq) / sampleRate)
         if (f > 1) f = 1
-        let r = resIsA ? resArr[i] : resArr[0]
+        let r = resCv ? resCv[i] : (resIsA ? resArr[i] : resArr[0])
         if (r < 0) r = 0
         else if (r > 1) r = 1
         k = r * 4

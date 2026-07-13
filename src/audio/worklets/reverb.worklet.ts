@@ -103,30 +103,51 @@ class ReverbProcessor extends AudioWorkletProcessor {
     if (!outCh) return true
 
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
+    // Wave 3 replace-semantics CVs.
+    const sizeCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
+    const dampCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
+    const mixCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
-    let size = parameters.size[0] ?? 0.5
-    let damp = parameters.damp[0] ?? 0.5
-    let mix = parameters.mix[0] ?? 0.3
-    if (size < 0) size = 0
-    else if (size > 1) size = 1
-    if (damp < 0) damp = 0
-    else if (damp > 1) damp = 1
-    if (mix < 0) mix = 0
-    else if (mix > 1) mix = 1
+    const sizeBase0 = parameters.size[0] ?? 0.5
+    const dampBase0 = parameters.damp[0] ?? 0.5
+    const mixBase0 = parameters.mix[0] ?? 0.3
+    const sizeBase = sizeBase0 < 0 ? 0 : sizeBase0 > 1 ? 1 : sizeBase0
+    const dampBase = dampBase0 < 0 ? 0 : dampBase0 > 1 ? 1 : dampBase0
+    const mixBase = mixBase0 < 0 ? 0 : mixBase0 > 1 ? 1 : mixBase0
 
-    const roomsize = size * 0.28 + 0.7 // 0.7 .. 0.98
-    const dampVal = damp * 0.4
     const combs = this.combs
     const allpasses = this.allpasses
-    for (let i = 0; i < combs.length; i++) {
-      combs[i].feedback = roomsize
-      combs[i].setDamp(dampVal)
-    }
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const dry = inCh ? inCh[i] : 0
       const input = dry * FIXED_GAIN
+
+      let size = sizeBase
+      if (sizeCv) {
+        size = sizeCv[i]
+        if (size < 0) size = 0
+        else if (size > 1) size = 1
+      }
+      let damp = dampBase
+      if (dampCv) {
+        damp = dampCv[i]
+        if (damp < 0) damp = 0
+        else if (damp > 1) damp = 1
+      }
+      let mix = mixBase
+      if (mixCv) {
+        mix = mixCv[i]
+        if (mix < 0) mix = 0
+        else if (mix > 1) mix = 1
+      }
+
+      const roomsize = size * 0.28 + 0.7
+      const dampVal = damp * 0.4
+      for (let k = 0; k < combs.length; k++) {
+        combs[k].feedback = roomsize
+        combs[k].setDamp(dampVal)
+      }
 
       let wet = 0
       // Parallel combs.
