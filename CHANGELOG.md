@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Planned for v0.5: MIDI learn, Silkscreen mode + drill-template export, patch
+bank / snapshots, recording emulator output to .wav, ESP32 I2S MCLK
+pin-config fix. See `V0_5_PLAN.md`.
+
+## [0.4.2] - 2026-07-14
+
 ### Added
 - Daisy Seed OLED rendering: draw calls are now emitted as a real `DrawFrame()` (all element kinds — text, value, meters, scope, shapes) refreshed at ~30 fps from the main loop; previously the draw body was emitted as comments. Verified with an arm-none-eabi compile of the generated project.
 - ESP32-S3 real I2S audio input: full-duplex on the existing I2S port, RX sharing BCLK/WS with TX; `audio_in` is no longer a stub on ESP32. Verified with a PlatformIO compile of a generated duplex project.
@@ -27,10 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Inspector: click a value to type it exactly ("1.2k" works), double-click a slider to reset, Shift-drag for fine adjust, log tapers on frequency-style params, and CV-driven params show a "CV" tag with the live incoming value instead of a dead slider.
 - First-run: empty canvas shows an invitation with a one-click starter patch; the hardware view got a matching empty state.
 - Entrance motion for all modals and popovers; true animated folds for palette sections (all disabled under reduced-motion).
-
-Still planned for v0.5: MIDI learn, Silkscreen mode + drill-template export,
-patch bank / snapshots, recording emulator output to .wav, ESP32 I2S MCLK
-pin-config fix.
 
 ## [0.4.1] - 2026-07-13
 
