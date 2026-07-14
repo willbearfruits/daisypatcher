@@ -297,21 +297,29 @@ export function Palette() {
                   <span className={styles.sectionCount}>{items.length}</span>
                 )}
               </button>
+              {/* Outer element animates the 0fr/1fr fold; the inner element
+                  clips content and carries the list/grid layout. */}
               <div
                 className={`${styles.sectionBody} ${
-                  compact ? styles.sectionBodyGrid : ''
-                } ${isCollapsed ? styles.sectionBodyCollapsed : ''}`}
+                  isCollapsed ? styles.sectionBodyCollapsed : ''
+                }`}
                 aria-hidden={isCollapsed}
               >
-                {items.map(({ def, support }) => (
-                  <PaletteCard
-                    key={def.kind}
-                    def={def}
-                    support={support}
-                    filterMode={filter}
-                    compact={compact}
-                  />
-                ))}
+                <div
+                  className={`${styles.sectionBodyInner} ${
+                    compact ? styles.sectionBodyGrid : ''
+                  }`}
+                >
+                  {items.map(({ def, support }) => (
+                    <PaletteCard
+                      key={def.kind}
+                      def={def}
+                      support={support}
+                      filterMode={filter}
+                      compact={compact}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           )

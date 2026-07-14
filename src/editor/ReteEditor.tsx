@@ -112,6 +112,26 @@ function resolveSocket(
   return node.inputs[sd.key]?.socket
 }
 
+/** Duration of the refused-drop socket flash; matches --dp-motion-slow. */
+const REJECT_FLASH_MS = 320
+
+/**
+ * Brief danger flash on the socket that refused a drop. The attribute lands
+ * on the `RefSocket` wrapper (`SocketData.element`); styles live in
+ * style.css. Cleared by timeout rather than `animationend` so reduced-motion
+ * users — whose flash is a static color swap — get the same duration.
+ */
+function flashRejectedSocket(element: HTMLElement): void {
+  element.removeAttribute('data-dp-reject')
+  // Force a style flush so re-adding the attribute restarts the CSS
+  // animation when the user re-drops on the same socket in quick succession.
+  void element.offsetWidth
+  element.setAttribute('data-dp-reject', '')
+  window.setTimeout(() => {
+    element.removeAttribute('data-dp-reject')
+  }, REJECT_FLASH_MS)
+}
+
 function clientToCanvas(
   container: HTMLElement,
   transform: { x: number; y: number; k: number },
@@ -206,12 +226,51 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
               useEditorStore
                 .getState()
                 .setStatus({ kind: 'warn', message: 'signal type mismatch' })
+              // Same-side drops were already rejected silently above; this
+              // branch is a real "tried to plug it in, wrong signal" refusal.
+              flashRejectedSocket(to.element)
               return false
             }
             return true
           }
         })
     )
+
+    /* ----- drag-time socket compatibility highlight ----- */
+
+    // While a cable drag is in flight, the picked socket's signal kind and
+    // side are stamped on the editor root; CSS in style.css dims every socket
+    // that `canMakeConnection` would reject (wrong signal kind, or same side
+    // as the pick). The origin socket is marked so it stays lit. Cleared on
+    // `connectiondrop`, which fires on every drag-end path (created, dropped
+    // on empty canvas, or a declined existing-connection re-pick) — a drop
+    // refused on a socket keeps click-to-connect mode alive, so the
+    // highlight correctly persists there.
+    let dragOriginEl: HTMLElement | null = null
+    const clearDragHighlight = (): void => {
+      container.removeAttribute('data-dp-drag-signal')
+      container.removeAttribute('data-dp-drag-side')
+      if (dragOriginEl) {
+        dragOriginEl.removeAttribute('data-dp-drag-origin')
+        dragOriginEl = null
+      }
+    }
+    connection.addPipe((ctx) => {
+      if (ctx.type === 'connectionpick') {
+        const sd = ctx.data.socket
+        const picked = resolveSocket(editor, sd)
+        if (picked instanceof SignalSocket) {
+          container.setAttribute('data-dp-drag-signal', picked.signal)
+          container.setAttribute('data-dp-drag-side', sd.side)
+          dragOriginEl = sd.element
+          dragOriginEl.setAttribute('data-dp-drag-origin', '')
+        }
+      }
+      if (ctx.type === 'connectiondrop') {
+        clearDragHighlight()
+      }
+      return ctx
+    })
 
     render.addPreset(
       ReactPresets.classic.setup({
@@ -461,6 +520,7 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
       }
       unsubscribe()
       resizeObserver.disconnect()
+      clearDragHighlight()
       transformListenersRef.current.clear()
       accumulatorRef.current?.destroy()
       area.destroy()

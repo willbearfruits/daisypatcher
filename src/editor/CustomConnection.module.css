@@ -34,24 +34,8 @@
   transition: none;
 }
 
-.path-invalid {
-  stroke: var(--dp-danger);
-  animation: dp-cable-flash var(--dp-motion-normal) var(--dp-ease) infinite alternate;
-}
-
-@keyframes dp-cable-flash {
-  from {
-    opacity: 0.4;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* Static styling only when the user asks for reduced motion. */
-@media (prefers-reduced-motion: reduce) {
-  .path-invalid {
-    animation: none;
-    opacity: 1;
-  }
-}
+/*
+ * Rejected drops flash the refusing SOCKET, not the cable — see the
+ * data-dp-reject rules in style.css. (An unused `.path-invalid` cable flash
+ * used to live here; removed when the socket flash shipped.)
+ */

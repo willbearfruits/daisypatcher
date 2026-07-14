@@ -26,26 +26,51 @@
   /* The SVG handles pin-row, role-badge, drag pointer events directly. */
 }
 
+/* Empty state — same visual language as the patch canvas empty state
+ * (CanvasShell.module.css): accent mark with glow, dim mono copy, delayed
+ * fade-in so transient zero-component frames never flash it. Top-anchored
+ * so it doesn't cover the board silhouette centered below. */
 .emptyHint {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--dp-space-2);
   padding-top: 10%;
   pointer-events: none;
+  animation: emptyHintFadeIn var(--dp-motion-slow) var(--dp-ease) 120ms backwards;
 }
 
-.emptyHint > span {
+@keyframes emptyHintFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.emptyMark {
+  color: var(--dp-accent);
+  opacity: 0.8;
+  filter: drop-shadow(0 0 6px var(--dp-accent));
+  margin-bottom: var(--dp-space-1);
+}
+
+.emptyTitle {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+}
+
+.emptySub {
   font-family: var(--dp-font-mono);
   font-size: var(--dp-fs-xs);
   color: var(--dp-text-dim);
   text-transform: lowercase;
   letter-spacing: 0.08em;
-  background: var(--dp-surface-sunken);
-  padding: 6px 14px;
-  border-radius: var(--dp-radius-sm);
-  border: 1px solid var(--dp-border);
+  max-width: 420px;
+  text-align: center;
 }
 
 /* Cursor affordances for pan. */

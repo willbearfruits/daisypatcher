@@ -251,19 +251,32 @@
   text-transform: none;
 }
 
+/*
+ * Section fold — grid-template-rows 0fr/1fr technique. The outer element
+ * is a single-row grid whose row track animates between 1fr (natural
+ * height) and 0fr; the inner element (min-height: 0; overflow: hidden)
+ * clips its content as the track collapses. Unlike a max-height sentinel,
+ * the transition always spans the section's true height, so collapse and
+ * expand take exactly the token duration with no dead time or snap.
+ */
 .sectionBody {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--dp-motion-normal) var(--dp-ease);
+}
+
+.sectionBodyInner {
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: var(--dp-space-1);
-  overflow: hidden;
-  max-height: 4000px;
-  transition: max-height var(--dp-motion-fast) var(--dp-ease),
-              opacity var(--dp-motion-fast) var(--dp-ease);
   opacity: 1;
+  transition: opacity var(--dp-motion-normal) var(--dp-ease);
 }
 
 /*
- * Grid variant — applied to the section body in compact mode so the
+ * Grid variant — applied to the inner body in compact mode so the
  * catalog fits many more items per screen. Tiles auto-fill so widening
  * the palette adds columns.
  */
@@ -271,13 +284,22 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
   gap: var(--dp-space-1);
-  max-height: none;
 }
 
 .sectionBodyCollapsed {
-  max-height: 0;
+  grid-template-rows: 0fr;
+}
+
+.sectionBodyCollapsed .sectionBodyInner {
   opacity: 0;
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sectionBody,
+  .sectionBodyInner {
+    transition: none;
+  }
 }
 
 /* Empty state — search/target-filter yielded no cards. */

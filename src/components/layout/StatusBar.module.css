@@ -284,6 +284,24 @@
   padding: 0;
   text-transform: none;
   letter-spacing: 0;
+  /* Rises out of the device pill it is anchored to (bottom-left corner). */
+  transform-origin: bottom left;
+  animation: dp-popover-in var(--dp-motion-normal) var(--dp-ease-out);
+}
+
+/* Entrance only — exit is a clean unmount by design. Starts 4px closer to
+   the anchor pill and settles upward into place. */
+@keyframes dp-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover {
+    animation: none;
+  }
 }
 
 .popoverHeader {

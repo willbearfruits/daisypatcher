@@ -43,6 +43,8 @@ import type { NodeKind } from '@/types/graph'
 import { HardwarePalette } from '@/hardware/HardwarePalette'
 import { HardwareView } from '@/hardware/HardwareView'
 import { HardwareInspector } from '@/hardware/HardwareInspector'
+import { PerformView } from '@/perform/PerformView'
+import { usePerformMode } from '@/perform/performMode'
 
 export default function App() {
   const reteRef = useRef<ReteEditorHandle>(null)
@@ -180,33 +182,52 @@ function MainShell({ reteRef }: { reteRef: React.RefObject<ReteEditorHandle | nu
   const setPaletteW = useEditorStore((s) => s.setPaletteW)
   const setInspectorW = useEditorStore((s) => s.setInspectorW)
   const isPatch = view === 'patch'
+  const isPerform = view === 'perform'
+  // Perform's ARRANGE mode brings the right panel back (HardwareInspector
+  // for the selected component); PLAY stays full-bleed.
+  const performMode = usePerformMode((s) => s.mode)
+  const performArrange = isPerform && performMode === 'arrange'
+  const performFullBleed = isPerform && !performArrange
 
   // Five tracks: [palette] [handle] [canvas] [handle] [inspector]. The
   // handles are fixed 4px so the main canvas absorbs all remaining space.
   // When the palette is collapsed we override its track width to a thin
   // rail — the resize handle is also disabled in that mode (there's
   // nothing to drag against).
+  //
+  // Perform view is the stage: in PLAY both side panels collapse to zero
+  // so the pedal gets the full width; ARRANGE re-opens the inspector
+  // track. The panels stay in the grid (5 children, fixed track order)
+  // so the Rete canvas never remounts.
   const effectivePaletteW = paletteCollapsed ? COLLAPSED_PALETTE_W : paletteW
-  const gridTemplateColumns = `${effectivePaletteW}px 4px 1fr 4px ${inspectorW}px`
+  const gridTemplateColumns = isPerform
+    ? performArrange
+      ? `0px 0px 1fr 4px ${inspectorW}px`
+      : '0px 0px 1fr 0px 0px'
+    : `${effectivePaletteW}px 4px 1fr 4px ${inspectorW}px`
 
   return (
     <div className="dp-app">
       <TopBar />
       <div className="dp-main" style={{ gridTemplateColumns }}>
-        <aside className="dp-panel">
-          {isPatch ? <Palette /> : <HardwarePalette />}
+        <aside className="dp-panel" style={isPerform ? { border: 'none', overflow: 'hidden' } : undefined}>
+          {isPatch ? <Palette /> : isPerform ? null : <HardwarePalette />}
         </aside>
-        <ResizeHandle
-          orientation="vertical"
-          ariaLabel="Resize palette"
-          onResize={(dx) => {
-            // No-op while collapsed — dragging a thin rail would just
-            // auto-expand it unexpectedly. User should uncollapse first.
-            if (paletteCollapsed) return
-            setPaletteW(paletteW + dx)
-          }}
-          onReset={() => setPaletteW(DEFAULT_PALETTE_W)}
-        />
+        {isPerform ? (
+          <div aria-hidden />
+        ) : (
+          <ResizeHandle
+            orientation="vertical"
+            ariaLabel="Resize palette"
+            onResize={(dx) => {
+              // No-op while collapsed — dragging a thin rail would just
+              // auto-expand it unexpectedly. User should uncollapse first.
+              if (paletteCollapsed) return
+              setPaletteW(paletteW + dx)
+            }}
+            onReset={() => setPaletteW(DEFAULT_PALETTE_W)}
+          />
+        )}
         <main className="dp-canvas-shell">
           {/* Patch canvas — stays mounted so Rete.js state persists. */}
           <div style={{ position: 'absolute', inset: 0, display: isPatch ? 'block' : 'none' }}>
@@ -220,18 +241,27 @@ function MainShell({ reteRef }: { reteRef: React.RefObject<ReteEditorHandle | nu
               <SignalLegend />
             </CanvasShell>
           </div>
-          {/* Hardware canvas — fresh mount each time; its state lives in the store. */}
-          {!isPatch ? <HardwareView /> : null}
+          {/* Hardware / Perform canvases — fresh mount each time; their
+              state lives in the store. */}
+          {view === 'hardware' ? <HardwareView /> : null}
+          {isPerform ? <PerformView /> : null}
         </main>
-        <ResizeHandle
-          orientation="vertical"
-          ariaLabel="Resize inspector"
-          // Drag right shrinks the inspector; drag left grows it. Negate dx.
-          onResize={(dx) => setInspectorW(inspectorW - dx)}
-          onReset={() => setInspectorW(DEFAULT_INSPECTOR_W)}
-        />
-        <aside className="dp-inspector">
-          {isPatch ? <Inspector /> : <HardwareInspector />}
+        {performFullBleed ? (
+          <div aria-hidden />
+        ) : (
+          <ResizeHandle
+            orientation="vertical"
+            ariaLabel="Resize inspector"
+            // Drag right shrinks the inspector; drag left grows it. Negate dx.
+            onResize={(dx) => setInspectorW(inspectorW - dx)}
+            onReset={() => setInspectorW(DEFAULT_INSPECTOR_W)}
+          />
+        )}
+        <aside
+          className="dp-inspector"
+          style={performFullBleed ? { border: 'none', overflow: 'hidden' } : undefined}
+        >
+          {isPatch ? <Inspector /> : isPerform && !performArrange ? null : <HardwareInspector />}
         </aside>
       </div>
       <StatusBar />

@@ -56,6 +56,15 @@ export const crtPatchbay: Skin = {
     rendering: 'crackle'
   },
 
+  // Perform finish: dark green-black coat, phosphor-green silkscreen —
+  // the pedal as a piece of terminal hardware.
+  perform: {
+    coat: '#0f2618',
+    coatDeep: '#040c07',
+    ink: '#3dfa7e',
+    hardware: '#08110b'
+  },
+
   shadowSm: '0 1px 2px rgba(0, 0, 0, 0.65)',
   shadowMd: '0 4px 18px rgba(0, 0, 0, 0.7), 0 1px 2px rgba(0, 0, 0, 0.75)',
   shadowGlow: '0 0 30px rgba(61, 250, 126, 0.22)',

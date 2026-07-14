@@ -1,0 +1,125 @@
+/**
+ * PerformView styles — the stage the pedal sits on. The pedal itself is
+ * all SVG (see PerformView.tsx / performShapes.tsx); this module only
+ * styles the room around it: backdrop, cursors, and the empty-state
+ * invitation. Tokens only — no hex.
+ */
+
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* Stage lighting: a soft key light above the pedal, vignetted edges. */
+  background:
+    radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--dp-perform-coat) 7%, transparent) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 120%, color-mix(in srgb, black 40%, transparent) 0%, transparent 60%),
+    var(--dp-bg);
+}
+
+.svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sweepable {
+  cursor: ns-resize;
+}
+
+.pressable {
+  cursor: pointer;
+}
+
+.panning {
+  cursor: grabbing;
+}
+
+.panReady {
+  cursor: grab;
+}
+
+/* ARRANGE mode — the transparent hit rects that sit on top of every
+ * component. The cursor is the mode's entire affordance language: grab
+ * over a component, grabbing while it moves. */
+.arrangeHit {
+  cursor: grab;
+}
+
+.arrangeHitDragging {
+  cursor: grabbing;
+}
+
+.selectionRing {
+  fill: color-mix(in srgb, var(--dp-accent) 6%, transparent);
+  stroke: var(--dp-accent);
+  stroke-width: 0.6;
+  pointer-events: none;
+}
+
+/* Empty state — same language as the hardware view's hint, plus a real
+ * action that jumps to the Hardware view. */
+.emptyHint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dp-space-2);
+  pointer-events: none;
+  animation: emptyHintFadeIn var(--dp-motion-slow) var(--dp-ease) 120ms backwards;
+}
+
+@keyframes emptyHintFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.emptyMark {
+  color: var(--dp-accent);
+  opacity: 0.8;
+  filter: drop-shadow(0 0 6px var(--dp-accent));
+  margin-bottom: var(--dp-space-1);
+}
+
+.emptyTitle {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dp-text-muted);
+}
+
+.emptySub {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  max-width: 46ch;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.emptyAction {
+  pointer-events: auto;
+  margin-top: var(--dp-space-3);
+  padding: 6px 14px;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dp-accent);
+  background: color-mix(in srgb, var(--dp-accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dp-accent) 45%, transparent);
+  border-radius: var(--dp-radius-sm);
+  cursor: pointer;
+  transition:
+    background var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.emptyAction:hover {
+  background: color-mix(in srgb, var(--dp-accent) 16%, transparent);
+  border-color: var(--dp-accent);
+}

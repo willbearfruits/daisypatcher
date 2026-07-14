@@ -25,7 +25,7 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 8, step: 0.01, default: 0.5, unit: 'Hz' },
+      { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 8, step: 0.01, default: 0.5, unit: 'Hz', taper: 'log' },
       { id: 'depth', label: 'Depth', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.7 },
       { id: 'feedback', label: 'FB', kind: 'number', min: 0, max: 0.9, step: 0.01, default: 0.5 },
       { id: 'mix', label: 'Mix', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
@@ -57,7 +57,7 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 5, step: 0.01, default: 0.3, unit: 'Hz' },
+      { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 5, step: 0.01, default: 0.3, unit: 'Hz', taper: 'log' },
       { id: 'depth', label: 'Depth', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.6 },
       { id: 'feedback', label: 'FB', kind: 'number', min: -0.95, max: 0.95, step: 0.01, default: 0.5 },
       { id: 'mix', label: 'Mix', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 }
@@ -80,7 +80,7 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
       { id: 'right', label: 'R', signal: 'audio' }
     ],
     params: [
-      { id: 'time', label: 'Time', kind: 'number', min: 0.02, max: 2, step: 0.001, default: 0.3, unit: 's' },
+      { id: 'time', label: 'Time', kind: 'number', min: 0.02, max: 2, step: 0.001, default: 0.3, unit: 's', taper: 'log' },
       { id: 'feedback', label: 'FB', kind: 'number', min: 0, max: 0.95, step: 0.01, default: 0.45 },
       { id: 'mix', label: 'Mix', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.4 },
       { id: 'width', label: 'Width', kind: 'number', min: 0, max: 1, step: 0.01, default: 1 }
@@ -208,8 +208,8 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     params: [
       { id: 'threshold', label: 'Thr', kind: 'number', min: -60, max: 0, step: 0.1, default: -20, unit: 'dB' },
       { id: 'ratio', label: 'Ratio', kind: 'number', min: 1, max: 20, step: 0.1, default: 4 },
-      { id: 'attack', label: 'Atk', kind: 'number', min: 0.001, max: 0.5, step: 0.001, default: 0.01, unit: 's' },
-      { id: 'release', label: 'Rel', kind: 'number', min: 0.01, max: 3, step: 0.001, default: 0.1, unit: 's' },
+      { id: 'attack', label: 'Atk', kind: 'number', min: 0.001, max: 0.5, step: 0.001, default: 0.01, unit: 's', taper: 'log' },
+      { id: 'release', label: 'Rel', kind: 'number', min: 0.01, max: 3, step: 0.001, default: 0.1, unit: 's', taper: 'log' },
       { id: 'makeup', label: 'Make', kind: 'number', min: 0, max: 24, step: 0.1, default: 0, unit: 'dB' }
     ]
   },
@@ -227,7 +227,7 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'ceiling', label: 'Ceil', kind: 'number', min: -12, max: 0, step: 0.1, default: -0.3, unit: 'dB' },
-      { id: 'release', label: 'Rel', kind: 'number', min: 0.01, max: 2, step: 0.001, default: 0.05, unit: 's' }
+      { id: 'release', label: 'Rel', kind: 'number', min: 0.01, max: 2, step: 0.001, default: 0.05, unit: 's', taper: 'log' }
     ]
   },
 
@@ -246,9 +246,9 @@ export const EFFECTS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'threshold', label: 'Thr', kind: 'number', min: -80, max: 0, step: 0.1, default: -40, unit: 'dB' },
-      { id: 'attack', label: 'Atk', kind: 'number', min: 0.001, max: 0.1, step: 0.001, default: 0.005, unit: 's' },
+      { id: 'attack', label: 'Atk', kind: 'number', min: 0.001, max: 0.1, step: 0.001, default: 0.005, unit: 's', taper: 'log' },
       { id: 'hold', label: 'Hold', kind: 'number', min: 0, max: 0.5, step: 0.001, default: 0.05, unit: 's' },
-      { id: 'release', label: 'Rel', kind: 'number', min: 0.01, max: 2, step: 0.001, default: 0.1, unit: 's' }
+      { id: 'release', label: 'Rel', kind: 'number', min: 0.01, max: 2, step: 0.001, default: 0.1, unit: 's', taper: 'log' }
     ]
   }
 }

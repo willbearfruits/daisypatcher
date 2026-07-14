@@ -141,15 +141,108 @@
   color: var(--dp-text-muted);
 }
 
+.fieldLabelGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  min-width: 0;
+}
+
+/* Value readout doubles as the entry point for inline exact-value editing;
+   it's a button so it stays keyboard-reachable. Chrome stripped so it reads
+   as the same mono readout it replaced. */
 .fieldValue {
   font-family: var(--dp-font-mono);
   font-size: var(--dp-fs-sm);
   color: var(--dp-text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: text;
+  transition: color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.fieldValue:hover:not(:disabled) {
+  color: var(--dp-accent);
+}
+
+.fieldValue:focus-visible {
+  outline: 1px solid var(--dp-accent);
+  outline-offset: 2px;
+  border-radius: var(--dp-radius-xs);
+}
+
+.fieldValue:disabled {
+  cursor: default;
 }
 
 .fieldUnit {
   color: var(--dp-text-dim);
   margin-left: 2px;
+}
+
+/* Inline exact-value entry (click the readout). */
+.valueInput {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-accent);
+  border-radius: var(--dp-radius-xs);
+  padding: 0 4px;
+  width: 10ch;
+  text-align: right;
+  outline: none;
+}
+
+/*
+ * Driven param row — the param is being replaced live by an external
+ * signal (CV today; the Perform view will reuse this for MIDI). The class
+ * is generic: the tint rides on a local custom property so a future
+ * variant can re-point it, and the tag text comes in as a prop.
+ */
+.paramDriven {
+  --driven-tint: var(--dp-signal-cv);
+  background: color-mix(in srgb, var(--driven-tint) 7%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--driven-tint) 60%, transparent);
+  border-radius: var(--dp-radius-sm);
+  padding: var(--dp-space-2);
+  margin: calc(-1 * var(--dp-space-2));
+  margin-left: calc(-1 * var(--dp-space-2) - 2px);
+}
+
+.drivenTag {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--driven-tint, var(--dp-signal-cv));
+  background: color-mix(in srgb, var(--driven-tint, var(--dp-signal-cv)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--driven-tint, var(--dp-signal-cv)) 40%, transparent);
+  border-radius: var(--dp-radius-xs);
+  padding: 0 4px;
+  flex: 0 0 auto;
+}
+
+.paramDriven .fieldValue {
+  color: var(--driven-tint);
+}
+
+.paramDriven .slider {
+  opacity: 0.45;
+}
+
+.paramDriven .slider::-webkit-slider-thumb {
+  background: var(--dp-text-dim);
+  box-shadow: none;
+  cursor: default;
+}
+
+.paramDriven .slider::-moz-range-thumb {
+  background: var(--dp-text-dim);
+  box-shadow: none;
+  cursor: default;
 }
 
 /* Range slider — cross-browser. Thin track, cyan thumb. */

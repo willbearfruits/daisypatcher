@@ -8,6 +8,7 @@
   z-index: var(--dp-z-modal, 40);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
+  animation: dp-backdrop-in var(--dp-motion-fast) var(--dp-ease-out);
 }
 
 .modal {
@@ -21,6 +22,27 @@
   flex-direction: column;
   font-family: var(--dp-font-sans);
   color: var(--dp-text);
+  animation: dp-surface-in var(--dp-motion-normal) var(--dp-ease-out);
+}
+
+/* Entrance: backdrop fades, panel settles into place. Exit is a clean
+   unmount by design — no exit choreography. */
+@keyframes dp-backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes dp-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .modal {
+    animation: none;
+  }
 }
 
 .header {

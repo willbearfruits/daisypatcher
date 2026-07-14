@@ -23,6 +23,14 @@ export interface ParamDef {
   default: number | string
   unit?: string
   options?: { value: string; label: string }[]
+  /**
+   * Optional slider taper. `'log'` maps slider position t ∈ [0,1] to
+   * value = min * (max/min)^t — the natural feel for frequency- and
+   * time-ranged params spanning ≥2 decades. Purely a UI position mapping:
+   * the stored value, CV clamping and codegen are unaffected. Requires
+   * min > 0; controls fall back to linear when it isn't.
+   */
+  taper?: 'log'
 }
 
 export interface NodeDefinition {
@@ -54,7 +62,7 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 220, unit: 'Hz' },
+      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 220, unit: 'Hz', taper: 'log' },
       { id: 'amplitude', label: 'Amp', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
       {
         id: 'waveform',
@@ -105,7 +113,7 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
-      { id: 'frequency', label: 'Rate', kind: 'number', min: 0.01, max: 20, step: 0.01, default: 1, unit: 'Hz' },
+      { id: 'frequency', label: 'Rate', kind: 'number', min: 0.01, max: 20, step: 0.01, default: 1, unit: 'Hz', taper: 'log' },
       { id: 'depth', label: 'Depth', kind: 'number', min: 0, max: 1, step: 0.01, default: 1 },
       { id: 'offset', label: 'Offset', kind: 'number', min: -1, max: 1, step: 0.01, default: 0 },
       {
@@ -300,7 +308,7 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
       { id: 'notch', label: 'N', signal: 'audio' }
     ],
     params: [
-      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 1000, unit: 'Hz' },
+      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 1000, unit: 'Hz', taper: 'log' },
       { id: 'resonance', label: 'Q', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.2 }
     ]
   },
@@ -318,7 +326,7 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 1000, unit: 'Hz' },
+      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 1000, unit: 'Hz', taper: 'log' },
       { id: 'resonance', label: 'Q', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.3 }
     ]
   },
@@ -338,10 +346,10 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
-      { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.01, unit: 's' },
-      { id: 'decay', label: 'D', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.1, unit: 's' },
+      { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.01, unit: 's', taper: 'log' },
+      { id: 'decay', label: 'D', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.1, unit: 's', taper: 'log' },
       { id: 'sustain', label: 'S', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.7 },
-      { id: 'release', label: 'R', kind: 'number', min: 0.001, max: 8, step: 0.001, default: 0.3, unit: 's' }
+      { id: 'release', label: 'R', kind: 'number', min: 0.001, max: 8, step: 0.001, default: 0.3, unit: 's', taper: 'log' }
     ]
   },
 
@@ -357,8 +365,8 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
-      { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.01, unit: 's' },
-      { id: 'release', label: 'R', kind: 'number', min: 0.001, max: 8, step: 0.001, default: 0.3, unit: 's' }
+      { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 4, step: 0.001, default: 0.01, unit: 's', taper: 'log' },
+      { id: 'release', label: 'R', kind: 'number', min: 0.001, max: 8, step: 0.001, default: 0.3, unit: 's', taper: 'log' }
     ]
   },
 
@@ -374,8 +382,8 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
-      { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 1, step: 0.001, default: 0.01, unit: 's' },
-      { id: 'release', label: 'R', kind: 'number', min: 0.001, max: 2, step: 0.001, default: 0.1, unit: 's' }
+      { id: 'attack', label: 'A', kind: 'number', min: 0.001, max: 1, step: 0.001, default: 0.01, unit: 's', taper: 'log' },
+      { id: 'release', label: 'R', kind: 'number', min: 0.001, max: 2, step: 0.001, default: 0.1, unit: 's', taper: 'log' }
     ]
   },
 
@@ -492,7 +500,7 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'time', label: 'Time', kind: 'number', min: 0.001, max: 2, step: 0.001, default: 0.25, unit: 's' },
+      { id: 'time', label: 'Time', kind: 'number', min: 0.001, max: 2, step: 0.001, default: 0.25, unit: 's', taper: 'log' },
       { id: 'feedback', label: 'FB', kind: 'number', min: 0, max: 0.95, step: 0.01, default: 0.4 },
       { id: 'mix', label: 'Mix', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 }
     ]
@@ -546,7 +554,7 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 8, step: 0.01, default: 0.8, unit: 'Hz' },
+      { id: 'rate', label: 'Rate', kind: 'number', min: 0.05, max: 8, step: 0.01, default: 0.8, unit: 'Hz', taper: 'log' },
       { id: 'depth', label: 'Depth', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
       { id: 'mix', label: 'Mix', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 }
     ]
@@ -565,7 +573,7 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
       { id: 'bits', label: 'Bits', kind: 'number', min: 1, max: 16, step: 1, default: 8 },
-      { id: 'rate', label: 'Rate', kind: 'number', min: 0.01, max: 1, step: 0.01, default: 0.5 },
+      { id: 'rate', label: 'Rate', kind: 'number', min: 0.01, max: 1, step: 0.01, default: 0.5, taper: 'log' },
       { id: 'mix', label: 'Mix', kind: 'number', min: 0, max: 1, step: 0.01, default: 1 }
     ]
   },

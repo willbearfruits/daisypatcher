@@ -35,6 +35,14 @@
   gap: var(--dp-space-3);
   color: var(--dp-text-dim);
   pointer-events: none;
+  /* Delayed fade-in: any transient zero-node frame (mid-load, mid-reset)
+   * stays invisible instead of flashing the overlay. */
+  animation: emptyFadeIn var(--dp-motion-slow) var(--dp-ease) 120ms backwards;
+}
+
+@keyframes emptyFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .crosshair {
@@ -75,6 +83,57 @@
   text-transform: lowercase;
   letter-spacing: 0.08em;
   color: var(--dp-text-muted);
+}
+
+.emptyKeys {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  color: var(--dp-text-dim);
+}
+
+.emptyKeys kbd {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  padding: 1px 5px;
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+}
+
+/* The one interactive element in the overlay — re-enables pointer events
+ * on itself only, so Rete panning / drops around it stay unaffected. */
+.starterButton {
+  pointer-events: auto;
+  margin-top: var(--dp-space-2);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    box-shadow var(--dp-motion-fast) var(--dp-ease);
+}
+
+.starterButton:hover {
+  color: var(--dp-accent);
+  border-color: var(--dp-accent-muted);
+  box-shadow: var(--dp-shadow-glow);
+}
+
+.starterButton:focus-visible {
+  outline: none;
+  border-color: var(--dp-accent);
+  box-shadow: var(--dp-shadow-glow);
 }
 
 .children {

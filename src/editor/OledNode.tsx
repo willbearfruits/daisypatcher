@@ -29,7 +29,8 @@ import type { SignalSocket } from './sockets'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
 import { useAudioEngine } from '@/audio/AudioEngineContext'
 import { useEditorStore } from '@/state/store'
-import type { AudioEngine, Tap } from '@/types/store'
+import type { Tap } from '@/types/store'
+import { tapInput } from './oled/tapInput'
 import {
   type BindingSource,
   type DisplayElement,
@@ -94,31 +95,6 @@ function readTheme(el: HTMLElement): ThemeColors {
     pixelOff: pick('--dp-bg', '#0a0f14'),
     border: pick('--dp-border-strong', '#3b4a5e')
   }
-}
-
-/**
- * Tap the source of a connected input socket. Returns the engine `Tap` or
- * null if the socket is unconnected. Callers pass a zero-filled buffer as
- * the default for unconnected inputs so render code uses zero state.
- */
-function tapInput(
-  engine: AudioEngine,
-  nodeId: string,
-  socketId: string,
-  onFrame: (values: Float32Array) => void
-): Tap | null {
-  const graph = useEditorStore.getState().graph
-  const conn = graph.connections.find(
-    (c) => c.to.nodeId === nodeId && c.to.socketId === socketId
-  )
-  if (!conn) return null
-  return engine.tap(
-    conn.from.nodeId,
-    (frame) => {
-      onFrame(frame.timeDomain)
-    },
-    { wantFrequency: false }
-  )
 }
 
 export function OledNode<S extends ClassicScheme>(props: Props<S>): React.JSX.Element {

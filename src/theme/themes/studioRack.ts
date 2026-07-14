@@ -55,6 +55,15 @@ export const studioRack: Skin = {
     rendering: 'physical'
   },
 
+  // Perform finish: warm cream powder-coat, near-black silkscreen — the
+  // classic boutique-pedal build.
+  perform: {
+    coat: '#e9dfc4',
+    coatDeep: '#c7b896',
+    ink: '#2a2117',
+    hardware: '#1c150d'
+  },
+
   shadowSm: '0 1px 2px rgba(8, 5, 2, 0.55)',
   shadowMd: '0 4px 14px rgba(8, 5, 2, 0.6), 0 1px 3px rgba(8, 5, 2, 0.65)',
   shadowGlow: '0 0 22px rgba(245, 168, 59, 0.18)',

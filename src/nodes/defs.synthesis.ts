@@ -25,7 +25,7 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 2000, step: 1, default: 220, unit: 'Hz' },
+      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 2000, step: 1, default: 220, unit: 'Hz', taper: 'log' },
       { id: 'damping', label: 'Damp', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
       { id: 'feedback', label: 'FB', kind: 'number', min: 0.9, max: 0.999, step: 0.001, default: 0.99 },
       {
@@ -56,7 +56,7 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 220, unit: 'Hz' },
+      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 220, unit: 'Hz', taper: 'log' },
       { id: 'ratio', label: 'Ratio', kind: 'number', min: 0.125, max: 16, step: 0.125, default: 1 },
       { id: 'amplitude', label: 'Amp', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.7 },
       { id: 'feedback', label: 'FB', kind: 'number', min: 0, max: 1, step: 0.01, default: 0 }
@@ -75,7 +75,7 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 8000, step: 1, default: 220, unit: 'Hz' },
+      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 8000, step: 1, default: 220, unit: 'Hz', taper: 'log' },
       { id: 'mod_ratio', label: 'M:C', kind: 'number', min: 0.125, max: 16, step: 0.125, default: 2 },
       { id: 'mod_index', label: 'Index', kind: 'number', min: 0, max: 20, step: 0.01, default: 3 },
       { id: 'carrier_amp', label: 'Amp', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.7 }
@@ -93,7 +93,7 @@ export const SYNTHESIS_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 220, unit: 'Hz' },
+      { id: 'frequency', label: 'Freq', kind: 'number', min: 20, max: 20000, step: 1, default: 220, unit: 'Hz', taper: 'log' },
       { id: 'amplitude', label: 'Amp', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
       { id: 'morph', label: 'Morph', kind: 'number', min: 0, max: 1, step: 0.01, default: 0 }
     ]

@@ -24,6 +24,22 @@ export interface CableStyle {
   rendering: 'smooth' | 'crackle' | 'physical'
 }
 
+/**
+ * Perform-view physical finish — the "build" of the pedal each skin
+ * produces. Consumed by `src/perform/` as `--dp-perform-*` vars; every
+ * other color in that view comes from the regular skin tokens.
+ */
+export interface PerformFinish {
+  /** Powder-coat face color (light end of the vertical coat gradient). */
+  coat: string
+  /** Powder-coat shadow color (dark end of the coat gradient). */
+  coatDeep: string
+  /** Silkscreen ink printed on the faceplate (name, control labels). */
+  ink: string
+  /** Dark machined-metal base tone for knobs / fader caps. */
+  hardware: string
+}
+
 export interface Skin {
   id: string
   name: string
@@ -55,6 +71,8 @@ export interface Skin {
   signal: SignalPalette
 
   cable: CableStyle
+
+  perform: PerformFinish
 
   shadowSm: string
   shadowMd: string

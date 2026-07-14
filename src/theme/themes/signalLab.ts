@@ -49,6 +49,14 @@ export const signalLab: Skin = {
     rendering: 'smooth'
   },
 
+  // Perform finish: deep petrol/graphite powder-coat, pale lab-instrument ink.
+  perform: {
+    coat: '#31505b',
+    coatDeep: '#1a2c33',
+    ink: '#d8ebee',
+    hardware: '#14181d'
+  },
+
   shadowSm: '0 1px 2px rgba(0, 0, 0, 0.4)',
   shadowMd: '0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6)',
   shadowGlow: '0 0 24px rgba(34, 211, 238, 0.15)',

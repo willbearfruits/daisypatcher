@@ -50,6 +50,8 @@ function skinToCssVars(skin: Skin): Record<string, string> {
     '--dp-cable-width': `${skin.cable.width}px`,
     '--dp-cable-glow': `${skin.cable.glow}px`,
     '--dp-cable-opacity': `${skin.cable.opacity}`,
+    '--dp-cable-sag': `${skin.cable.sag}`,
+    '--dp-cable-rendering': skin.cable.rendering,
 
     '--dp-shadow-sm': skin.shadowSm,
     '--dp-shadow-md': skin.shadowMd,
@@ -61,7 +63,12 @@ function skinToCssVars(skin: Skin): Record<string, string> {
     '--dp-node-header-text': skin.nodeHeaderText,
     '--dp-node-selected-ring': skin.nodeSelectedRing,
 
-    '--dp-canvas-overlay': skin.canvasOverlay
+    '--dp-canvas-overlay': skin.canvasOverlay,
+
+    '--dp-perform-coat': skin.perform.coat,
+    '--dp-perform-coat-deep': skin.perform.coatDeep,
+    '--dp-perform-ink': skin.perform.ink,
+    '--dp-perform-hardware': skin.perform.hardware
   }
 }
 

@@ -696,7 +696,36 @@ function HardwareViewInner() {
 
       {components.length === 0 ? (
         <div className={styles.emptyHint}>
-          <span>drag a component from the left onto the board</span>
+          <div className={styles.emptyMark} aria-hidden>
+            {/* Board-with-pin-headers mark — same treatment as the patch
+              * canvas crosshair (accent stroke + glow). */}
+            <svg
+              width="30"
+              height="30"
+              viewBox="0 0 30 30"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
+              <rect x="9" y="4" width="12" height="22" rx="2" />
+              <line x1="6" y1="8" x2="9" y2="8" />
+              <line x1="6" y1="13" x2="9" y2="13" />
+              <line x1="6" y1="18" x2="9" y2="18" />
+              <line x1="6" y1="23" x2="9" y2="23" />
+              <line x1="21" y1="8" x2="24" y2="8" />
+              <line x1="21" y1="13" x2="24" y2="13" />
+              <line x1="21" y1="18" x2="24" y2="18" />
+              <line x1="21" y1="23" x2="24" y2="23" />
+            </svg>
+          </div>
+          <span className={styles.emptyTitle}>
+            drag a component from the palette onto the board
+          </span>
+          <span className={styles.emptySub}>
+            hardware nodes dropped in the patch — knobs, buttons, leds — place
+            their component here automatically
+          </span>
         </div>
       ) : null}
     </div>

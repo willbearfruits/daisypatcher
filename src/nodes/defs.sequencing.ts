@@ -133,7 +133,7 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
-      { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 20, step: 0.1, default: 2, unit: 'Hz' },
+      { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 20, step: 0.1, default: 2, unit: 'Hz', taper: 'log' },
       { id: 'range', label: 'Range', kind: 'number', min: 0, max: 1, step: 0.01, default: 1 },
       { id: 'smooth', label: 'Smooth', kind: 'number', min: 0, max: 1, step: 0.01, default: 0 }
     ]
@@ -149,7 +149,7 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],
     params: [
-      { id: 'density', label: 'Dens', kind: 'number', min: 0.1, max: 50, step: 0.1, default: 5, unit: 'Hz' },
+      { id: 'density', label: 'Dens', kind: 'number', min: 0.1, max: 50, step: 0.1, default: 5, unit: 'Hz', taper: 'log' },
       { id: 'width', label: 'Width', kind: 'number', min: 0.001, max: 0.05, step: 0.001, default: 0.005, unit: 's' }
     ]
   },
@@ -226,7 +226,7 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 20, step: 0.01, default: 4, unit: 'Hz' },
+      { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 20, step: 0.01, default: 4, unit: 'Hz', taper: 'log' },
       { id: 'depth', label: 'Depth', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
       {
         id: 'shape',
@@ -254,7 +254,7 @@ export const SEQUENCING_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     ],
     outputs: [{ id: 'out', label: 'out', signal: 'audio' }],
     params: [
-      { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 15, step: 0.01, default: 6, unit: 'Hz' },
+      { id: 'rate', label: 'Rate', kind: 'number', min: 0.1, max: 15, step: 0.01, default: 6, unit: 'Hz', taper: 'log' },
       { id: 'depth', label: 'Depth', kind: 'number', min: 0, max: 1, step: 0.01, default: 0.3 }
     ]
   }

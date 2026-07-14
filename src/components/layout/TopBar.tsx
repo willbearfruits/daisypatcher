@@ -422,9 +422,10 @@ interface IconButtonProps {
 /* ---------- view switcher ---------- */
 
 /**
- * Segmented toggle between Patch and Hardware views. Sits in the TopBar's
- * center slot to the left of the file name. 2px accent underline marks the
- * active segment — deliberately spare so it reads as status, not navigation.
+ * Segmented toggle between Patch, Hardware and Perform views. Sits in the
+ * TopBar's center slot to the left of the file name. 2px accent underline
+ * marks the active segment — deliberately spare so it reads as status, not
+ * navigation.
  */
 function ViewSwitcher() {
   const view = useEditorStore((s) => s.view)
@@ -448,6 +449,15 @@ function ViewSwitcher() {
         onClick={() => setView('hardware')}
       >
         HARDWARE
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === 'perform'}
+        className={`${styles.viewSeg} ${view === 'perform' ? styles.viewSegActive : ''}`}
+        onClick={() => setView('perform')}
+      >
+        PERFORM
       </button>
     </div>
   )

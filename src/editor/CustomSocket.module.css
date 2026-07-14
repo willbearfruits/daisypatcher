@@ -19,7 +19,10 @@
   line-height: 0;
   color: var(--dp-signal-audio); /* default; overridden per kind below */
   transition: filter var(--dp-motion-fast) var(--dp-ease),
-    box-shadow var(--dp-motion-fast) var(--dp-ease);
+    box-shadow var(--dp-motion-fast) var(--dp-ease),
+    opacity var(--dp-motion-fast) var(--dp-ease);
+  /* opacity is dimmed during cable drags for incompatible sockets — see the
+     data-dp-drag-signal rules in style.css. */
 }
 
 .disc {

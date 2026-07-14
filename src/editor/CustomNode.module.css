@@ -5,10 +5,12 @@
  * The socket circles themselves are drawn by `CustomSocket`; this file only
  * handles the node body, header, and row layout.
  *
- * Collapse: adding `.collapsed` hides the `.body` element and re-positions
- * the sockets onto the header strip. The height transition is a pure CSS
- * fold — the body has `max-height: 0` when collapsed; when expanded it
- * restores to its natural height via a large max-height upper bound.
+ * Collapse: the `.body` element is UNMOUNTED while `collapsed` is true (the
+ * sockets re-mount on the header strip so cables keep valid anchor rects),
+ * so no CSS height fold can run here. On expand the body mounts at its
+ * final geometry instantly — socket positions are read once at render by
+ * the cable layer, so geometry must never animate — and only its opacity
+ * fades in. Collapse is an instant clean unmount by design.
  */
 
 .node {
@@ -92,7 +94,7 @@
 }
 
 .chevron {
-  transition: transform 120ms var(--dp-ease);
+  transition: transform var(--dp-motion-fast) var(--dp-ease);
   display: block;
 }
 
@@ -125,16 +127,24 @@
   flex-direction: column;
   padding: var(--dp-space-2) 0;
   gap: var(--dp-space-1);
-  transition: max-height 180ms var(--dp-ease), padding 180ms var(--dp-ease),
-    opacity 120ms var(--dp-ease);
-  max-height: 2000px;
+  /* Opacity-only entrance on expand/mount. Geometry must be final at
+     mount time (cable anchors are measured once) — never animate
+     height/transform here. */
+  animation: dp-node-body-in var(--dp-motion-fast) var(--dp-ease-out);
 }
 
-.collapsed .body {
-  max-height: 0;
-  padding: 0;
-  opacity: 0;
-  pointer-events: none;
+@keyframes dp-node-body-in {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .body {
+    animation: none;
+  }
+
+  .chevron {
+    transition: none;
+  }
 }
 
 .row {

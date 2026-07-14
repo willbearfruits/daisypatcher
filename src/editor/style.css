@@ -36,3 +36,49 @@
   background: var(--dp-accent-muted);
   border: 1px solid var(--dp-accent);
 }
+
+/*
+ * Cable-drag socket compatibility highlight. ReteEditor stamps
+ * data-dp-drag-signal="<kind>" + data-dp-drag-side="<side>" on this root on
+ * connectionpick and clears them on connectiondrop. Sockets the drop would
+ * be rejected on — wrong signal kind, or same side as the pick (the exact
+ * canMakeConnection rules in sockets.ts / ReteEditor.tsx) — fade back;
+ * compatible ones stay lit. The origin socket carries data-dp-drag-origin
+ * (on its RefSocket wrapper) so it is exempt from the same-side dim.
+ * The opacity transition lives on .socket in CustomSocket.module.css.
+ */
+.dp-rete-root[data-dp-drag-signal='audio'] [data-signal]:not([data-signal='audio']),
+.dp-rete-root[data-dp-drag-signal='cv'] [data-signal]:not([data-signal='cv']),
+.dp-rete-root[data-dp-drag-signal='gate'] [data-signal]:not([data-signal='gate']),
+.dp-rete-root[data-dp-drag-signal='clock'] [data-signal]:not([data-signal='clock']),
+.dp-rete-root[data-dp-drag-side='output'] .output-socket:not([data-dp-drag-origin]) [data-signal],
+.dp-rete-root[data-dp-drag-side='input'] .input-socket:not([data-dp-drag-origin]) [data-signal] {
+  opacity: 0.3;
+}
+
+/*
+ * Refused-drop flash: ReteEditor stamps data-dp-reject on the drop target's
+ * socket wrapper for ~320ms when canMakeConnection rejects a signal-kind
+ * mismatch. Reduced motion keeps the static color swap, drops the pulse.
+ */
+.dp-rete-root [data-dp-reject] [data-signal] {
+  color: var(--dp-danger);
+  animation: dp-socket-reject var(--dp-motion-slow) var(--dp-ease);
+}
+
+@keyframes dp-socket-reject {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.3);
+    filter: drop-shadow(0 0 8px var(--dp-danger));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dp-rete-root [data-dp-reject] [data-signal] {
+    animation: none;
+  }
+}

@@ -114,7 +114,7 @@ export interface EditorStoreState {
   /** Parallel layout describing physical components wired to Seed pins. */
   hardware: HardwareLayout
   /** Which canvas is currently visible. */
-  view: 'patch' | 'hardware'
+  view: 'patch' | 'hardware' | 'perform'
   /** Currently-selected placed-component id, or null. */
   selectedHardwareId: string | null
 
@@ -174,7 +174,7 @@ export interface EditorStoreActions {
   resetGraph(): void
 
   /* hardware view */
-  setView(view: 'patch' | 'hardware'): void
+  setView(view: 'patch' | 'hardware' | 'perform'): void
   addHardware(kind: HardwareKind, position: { x: number; y: number }): string
   removeHardware(id: string): void
   moveHardware(id: string, position: { x: number; y: number }): void

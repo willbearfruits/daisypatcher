@@ -89,6 +89,18 @@
   font-family: var(--dp-font-sans);
   font-size: var(--dp-fs-sm);
   line-height: var(--dp-lh);
+  /* Drops out of the badge it is anchored to (top-left corner). */
+  transform-origin: top left;
+  animation: dp-popover-in var(--dp-motion-normal) var(--dp-ease-out);
+}
+
+/* Entrance only — exit is a clean unmount by design. Starts 4px closer to
+   the anchor badge and settles downward into place. */
+@keyframes dp-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
 }
 
 .popTitle {
@@ -255,6 +267,9 @@
   border-radius: var(--dp-radius-md);
   box-shadow: var(--dp-shadow-md);
   padding: 4px 0;
+  /* Anchored to the menu button's bottom-right corner. */
+  transform-origin: top right;
+  animation: dp-popover-in var(--dp-motion-normal) var(--dp-ease-out);
 }
 
 .menuItem {
@@ -291,10 +306,19 @@
   color: var(--dp-text-muted);
   box-shadow: var(--dp-shadow-sm);
   pointer-events: none;
-  animation: dp-toast-in var(--dp-motion-normal) var(--dp-ease);
+  animation: dp-toast-in var(--dp-motion-normal) var(--dp-ease-out);
 }
 
 @keyframes dp-toast-in {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover,
+  .menu,
+  .toast,
+  .dotDownloading {
+    animation: none;
+  }
 }

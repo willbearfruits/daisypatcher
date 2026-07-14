@@ -21,9 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The last text-glyph icons (play/stop, lock, popover close) are now inline SVGs matching the icon system.
 - Keyboard focus uses one consistent accent treatment app-wide; `outline: none` no longer suppresses focus visibility anywhere.
 
-Still planned for v0.5: Perform view (Powder-coat direction — see
-`V0_5_PLAN.md`), patch bank / snapshots, recording emulator output to .wav,
-ESP32 I2S MCLK pin-config fix.
+- **Perform view**: a third view rendering the hardware layout as the physical pedal — powder-coat enclosure auto-sized to standard Hammond boxes, per-theme finishes, live LEDs/OLED, knobs swept with the mouse (Shift = fine, double-click = reset). ARRANGE mode for moving/rotating/nudging components on the face (0.5 mm snap, shared with the Hardware view, undoable), with the hardware inspector alongside.
+- Per-theme cable personality: Studio Rack cables hang with real sag, CRT Patchbay traces run taut with phosphor bloom and beam jitter (free when stopped, reduced-motion safe).
+- Compatible sockets stay lit while dragging a cable; incompatible ones dim. Refused drops flash the target socket.
+- Inspector: click a value to type it exactly ("1.2k" works), double-click a slider to reset, Shift-drag for fine adjust, log tapers on frequency-style params, and CV-driven params show a "CV" tag with the live incoming value instead of a dead slider.
+- First-run: empty canvas shows an invitation with a one-click starter patch; the hardware view got a matching empty state.
+- Entrance motion for all modals and popovers; true animated folds for palette sections (all disabled under reduced-motion).
+
+Still planned for v0.5: MIDI learn, Silkscreen mode + drill-template export,
+patch bank / snapshots, recording emulator output to .wav, ESP32 I2S MCLK
+pin-config fix.
 
 ## [0.4.1] - 2026-07-13
 
