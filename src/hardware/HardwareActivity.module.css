@@ -150,6 +150,22 @@
   background: var(--dp-surface-sunken);
 }
 
+/*
+ * Repin affordance. Only rendered when bindings point at pins the current
+ * board doesn't have, so it is deliberately loud — it is the one control
+ * in this toolbar that reports a problem rather than toggling a view.
+ */
+.toolbarWarn {
+  color: var(--dp-warning);
+  border-color: color-mix(in srgb, var(--dp-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--dp-warning) 12%, transparent);
+}
+
+.toolbarWarn:hover {
+  color: var(--dp-warning);
+  background: color-mix(in srgb, var(--dp-warning) 22%, transparent);
+}
+
 .toolbarButton[data-active='true'] {
   color: var(--dp-accent);
   border-color: color-mix(in srgb, var(--dp-accent) 50%, transparent);

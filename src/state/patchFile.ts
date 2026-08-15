@@ -17,10 +17,12 @@
 
 import type { AudioGraph, NodeKind } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
+import { coerceBoardId } from '../../shared/boards'
 import { emptyHardwareLayout } from '@/types/hardware'
 import type { DaisyFlashMode, LayoutSizes, PaletteFilterMode } from '@/types/store'
+import { parsePresets, type Preset } from '@/state/presets'
 import { requestConfirm } from '@/components/layout/ConfirmDialog'
-import { useEditorStore } from './store'
+import { rootGraphOf, useEditorStore } from './store'
 
 type Store = typeof useEditorStore
 
@@ -38,6 +40,13 @@ interface DpatchEnvelope {
   dpatch: 2
   graph: AudioGraph
   hardware: HardwareLayout
+  /**
+   * Named parameter snapshots. Optional and additive: a file written
+   * before presets existed simply has none, and one written with them
+   * still loads in an older build, which is why this did not need a
+   * version bump.
+   */
+  presets?: Preset[]
   /** Optional — absent on older saves; the store falls back to defaults. */
   layout?: DpatchLayoutSection
 }
@@ -119,6 +128,7 @@ function extractLayout(raw: unknown): DpatchLayoutSection | undefined {
 function parseDpatch(parsed: unknown): {
   graph: AudioGraph
   hardware: HardwareLayout
+  presets: Preset[]
   layout?: DpatchLayoutSection
 } | null {
   if (!isObject(parsed)) return null
@@ -126,13 +136,25 @@ function parseDpatch(parsed: unknown): {
   if ('dpatch' in parsed || 'graph' in parsed) {
     const envelope = parsed as Partial<DpatchEnvelope>
     if (!validateGraph(envelope.graph)) return null
-    const hardware = validateHardware(envelope.hardware) ? envelope.hardware : emptyHardwareLayout()
+    /*
+     * Trust boundary. `board` comes off disk and could be anything —
+     * an older spelling, a hand-edited file, a board we dropped. The
+     * board lookup tables are now total with no Daisy fallback, so an
+     * unrecognised id must be narrowed here rather than blowing up
+     * downstream. `coerceBoardId` also maps the legacy 'esp32_s3'
+     * spelling onto its current id.
+     */
+    const hardware = validateHardware(envelope.hardware)
+      ? { ...envelope.hardware, board: coerceBoardId(envelope.hardware.board) }
+      : emptyHardwareLayout()
     const layout = extractLayout(envelope.layout)
-    return { graph: envelope.graph, hardware, layout }
+    // Same trust boundary as `hardware`: hand-edited or truncated preset
+    // data must not reach the store, so it is validated rather than cast.
+    return { graph: envelope.graph, hardware, presets: parsePresets(envelope.presets), layout }
   }
   // v1 — whole file is the graph.
   if (validateGraph(parsed)) {
-    return { graph: parsed, hardware: emptyHardwareLayout() }
+    return { graph: parsed, hardware: emptyHardwareLayout(), presets: [] }
   }
   return null
 }
@@ -147,7 +169,13 @@ export async function savePatch(
   if (canceled || !path) return { saved: false }
 
   const name = stripExt(basename(path))
-  const graphToSave: AudioGraph = { ...s.graph, meta: { ...s.graph.meta, name } }
+  /*
+   * Save the ROOT patch. `s.graph` is whichever level is open, so saving
+   * while inside a subpatch would otherwise write the body out as if it
+   * were the whole instrument — and lose everything above it.
+   */
+  const rootGraph = rootGraphOf(s)
+  const graphToSave: AudioGraph = { ...rootGraph, meta: { ...rootGraph.meta, name } }
   const hardwareToSave: HardwareLayout = {
     ...s.hardware,
     meta: { ...s.hardware.meta, name }
@@ -156,6 +184,7 @@ export async function savePatch(
     dpatch: 2,
     graph: graphToSave,
     hardware: hardwareToSave,
+    presets: s.presets,
     // Persist the user's preferred rail/panel sizes so reopening the patch
     // restores their shell. Safe to omit on load (store falls back to default).
     // `daisyFlashMode` rides in the same section so a patch remembers its
@@ -205,7 +234,7 @@ export async function openPatch(
       ...loaded.hardware,
       meta: { ...loaded.hardware.meta, name }
     }
-    s.loadGraph(graph, path, hardware)
+    s.loadGraph(graph, path, hardware, loaded.presets)
     if (loaded.layout) {
       const { daisyFlashMode, ...layoutRest } = loaded.layout
       s.setLayout(layoutRest)

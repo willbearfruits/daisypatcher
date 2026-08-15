@@ -43,10 +43,15 @@ export const SHAPE_DIMENSIONS: Record<HardwareKind, { w: number; h: number }> = 
   midi_jack:    { w: 22, h: 22 },
   oled_ssd1306: { w: 28, h: 28 },
   i2s_codec:    { w: 20, h: 14 },
+  pcm5102a:     { w: 27, h: 19 }, // GY-PCM5102 purple board w/ 3.5mm jack
+  max98357a:    { w: 22, h: 17 }, // Adafruit MAX98357A breakout (21.2×16.6)
   gyroscope:    { w: 15, h: 15 },
   magnetometer: { w: 14, h: 14 },
   tof:          { w: 11, h: 21 }
 }
+
+/** 0.1" header pitch — the pad spacing on every breakout we draw. */
+export const HEADER_PITCH_MM = 2.54
 
 /** Convert the mm footprint to canvas (SVG) units. */
 export function shapeSizeCanvas(kind: HardwareKind): { w: number; h: number } {
@@ -719,6 +724,273 @@ function I2sShape() {
   )
 }
 
+/* =====================================================================
+ * Labelled pad rows — shared by the pin-accurate breakout modules.
+ *
+ * Unlike the older shapes (which hint at a header with a few anonymous
+ * rects at fractional offsets), these draw pads at real 0.1" pitch with
+ * their silkscreen text, so a user can count pads against the board in
+ * front of them. Pin 1 is square, the rest round — standard PCB
+ * convention.
+ *
+ * Everything is `pointerEvents="none"`: the whole shape group already is
+ * (HardwareView renders a separate transparent hit rect), so labels can
+ * never steal a click from the component drag handler.
+ * ===================================================================== */
+
+/** Pad pitch in canvas units. */
+const PITCH = HEADER_PITCH_MM * MM_PER_UNIT
+
+const PAD_R = 2.4
+const PAD_HOLE_R = 1.1
+const PAD_FONT = 4.2
+
+function Pad({ cx, cy, first }: { cx: number; cy: number; first?: boolean }) {
+  return (
+    <>
+      {first ? (
+        <rect
+          x={cx - PAD_R}
+          y={cy - PAD_R}
+          width={PAD_R * 2}
+          height={PAD_R * 2}
+          fill="var(--dp-warning)"
+          opacity="0.85"
+        />
+      ) : (
+        <circle cx={cx} cy={cy} r={PAD_R} fill="var(--dp-border-strong)" />
+      )}
+      <circle cx={cx} cy={cy} r={PAD_HOLE_R} fill="var(--dp-bg)" />
+    </>
+  )
+}
+
+/**
+ * A row (or column) of labelled header pads.
+ *
+ * `x`/`y` is the center of the first pad. `dir` is the direction pads
+ * advance. `labelDir` pushes the text away from the pad — use the side
+ * that points into the board body so labels don't collide with the
+ * component's role dots, which live outside the silhouette.
+ */
+function PadRow({
+  x,
+  y,
+  labels,
+  dir = 'row',
+  labelDir = 'down'
+}: {
+  x: number
+  y: number
+  labels: string[]
+  dir?: 'row' | 'col'
+  labelDir?: 'up' | 'down' | 'left' | 'right'
+}) {
+  const dx = dir === 'row' ? PITCH : 0
+  const dy = dir === 'col' ? PITCH : 0
+  const off = PAD_R + 1.4
+  const tx = labelDir === 'left' ? -off : labelDir === 'right' ? off : 0
+  const ty = labelDir === 'up' ? -off : labelDir === 'down' ? off + PAD_FONT * 0.5 : 0
+  const anchor =
+    labelDir === 'left' ? 'end' : labelDir === 'right' ? 'start' : 'middle'
+
+  return (
+    <g pointerEvents="none">
+      {labels.map((label, i) => {
+        const cx = x + dx * i
+        const cy = y + dy * i
+        return (
+          <g key={`${label}-${i}`}>
+            <Pad cx={cx} cy={cy} first={i === 0} />
+            <text
+              x={cx + tx}
+              y={cy + ty}
+              fontSize={PAD_FONT}
+              fontFamily="var(--dp-font-mono)"
+              fill="var(--dp-text-dim)"
+              textAnchor={anchor}
+              dominantBaseline={dir === 'col' ? 'middle' : 'auto'}
+            >
+              {label}
+            </text>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+/* --- GY-PCM5102 line-out DAC (27×19 mm purple board + 3.5mm jack) ----
+ *
+ * Two 6-pad headers on the long edges. The I2S/power row carries the
+ * three pads we actually bind (BCK/LCK/DIN); the opposite row is the
+ * config strapping (FLT/DEMP/XSMT/FMT) plus analog supply, drawn but not
+ * bindable — those are jumper-set, not wired to the MCU.
+ *
+ * Silkscreen ORDER here follows the ordering cited consistently across
+ * the community wiring guides. Worth an eyeball against a physical board:
+ * the pad SET and their functions are well established, the left-to-right
+ * sequence is not authoritatively published anywhere I could find.
+ */
+function Pcm5102aShape() {
+  const { w, h } = shapeSizeCanvas('pcm5102a')
+  const rowW = PITCH * 5
+  const x0 = (w - rowW) / 2
+
+  return (
+    <ShapeSvg kind="pcm5102a">
+      {/* board */}
+      <rect
+        x={0.75}
+        y={0.75}
+        width={w - 1.5}
+        height={h - 1.5}
+        rx={2}
+        fill="color-mix(in srgb, var(--dp-accent) 16%, var(--dp-surface-sunken))"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="0.75"
+      />
+      {/* PCM5102A chip (TSSOP-20) */}
+      <rect
+        x={w * 0.3}
+        y={h * 0.38}
+        width={w * 0.28}
+        height={h * 0.24}
+        rx={0.6}
+        fill="var(--dp-bg)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="0.5"
+      />
+      <circle cx={w * 0.33} cy={h * 0.43} r="0.7" fill="var(--dp-border-strong)" />
+      {/* 3.5mm jack barrel on the right edge */}
+      <rect
+        x={w - 7.5}
+        y={h * 0.34}
+        width={6.75}
+        height={h * 0.32}
+        rx={1.5}
+        fill="var(--dp-surface)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="0.6"
+      />
+      <circle
+        cx={w - 4.1}
+        cy={h * 0.5}
+        r="2"
+        fill="var(--dp-bg)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="0.5"
+      />
+      {/* four config solder jumpers (H1L..H4L) */}
+      {Array.from({ length: 4 }).map((_, i) => (
+        <rect
+          key={i}
+          x={w * 0.18 + i * 3.2}
+          y={h - 20}
+          width={2}
+          height={3}
+          rx={0.4}
+          fill="var(--dp-border)"
+        />
+      ))}
+      {/* I2S + power header (bindable side) */}
+      <PadRow
+        x={x0}
+        y={5}
+        labels={['SCK', 'BCK', 'DIN', 'LCK', 'GND', 'VIN']}
+        labelDir="down"
+      />
+      {/* config / analog header */}
+      <PadRow
+        x={x0}
+        y={h - 5}
+        labels={['FLT', 'DEMP', 'XSMT', 'FMT', 'A3V3', 'AGND']}
+        labelDir="up"
+      />
+    </ShapeSvg>
+  )
+}
+
+/* --- MAX98357A I2S class-D mono amp (Adafruit 21.2×16.6 mm) ----------
+ *
+ * One 7-pad header (LRC/BCLK/DIN/GAIN/SD/GND/Vin) and a 2-pole screw
+ * terminal for the bridge-tied speaker output. GAIN and SD are drawn but
+ * not bindable — see the KIND_ROLES note; they are resistor-strapped, and
+ * the inspector exposes them as config.
+ */
+function Max98357aShape() {
+  const { w, h } = shapeSizeCanvas('max98357a')
+  const rowW = PITCH * 6
+  const x0 = (w - rowW) / 2
+
+  return (
+    <ShapeSvg kind="max98357a">
+      <rect
+        x={0.75}
+        y={0.75}
+        width={w - 1.5}
+        height={h - 1.5}
+        rx={2}
+        fill="color-mix(in srgb, var(--dp-surface-sunken) 88%, var(--dp-border))"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="0.75"
+      />
+      {/* MAX98357A chip (TQFN-16) */}
+      <rect
+        x={w * 0.36}
+        y={h * 0.4}
+        width={w * 0.24}
+        height={h * 0.22}
+        rx={0.6}
+        fill="var(--dp-bg)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="0.5"
+      />
+      <circle cx={w * 0.39} cy={h * 0.45} r="0.7" fill="var(--dp-border-strong)" />
+      {/* speaker screw terminal, top edge */}
+      <rect
+        x={w * 0.26}
+        y={2}
+        width={w * 0.48}
+        height={5.5}
+        rx={0.8}
+        fill="var(--dp-surface)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="0.6"
+      />
+      {[0.36, 0.64].map((f) => (
+        <circle
+          key={f}
+          cx={w * f}
+          cy={4.75}
+          r="1.5"
+          fill="var(--dp-bg)"
+          stroke="var(--dp-border-strong)"
+          strokeWidth="0.4"
+        />
+      ))}
+      <text
+        x={w / 2}
+        y={11.5}
+        fontSize={PAD_FONT}
+        fontFamily="var(--dp-font-mono)"
+        fill="var(--dp-text-dim)"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
+        SPK +/-
+      </text>
+      {/* signal + power header, bottom edge */}
+      <PadRow
+        x={x0}
+        y={h - 5}
+        labels={['LRC', 'BCLK', 'DIN', 'GAIN', 'SD', 'GND', 'Vin']}
+        labelDir="up"
+      />
+    </ShapeSvg>
+  )
+}
+
 /* --- Gyro / IMU breakout (15×15 mm square PCB) ----------------------- */
 
 function GyroShape() {
@@ -866,6 +1138,8 @@ export function renderComponentShape(comp: PlacedComponent, level?: number): Rea
     case 'midi_jack':    return <JackShape kind="midi_jack" withMidiRing />
     case 'oled_ssd1306': return <OledShape />
     case 'i2s_codec':    return <I2sShape />
+    case 'pcm5102a':     return <Pcm5102aShape />
+    case 'max98357a':    return <Max98357aShape />
     case 'gyroscope':    return <GyroShape />
     case 'magnetometer': return <MagnetometerShape />
     case 'tof':          return <TofShape />

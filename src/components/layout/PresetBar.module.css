@@ -1,0 +1,169 @@
+/* Presets. Tokens only. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-3);
+  border-bottom: 1px solid var(--dp-border);
+}
+
+.compact { padding: var(--dp-space-2); border-bottom: none; }
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+}
+
+.title {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.14em;
+  color: var(--dp-text-muted);
+}
+
+.spacer { flex: 1 1 auto; }
+
+.btn {
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+.btn:hover { color: var(--dp-accent); border-color: var(--dp-border-strong); }
+
+.empty {
+  margin: 0;
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  line-height: 1.5;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  border-radius: var(--dp-radius-sm);
+  padding: 2px;
+}
+
+.row:hover { background: var(--dp-surface-sunken); }
+
+/*
+ * The recalled preset is marked, and the mark disappears the moment any
+ * param moves — see `setParam` in the store. A highlight next to a sound
+ * you have since turned somewhere else is worse than no highlight.
+ */
+.rowActive {
+  background: color-mix(in srgb, var(--dp-accent) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--dp-accent);
+}
+
+.slot {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text-dim);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  cursor: pointer;
+}
+.slot:hover { color: var(--dp-accent); }
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text);
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nameInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-accent);
+  border-radius: var(--dp-radius-xs);
+  padding: 1px 4px;
+}
+
+.iconBtn {
+  flex: 0 0 auto;
+  font-family: var(--dp-font-mono);
+  font-size: 11px;
+  color: var(--dp-text-dim);
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dp-motion-fast) var(--dp-ease);
+}
+
+/* Destructive controls stay hidden until you are on the row. */
+.row:hover .iconBtn { opacity: 1; }
+.iconBtn:hover { color: var(--dp-text); }
+.danger:hover { color: var(--dp-danger); }
+
+.morph {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-1);
+  padding-top: var(--dp-space-2);
+  border-top: 1px solid var(--dp-border);
+}
+
+.morphRow { display: flex; gap: var(--dp-space-2); }
+
+.select {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  padding: 2px;
+}
+
+.slider { width: 100%; accent-color: var(--dp-accent); }
+.slider:disabled { opacity: 0.4; }
+
+.morphNote {
+  font-family: var(--dp-font-mono);
+  font-size: 9px;
+  color: var(--dp-text-dim);
+}

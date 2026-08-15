@@ -1,11 +1,31 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { getSdkStatus, installSdk, installEsp32Toolchain, WORKSPACE } from './sdk'
-import { buildProject, isInside, type BuildInput } from './buildService'
+import {
+  complete as assistantComplete,
+  listLocalModels,
+  readConfigSafe,
+  saveConfig,
+  type CompletionRequest
+} from './assistantService'
+import {
+  deleteSample,
+  listSamples,
+  readSamplePcm,
+  renameSample,
+  storeSample,
+  type StoreSampleInput
+} from './sampleService'
+import { buildProject, isInside, writeProjectFiles, type BuildInput } from './buildService'
 import { detectFlashDevices, flashBinary } from './flashService'
 import { detectAllBoards } from './deviceDetection'
+import type { BoardId } from '../../shared/boards'
+import { coerceBoardId } from '../../shared/boards'
 import {
   listSerialPorts,
   openSerial,
@@ -35,58 +55,201 @@ function grantPath(p: string | undefined): void {
   if (p) grantedPaths.add(resolve(p))
 }
 
+function hasPatchExt(p: string): boolean {
+  const lower = p.toLowerCase()
+  return lower.endsWith('.dpatch') || lower.endsWith('.json')
+}
+
+/**
+ * Force a patch extension onto a path the user typed.
+ *
+ * GTK's save dialog does not reliably append the filter's extension, so a
+ * user who types "mysong" gets back a bare path — which then fails the
+ * allow-list below and surfaces as a confusing "not granted via a dialog"
+ * error on a file they just picked in a dialog.
+ */
+function withPatchExt(p: string): string {
+  return hasPatchExt(p) ? p : `${p}.dpatch`
+}
+
 function isAllowedPath(p: string): boolean {
   const abs = resolve(p)
-  const lower = abs.toLowerCase()
-  const extOk = lower.endsWith('.dpatch') || lower.endsWith('.json')
-  return extOk && grantedPaths.has(abs)
+  return hasPatchExt(abs) && grantedPaths.has(abs)
+}
+
+
+/* =====================================================================
+ * Linux file-dialog fallback.
+ *
+ * Electron's own `dialog.showSaveDialog` / `showOpenDialog` never open a
+ * window on some Linux desktops — verified here with a bare Electron app
+ * (no daisypatcher code at all): the call is made, no chooser appears, and
+ * the promise never settles. Forcing gtk-version 3 or 4, disabling the
+ * sandbox, and reparenting the modal all made no difference, while
+ * `kdialog` and `zenity` open a chooser on the same session immediately.
+ *
+ * So on Linux we prefer a desktop file-chooser binary when one exists and
+ * fall back to Electron's dialog otherwise. Set DAISY_ELECTRON_DIALOGS=1
+ * to always use Electron's, for anyone whose setup is fine.
+ * ===================================================================== */
+
+interface PickResult {
+  canceled: boolean
+  path?: string
+}
+
+function findHelper(): { bin: string; kind: 'kdialog' | 'zenity' } | null {
+  if (process.platform !== 'linux') return null
+  if (process.env.DAISY_ELECTRON_DIALOGS === '1') return null
+  /*
+   * zenity first, even on KDE, where kdialog would look more native.
+   *
+   * Chromium's own KDE file-dialog path shells out to kdialog, and on a
+   * system where kdialog is broken that call never returns — the observed
+   * failure was a kdialog child spinning at ~99% CPU for over an hour
+   * without ever mapping a window, which is exactly why Electron's
+   * built-in dialog hung too. zenity is GTK, independent of that stack,
+   * and works on both desktops. DAISY_FILE_DIALOG=kdialog|zenity|electron
+   * overrides the choice.
+   */
+  const forced = process.env.DAISY_FILE_DIALOG
+  const zenity = { bin: '/usr/bin/zenity', kind: 'zenity' as const }
+  const kdialog = { bin: '/usr/bin/kdialog', kind: 'kdialog' as const }
+  if (forced === 'electron') return null
+  if (forced === 'kdialog') return existsSync(kdialog.bin) ? kdialog : null
+  if (forced === 'zenity') return existsSync(zenity.bin) ? zenity : null
+  return [zenity, kdialog].find((c) => existsSync(c.bin)) ?? null
+}
+
+/** Run a chooser binary. Exit 0 = picked, anything else = cancelled. */
+function runHelper(bin: string, args: string[]): Promise<PickResult> {
+  return new Promise((resolvePromise) => {
+    let settled = false
+    const child = execFile(bin, args, { timeout: 10 * 60 * 1000 }, (err, stdout) => {
+      if (settled) return
+      settled = true
+      const picked = String(stdout ?? '').trim().split('\n')[0]
+      if (err || !picked) return resolvePromise({ canceled: true })
+      resolvePromise({ canceled: false, path: picked })
+    })
+    /*
+     * A chooser that never draws is indistinguishable from one the user is
+     * still reading, so we can't time out on "slow". What we CAN catch is a
+     * helper that dies or spins without ever producing a window: if the
+     * process is gone and nothing was returned, settle rather than leaving
+     * the renderer's promise pending forever, which is what made Save look
+     * like it did nothing at all.
+     */
+    child.on('error', () => {
+      if (settled) return
+      settled = true
+      resolvePromise({ canceled: true })
+    })
+  })
+}
+
+async function pickSavePath(defaultName: string): Promise<PickResult> {
+  const helper = findHelper()
+  if (!helper) return { canceled: true }
+  const start = join(homedir(), defaultName || 'untitled.dpatch')
+  return helper.kind === 'kdialog'
+    ? runHelper(helper.bin, ['--getsavefilename', start, '*.dpatch *.json|Daisy Patch'])
+    : runHelper(helper.bin, [
+        '--file-selection',
+        '--save',
+        '--confirm-overwrite',
+        `--filename=${start}`,
+        '--file-filter=Daisy Patch | *.dpatch *.json'
+      ])
+}
+
+async function pickOpenPath(): Promise<PickResult> {
+  const helper = findHelper()
+  if (!helper) return { canceled: true }
+  const start = join(homedir(), '')
+  return helper.kind === 'kdialog'
+    ? runHelper(helper.bin, ['--getopenfilename', start, '*.dpatch *.json|Daisy Patch'])
+    : runHelper(helper.bin, [
+        '--file-selection',
+        `--filename=${start}`,
+        '--file-filter=Daisy Patch | *.dpatch *.json'
+      ])
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle('dialog:save', async (_evt, defaultName: string) => {
-    const focused = BrowserWindow.getFocusedWindow()
-    const result = focused
-      ? await dialog.showSaveDialog(focused, {
-          title: 'Save Patch',
-          defaultPath: defaultName || 'untitled.dpatch',
-          filters: FILE_FILTERS
-        })
-      : await dialog.showSaveDialog({
-          title: 'Save Patch',
-          defaultPath: defaultName || 'untitled.dpatch',
-          filters: FILE_FILTERS
-        })
-    if (!result.canceled) grantPath(result.filePath)
-    return { canceled: result.canceled, path: result.filePath }
+  ipcMain.handle('dialog:save', async (evt, defaultName: string) => {
+    /*
+     * Parent the modal to the window that MADE the call, not to whatever
+     * happens to be focused. DevTools opens as its own detached
+     * BrowserWindow in this app, so `getFocusedWindow()` can hand back the
+     * DevTools window — the sheet then attaches there and looks, from the
+     * app window, like clicking Save did nothing at all.
+     */
+    if (findHelper()) {
+      const picked = await pickSavePath(defaultName)
+      if (picked.canceled || !picked.path) return { canceled: true }
+      const path = withPatchExt(picked.path)
+      grantPath(path)
+      return { canceled: false, path }
+    }
+    const owner = BrowserWindow.fromWebContents(evt.sender)
+    const opts = {
+      title: 'Save Patch',
+      defaultPath: defaultName || 'untitled.dpatch',
+      filters: FILE_FILTERS
+    }
+    const result = owner
+      ? await dialog.showSaveDialog(owner, opts)
+      : await dialog.showSaveDialog(opts)
+    if (result.canceled || !result.filePath) return { canceled: true }
+    const path = withPatchExt(result.filePath)
+    grantPath(path)
+    return { canceled: false, path }
   })
 
-  ipcMain.handle('dialog:open', async () => {
-    const focused = BrowserWindow.getFocusedWindow()
-    const result = focused
-      ? await dialog.showOpenDialog(focused, {
-          title: 'Open Patch',
-          properties: ['openFile'],
-          filters: FILE_FILTERS
-        })
-      : await dialog.showOpenDialog({
-          title: 'Open Patch',
-          properties: ['openFile'],
-          filters: FILE_FILTERS
-        })
-    if (!result.canceled) grantPath(result.filePaths[0])
-    return { canceled: result.canceled, path: result.filePaths[0] }
+  ipcMain.handle('dialog:open', async (evt) => {
+    // Same window-ownership reasoning as dialog:save above.
+    if (findHelper()) {
+      const picked = await pickOpenPath()
+      if (picked.canceled || !picked.path) return { canceled: true }
+      grantPath(picked.path)
+      return { canceled: false, path: picked.path }
+    }
+    const owner = BrowserWindow.fromWebContents(evt.sender)
+    const opts = {
+      title: 'Open Patch',
+      properties: ['openFile'] as const,
+      filters: FILE_FILTERS
+    }
+    const result = owner
+      ? await dialog.showOpenDialog(owner, { ...opts, properties: ['openFile'] })
+      : await dialog.showOpenDialog({ ...opts, properties: ['openFile'] })
+    const picked = result.filePaths[0]
+    if (result.canceled || !picked) return { canceled: true }
+    grantPath(picked)
+    return { canceled: false, path: picked }
   })
 
   ipcMain.handle('fs:writeFile', async (_evt, path: string, content: string) => {
     if (!isAllowedPath(path)) {
-      throw new Error(`refusing to write file not granted via a dialog: ${path}`)
+      // Say which rule failed — "not granted" on a file the user just
+      // picked sends people hunting in the wrong place.
+      throw new Error(
+        hasPatchExt(path)
+          ? `refusing to write a path not granted via a dialog: ${path}`
+          : `refusing to write: not a .dpatch/.json path: ${path}`
+      )
     }
     await writeFile(path, content, 'utf8')
   })
 
   ipcMain.handle('fs:readFile', async (_evt, path: string) => {
     if (!isAllowedPath(path)) {
-      throw new Error(`refusing to read file not granted via a dialog: ${path}`)
+      throw new Error(
+        hasPatchExt(path)
+          ? `refusing to read a path not granted via a dialog: ${path}`
+          : `refusing to read: not a .dpatch/.json path: ${path}`
+      )
     }
     return await readFile(path, 'utf8')
   })
@@ -168,7 +331,28 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('flash:detect', async (_evt, target?: 'daisy_seed' | 'esp32_s3') => {
+  /**
+   * Write the generated project to disk and reveal it in the file manager.
+   *
+   * The one-way door out of the patcher: from here the project is ordinary
+   * C++ that any editor can open and any toolchain can build. Nothing reads
+   * it back — the graph does not learn about edits made out there, which is
+   * why the UI says so before calling this.
+   *
+   * `shell.openPath` on the directory rather than launching an editor: there
+   * is no portable way to know which editor someone uses, and opening the
+   * folder works everywhere and is one click from any of them.
+   */
+  ipcMain.handle('project:eject', async (_evt, input: BuildInput) => {
+    const projectPath = await writeProjectFiles(input)
+    const err = await shell.openPath(projectPath)
+    // A non-empty string is Electron's way of reporting failure here. The
+    // path is still returned so the UI can show it even when no file
+    // manager is registered — common on a bare Linux install.
+    return { path: projectPath, opened: err === '', error: err || undefined }
+  })
+
+  ipcMain.handle('flash:detect', async (_evt, target?: BoardId) => {
     return await detectFlashDevices(target ?? 'daisy_seed')
   })
 
@@ -184,7 +368,7 @@ function registerIpcHandlers(): void {
       evt,
       payload: {
         binaryPath: string
-        target?: 'daisy_seed' | 'esp32_s3'
+        target?: BoardId
         daisyFlashMode?: 'internal' | 'qspi' | 'sram'
       }
     ) => {
@@ -195,8 +379,11 @@ function registerIpcHandlers(): void {
         // Back-compat: accept a bare string as the Daisy path for callers
         // that haven't adopted the new payload yet.
         const binaryPath = typeof payload === 'string' ? payload : payload.binaryPath
-        const target: 'daisy_seed' | 'esp32_s3' =
-          typeof payload === 'string' ? 'daisy_seed' : payload.target ?? 'daisy_seed'
+        // coerceBoardId, not a cast: this is a trust boundary and the
+        // target tables no longer carry a silent Daisy fallback.
+        const target: BoardId = coerceBoardId(
+          typeof payload === 'string' ? 'daisy_seed' : payload.target
+        )
         const daisyFlashMode: 'internal' | 'qspi' | 'sram' =
           typeof payload === 'string' ? 'qspi' : payload.daisyFlashMode ?? 'qspi'
 
@@ -255,6 +442,42 @@ function registerIpcHandlers(): void {
   // Read returns {} when the file doesn't exist yet — the renderer treats
   // "no entry" as unknown status.
   const VERIFICATION_PATH = join(app.getPath('userData'), 'verified.json')
+
+  /* ---------------- assistant ---------------- */
+
+  ipcMain.handle('assistant:config', async () => readConfigSafe())
+
+  ipcMain.handle('assistant:saveConfig', async (_evt, patch: Parameters<typeof saveConfig>[0]) =>
+    saveConfig(patch ?? {})
+  )
+
+  ipcMain.handle('assistant:models', async () => listLocalModels())
+
+  ipcMain.handle('assistant:complete', async (_evt, req: CompletionRequest) => {
+    if (!req || typeof req.system !== 'string' || typeof req.user !== 'string') {
+      return { error: 'assistant:complete expects { system, user }' }
+    }
+    return assistantComplete(req)
+  })
+
+  /* ---------------- sample library ---------------- */
+
+  ipcMain.handle('sample:list', async () => listSamples())
+
+  ipcMain.handle('sample:store', async (_evt, input: StoreSampleInput) => {
+    if (!input || !(input.pcm instanceof ArrayBuffer)) {
+      throw new Error('sample:store expects an ArrayBuffer of PCM')
+    }
+    return storeSample(input)
+  })
+
+  ipcMain.handle('sample:read', async (_evt, id: string) => readSamplePcm(id))
+
+  ipcMain.handle('sample:rename', async (_evt, id: string, name: string) =>
+    renameSample(id, name)
+  )
+
+  ipcMain.handle('sample:delete', async (_evt, id: string) => deleteSample(id))
 
   ipcMain.handle('verification:load', async () => {
     try {

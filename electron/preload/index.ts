@@ -7,7 +7,8 @@ import { contextBridge, ipcRenderer } from 'electron'
  * importing from `../main/*`) so the renderer's TypeScript project
  * doesn't have to include the main-process sources. Keep in sync.
  */
-export type BoardTarget = 'daisy_seed' | 'esp32_s3'
+import type { BoardId } from '../../shared/boards'
+export type BoardTarget = BoardId
 
 /** Mirror of the Daisy flash-mode union on the main side. */
 export type DaisyFlashMode = 'internal' | 'qspi' | 'sram'
@@ -173,6 +174,14 @@ const api = {
     onProgress: (cb: (line: string) => void): (() => void) =>
       onChannel('build:progress', cb)
   },
+  project: {
+    /**
+     * Write the generated project to the workspace and open the folder.
+     * One-way: nothing reads edits back into the graph.
+     */
+    eject: (input: BuildInput): Promise<{ path: string; opened: boolean; error?: string }> =>
+      ipcRenderer.invoke('project:eject', input)
+  },
   flash: {
     detect: (target?: BoardTarget): Promise<FlashStatus> =>
       ipcRenderer.invoke('flash:detect', target),
@@ -212,7 +221,61 @@ const api = {
       ipcRenderer.invoke('verification:load'),
     save: (table: Record<string, unknown>): Promise<void> =>
       ipcRenderer.invoke('verification:save', table)
+  },
+  /**
+   * Sample library. Decoding stays in the renderer (see sampleService.ts);
+   * what crosses this boundary is already raw interleaved Float32 PCM.
+   */
+  /**
+   * Assistant. Network calls and API keys stay in the main process — see
+   * `electron/main/assistantService.ts` for why. The renderer never holds a
+   * credential and `config()` never returns one.
+   */
+  assistant: {
+    config: (): Promise<SafeAssistantConfig> => ipcRenderer.invoke('assistant:config'),
+    saveConfig: (patch: {
+      provider?: 'ollama' | 'anthropic' | 'openai'
+      model?: string
+      baseUrl?: string
+      key?: { provider: 'ollama' | 'anthropic' | 'openai'; value: string }
+    }): Promise<SafeAssistantConfig> => ipcRenderer.invoke('assistant:saveConfig', patch),
+    models: (): Promise<string[]> => ipcRenderer.invoke('assistant:models'),
+    complete: (req: { system: string; user: string }): Promise<{ text?: string; error?: string }> =>
+      ipcRenderer.invoke('assistant:complete', req)
+  },
+  samples: {
+    list: (): Promise<SampleMeta[]> => ipcRenderer.invoke('sample:list'),
+    store: (input: {
+      name: string
+      sampleRate: number
+      channels: number
+      pcm: ArrayBuffer
+    }): Promise<SampleMeta> => ipcRenderer.invoke('sample:store', input),
+    read: (id: string): Promise<ArrayBuffer | null> => ipcRenderer.invoke('sample:read', id),
+    rename: (id: string, name: string): Promise<SampleMeta[]> =>
+      ipcRenderer.invoke('sample:rename', id, name),
+    remove: (id: string): Promise<SampleMeta[]> => ipcRenderer.invoke('sample:delete', id)
   }
+}
+
+/** Mirrors `electron/main/sampleService.ts`. Duplicated rather than imported:
+ *  the preload bundle must not pull in main-process modules. */
+export interface SampleMeta {
+  id: string
+  name: string
+  sampleRate: number
+  channels: number
+  frames: number
+  duration: number
+  importedAt: number
+}
+
+/** Mirrors `electron/main/assistantService.ts`; keys are never included. */
+export interface SafeAssistantConfig {
+  provider: 'ollama' | 'anthropic' | 'openai'
+  model: string
+  baseUrl: string
+  hasKey: Record<'ollama' | 'anthropic' | 'openai', boolean>
 }
 
 export type DaisyPatcherAPI = typeof api

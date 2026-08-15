@@ -42,6 +42,9 @@ import {
   parseElements,
   serializeElements
 } from './oled/elements'
+import { menuStateFor } from '@/state/menuRuntime'
+import { parseMenuTree } from './menu/tree'
+import type { MenuMap } from './oled/render'
 import {
   OLED_BITMAP_BYTES,
   OLED_HEIGHT,
@@ -75,7 +78,8 @@ const ELEMENT_BUTTONS: { kind: ElementKind; label: string; title: string }[] = [
   { kind: 'rect', label: '+R', title: 'Add rectangle' },
   { kind: 'circle', label: '+C', title: 'Add circle' },
   { kind: 'line', label: '+L', title: 'Add line' },
-  { kind: 'pattern', label: '+P', title: 'Add pattern' }
+  { kind: 'pattern', label: '+P', title: 'Add pattern' },
+  { kind: 'menu', label: '+Menu', title: 'Add live menu view' }
 ]
 
 interface ThemeColors {
@@ -217,7 +221,26 @@ export function OledNode<S extends ClassicScheme>(props: Props<S>): React.JSX.El
       for (const sock of INPUT_SOCKETS) {
         inputMap[sock] = bufsRef.current[sock] ?? new Float32Array(256)
       }
-      renderFrame(els, inputMap, bitmap)
+      /*
+       * Live menu data for any `menu` elements. Rebuilt per frame rather
+       * than subscribed: a patch has one or two menu nodes and the trees
+       * are tens of entries, so this is far cheaper than wiring a
+       * subscription per node — and it guarantees the bitmap reflects the
+       * cursor the moment it moves.
+       */
+      let menus: MenuMap | undefined
+      if (els.some((e) => e.kind === 'menu')) {
+        const nodes = useEditorStore.getState().graph.nodes
+        menus = {}
+        for (const n of nodes) {
+          if (n.kind !== 'menu') continue
+          menus[n.id] = {
+            tree: parseMenuTree(n.params.tree),
+            state: menuStateFor(n.id)
+          }
+        }
+      }
+      renderFrame(els, inputMap, bitmap, menus)
 
       // Paint background.
       ctx.fillStyle = theme.pixelOff
@@ -271,6 +294,17 @@ export function OledNode<S extends ClassicScheme>(props: Props<S>): React.JSX.El
   const addElement = React.useCallback(
     (k: ElementKind) => {
       const fresh = makeDefaultElement(k)
+      /*
+       * A menu element is useless until it names a menu node, and in the
+       * overwhelmingly common case there is exactly one. Bind it on
+       * creation so `+Menu` just works; the inspector can repoint it.
+       */
+      if (fresh.kind === 'menu' && !fresh.menuNodeId) {
+        const first = useEditorStore
+          .getState()
+          .graph.nodes.find((n) => n.kind === 'menu')
+        if (first) fresh.menuNodeId = first.id
+      }
       const next = [...elements, fresh]
       writeElements(next)
       setSelectedId(fresh.id)

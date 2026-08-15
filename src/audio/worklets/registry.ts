@@ -14,6 +14,7 @@ import { SEQUENCING_REGISTRY } from './registry.sequencing'
 import { EFFECTS_REGISTRY } from './registry.effects'
 import { VISUAL_REGISTRY } from './registry.visual'
 import { HARDWARE_REGISTRY } from './registry.hardware'
+import { LOGIC_REGISTRY } from './registry.logic'
 
 export interface WorkletEntry {
   processorName: string
@@ -153,7 +154,8 @@ export const WORKLET_REGISTRY: Partial<Record<NodeKind, WorkletEntry>> = {
   ...SEQUENCING_REGISTRY,
   ...EFFECTS_REGISTRY,
   ...VISUAL_REGISTRY,
-  ...HARDWARE_REGISTRY
+  ...HARDWARE_REGISTRY,
+  ...LOGIC_REGISTRY
 }
 
 export function workletEntriesToLoad(): WorkletEntry[] {

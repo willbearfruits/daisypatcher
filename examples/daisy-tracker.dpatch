@@ -1,0 +1,732 @@
+{
+  "dpatch": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "clock_1",
+        "kind": "clock",
+        "position": {
+          "x": -900,
+          "y": 0
+        },
+        "params": {
+          "bpm": 128,
+          "pulse_width": 0.08
+        }
+      },
+      {
+        "id": "clock_divider_2",
+        "kind": "clock_divider",
+        "position": {
+          "x": -700,
+          "y": 0
+        },
+        "params": {}
+      },
+      {
+        "id": "step_seq_3",
+        "kind": "step_seq",
+        "position": {
+          "x": -700,
+          "y": -420
+        },
+        "params": {
+          "s1": 0.5,
+          "s2": 0.58,
+          "s3": 0.66,
+          "s4": 0.58,
+          "s5": 0.75,
+          "s6": 0.66,
+          "s7": 0.5,
+          "s8": 0.42,
+          "g1": "on",
+          "g2": "on",
+          "g3": "on",
+          "g4": "on",
+          "g5": "on",
+          "g6": "on",
+          "g7": "on",
+          "g8": "on"
+        }
+      },
+      {
+        "id": "range_4",
+        "kind": "range",
+        "position": {
+          "x": -460,
+          "y": -460
+        },
+        "params": {
+          "in_min": 0,
+          "in_max": 1,
+          "out_min": -1,
+          "out_max": 1,
+          "clamp": "on"
+        }
+      },
+      {
+        "id": "oscillator_5",
+        "kind": "oscillator",
+        "position": {
+          "x": -240,
+          "y": -500
+        },
+        "params": {
+          "frequency": 330,
+          "amplitude": 0.5,
+          "waveform": "square"
+        }
+      },
+      {
+        "id": "adsr_6",
+        "kind": "adsr",
+        "position": {
+          "x": -460,
+          "y": -340
+        },
+        "params": {
+          "attack": 0.004,
+          "decay": 0.1,
+          "sustain": 0.2,
+          "release": 0.12
+        }
+      },
+      {
+        "id": "vca_7",
+        "kind": "vca",
+        "position": {
+          "x": -20,
+          "y": -480
+        },
+        "params": {
+          "bias": 0
+        }
+      },
+      {
+        "id": "step_seq_8",
+        "kind": "step_seq",
+        "position": {
+          "x": -700,
+          "y": -160
+        },
+        "params": {
+          "s1": 0.2,
+          "s2": 0.2,
+          "s3": 0.28,
+          "s4": 0.2,
+          "s5": 0.12,
+          "s6": 0.2,
+          "s7": 0.28,
+          "s8": 0.36,
+          "g1": "on",
+          "g2": "on",
+          "g3": "on",
+          "g4": "on",
+          "g5": "on",
+          "g6": "off",
+          "g7": "on",
+          "g8": "off"
+        }
+      },
+      {
+        "id": "range_9",
+        "kind": "range",
+        "position": {
+          "x": -460,
+          "y": -180
+        },
+        "params": {
+          "in_min": 0,
+          "in_max": 1,
+          "out_min": -2,
+          "out_max": 0,
+          "clamp": "on"
+        }
+      },
+      {
+        "id": "karplus_10",
+        "kind": "karplus",
+        "position": {
+          "x": -240,
+          "y": -200
+        },
+        "params": {
+          "frequency": 110,
+          "damping": 0.4,
+          "feedback": 0.985,
+          "retrigger": "manual"
+        }
+      },
+      {
+        "id": "drum_kick_11",
+        "kind": "drum_kick",
+        "position": {
+          "x": -240,
+          "y": 60
+        },
+        "params": {
+          "tune": 48,
+          "decay": 0.42,
+          "punch": 0.7,
+          "sweep": 0.6
+        }
+      },
+      {
+        "id": "drum_hat_12",
+        "kind": "drum_hat",
+        "position": {
+          "x": -240,
+          "y": 220
+        },
+        "params": {
+          "decay": 0.05,
+          "tone": 0.75
+        }
+      },
+      {
+        "id": "mixer4_13",
+        "kind": "mixer4",
+        "position": {
+          "x": 240,
+          "y": -140
+        },
+        "params": {
+          "gain1": 0.8,
+          "gain2": 0.9,
+          "gain3": 1,
+          "gain4": 0.5
+        }
+      },
+      {
+        "id": "knob_in_14",
+        "kind": "knob_in",
+        "position": {
+          "x": -900,
+          "y": 420
+        },
+        "params": {
+          "bindingId": "hw_slider_1",
+          "channel": "1",
+          "value": 0.6,
+          "min": 0,
+          "max": 1.4
+        }
+      },
+      {
+        "id": "knob_in_15",
+        "kind": "knob_in",
+        "position": {
+          "x": -900,
+          "y": 520
+        },
+        "params": {
+          "bindingId": "hw_slider_2",
+          "channel": "2",
+          "value": 0.65,
+          "min": 0,
+          "max": 1.4
+        }
+      },
+      {
+        "id": "knob_in_16",
+        "kind": "knob_in",
+        "position": {
+          "x": -900,
+          "y": 620
+        },
+        "params": {
+          "bindingId": "hw_slider_3",
+          "channel": "3",
+          "value": 0.7,
+          "min": 0,
+          "max": 1.4
+        }
+      },
+      {
+        "id": "knob_in_17",
+        "kind": "knob_in",
+        "position": {
+          "x": -900,
+          "y": 720
+        },
+        "params": {
+          "bindingId": "hw_slider_4",
+          "channel": "4",
+          "value": 0.4,
+          "min": 0,
+          "max": 1.4
+        }
+      },
+      {
+        "id": "filter_svf_18",
+        "kind": "filter_svf",
+        "position": {
+          "x": 480,
+          "y": -140
+        },
+        "params": {
+          "frequency": 6000,
+          "resonance": 0.12
+        }
+      },
+      {
+        "id": "reverb_19",
+        "kind": "reverb",
+        "position": {
+          "x": 700,
+          "y": -140
+        },
+        "params": {
+          "size": 0.45,
+          "damp": 0.55,
+          "mix": 0.22
+        }
+      },
+      {
+        "id": "audio_output_20",
+        "kind": "audio_output",
+        "position": {
+          "x": 940,
+          "y": -140
+        },
+        "params": {}
+      },
+      {
+        "id": "encoder_in_21",
+        "kind": "encoder_in",
+        "position": {
+          "x": -1180,
+          "y": 300
+        },
+        "params": {
+          "bindingId": "hw_encoder_5",
+          "value": 0.5,
+          "step": 0.02,
+          "min": 0,
+          "max": 1,
+          "wrap": "clamp",
+          "sw_value": 0
+        }
+      },
+      {
+        "id": "menu_22",
+        "kind": "menu",
+        "position": {
+          "x": -900,
+          "y": 300
+        },
+        "params": {
+          "tree": "{\"root\":[{\"id\":\"tempo\",\"kind\":\"value\",\"label\":\"TEMPO\",\"type\":\"number\",\"min\":50,\"max\":220,\"step\":1,\"value\":128,\"defaultValue\":128,\"unit\":\"bpm\",\"target\":{\"nodeId\":\"clock_1\",\"paramId\":\"bpm\"},\"out\":\"a\"},{\"id\":\"t1\",\"kind\":\"submenu\",\"label\":\"TRK1 LEAD\",\"children\":[{\"id\":\"t1w\",\"kind\":\"value\",\"label\":\"WAVE\",\"type\":\"enum\",\"min\":0,\"max\":3,\"step\":1,\"options\":[\"SINE\",\"SAW\",\"SQR\",\"TRI\"],\"value\":2,\"defaultValue\":2,\"out\":\"none\"},{\"id\":\"t1d\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.02,\"max\":0.8,\"step\":0.01,\"value\":0.1,\"defaultValue\":0.1,\"unit\":\"s\",\"target\":{\"nodeId\":\"adsr_6\",\"paramId\":\"decay\"},\"out\":\"none\"},{\"id\":\"t1s\",\"kind\":\"value\",\"label\":\"SUSTAIN\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.2,\"defaultValue\":0.2,\"target\":{\"nodeId\":\"adsr_6\",\"paramId\":\"sustain\"},\"out\":\"none\"}]},{\"id\":\"t2\",\"kind\":\"submenu\",\"label\":\"TRK2 BASS\",\"children\":[{\"id\":\"t2d\",\"kind\":\"value\",\"label\":\"DAMP\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.4,\"defaultValue\":0.4,\"target\":{\"nodeId\":\"karplus_10\",\"paramId\":\"damping\"},\"out\":\"none\"},{\"id\":\"t2f\",\"kind\":\"value\",\"label\":\"SUSTAIN\",\"type\":\"number\",\"min\":0.9,\"max\":0.999,\"step\":0.002,\"value\":0.985,\"defaultValue\":0.985,\"target\":{\"nodeId\":\"karplus_10\",\"paramId\":\"feedback\"},\"out\":\"none\"}]},{\"id\":\"t3\",\"kind\":\"submenu\",\"label\":\"TRK3 KICK\",\"children\":[{\"id\":\"t3t\",\"kind\":\"value\",\"label\":\"TUNE\",\"type\":\"number\",\"min\":30,\"max\":90,\"step\":1,\"value\":48,\"defaultValue\":48,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"drum_kick_11\",\"paramId\":\"tune\"},\"out\":\"none\"},{\"id\":\"t3d\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.05,\"max\":1,\"step\":0.01,\"value\":0.42,\"defaultValue\":0.42,\"unit\":\"s\",\"target\":{\"nodeId\":\"drum_kick_11\",\"paramId\":\"decay\"},\"out\":\"none\"}]},{\"id\":\"mst\",\"kind\":\"submenu\",\"label\":\"MASTER\",\"children\":[{\"id\":\"mcut\",\"kind\":\"value\",\"label\":\"TONE\",\"type\":\"number\",\"min\":400,\"max\":12000,\"step\":50,\"value\":6000,\"defaultValue\":6000,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"filter_svf_18\",\"paramId\":\"frequency\"},\"out\":\"b\"},{\"id\":\"mrev\",\"kind\":\"value\",\"label\":\"REVERB\",\"type\":\"number\",\"min\":0,\"max\":0.8,\"step\":0.02,\"value\":0.22,\"defaultValue\":0.22,\"target\":{\"nodeId\":\"reverb_19\",\"paramId\":\"mix\"},\"out\":\"c\"}]}],\"longPress\":\"back\",\"doubleClick\":\"home\",\"longMs\":480,\"doubleMs\":280}"
+        }
+      },
+      {
+        "id": "oled_23",
+        "kind": "oled",
+        "position": {
+          "x": -620,
+          "y": 300
+        },
+        "params": {
+          "bindingId": "hw_oled_ssd1306_6",
+          "elements": "[{\"id\":\"el_870571980\",\"kind\":\"menu\",\"x\":0,\"y\":0,\"width\":128,\"height\":64,\"rows\":6,\"menuNodeId\":\"menu_22\"}]"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": {
+          "nodeId": "clock_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "clock_divider_2",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c2",
+        "from": {
+          "nodeId": "clock_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "step_seq_3",
+          "socketId": "clock"
+        }
+      },
+      {
+        "id": "c3",
+        "from": {
+          "nodeId": "step_seq_3",
+          "socketId": "cv"
+        },
+        "to": {
+          "nodeId": "range_4",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c4",
+        "from": {
+          "nodeId": "range_4",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oscillator_5",
+          "socketId": "pitch_cv"
+        }
+      },
+      {
+        "id": "c5",
+        "from": {
+          "nodeId": "step_seq_3",
+          "socketId": "gate"
+        },
+        "to": {
+          "nodeId": "adsr_6",
+          "socketId": "gate"
+        }
+      },
+      {
+        "id": "c6",
+        "from": {
+          "nodeId": "oscillator_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "vca_7",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c7",
+        "from": {
+          "nodeId": "adsr_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "vca_7",
+          "socketId": "cv"
+        }
+      },
+      {
+        "id": "c8",
+        "from": {
+          "nodeId": "clock_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "step_seq_8",
+          "socketId": "clock"
+        }
+      },
+      {
+        "id": "c9",
+        "from": {
+          "nodeId": "step_seq_8",
+          "socketId": "cv"
+        },
+        "to": {
+          "nodeId": "range_9",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c10",
+        "from": {
+          "nodeId": "step_seq_8",
+          "socketId": "gate"
+        },
+        "to": {
+          "nodeId": "karplus_10",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c11",
+        "from": {
+          "nodeId": "range_9",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "karplus_10",
+          "socketId": "cv_pitch"
+        }
+      },
+      {
+        "id": "c12",
+        "from": {
+          "nodeId": "clock_divider_2",
+          "socketId": "d4"
+        },
+        "to": {
+          "nodeId": "drum_kick_11",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c13",
+        "from": {
+          "nodeId": "clock_divider_2",
+          "socketId": "d2"
+        },
+        "to": {
+          "nodeId": "drum_hat_12",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c14",
+        "from": {
+          "nodeId": "vca_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in1"
+        }
+      },
+      {
+        "id": "c15",
+        "from": {
+          "nodeId": "karplus_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in2"
+        }
+      },
+      {
+        "id": "c16",
+        "from": {
+          "nodeId": "drum_kick_11",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in3"
+        }
+      },
+      {
+        "id": "c17",
+        "from": {
+          "nodeId": "drum_hat_12",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in4"
+        }
+      },
+      {
+        "id": "c18",
+        "from": {
+          "nodeId": "knob_in_14",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "cv_level1"
+        }
+      },
+      {
+        "id": "c19",
+        "from": {
+          "nodeId": "knob_in_15",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "cv_level2"
+        }
+      },
+      {
+        "id": "c20",
+        "from": {
+          "nodeId": "knob_in_16",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "cv_level3"
+        }
+      },
+      {
+        "id": "c21",
+        "from": {
+          "nodeId": "knob_in_17",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "cv_level4"
+        }
+      },
+      {
+        "id": "c22",
+        "from": {
+          "nodeId": "mixer4_13",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_18",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c23",
+        "from": {
+          "nodeId": "filter_svf_18",
+          "socketId": "lp"
+        },
+        "to": {
+          "nodeId": "reverb_19",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c24",
+        "from": {
+          "nodeId": "reverb_19",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_20",
+          "socketId": "left"
+        }
+      },
+      {
+        "id": "c25",
+        "from": {
+          "nodeId": "reverb_19",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_20",
+          "socketId": "right"
+        }
+      },
+      {
+        "id": "c26",
+        "from": {
+          "nodeId": "encoder_in_21",
+          "socketId": "delta"
+        },
+        "to": {
+          "nodeId": "menu_22",
+          "socketId": "delta"
+        }
+      },
+      {
+        "id": "c27",
+        "from": {
+          "nodeId": "encoder_in_21",
+          "socketId": "sw"
+        },
+        "to": {
+          "nodeId": "menu_22",
+          "socketId": "click"
+        }
+      }
+    ],
+    "meta": {
+      "name": "daisy-tracker",
+      "sampleRate": 48000,
+      "blockSize": 48
+    }
+  },
+  "hardware": {
+    "board": "daisy_seed",
+    "components": [
+      {
+        "id": "hw_slider_1",
+        "kind": "slider",
+        "label": "Trk 1",
+        "position": {
+          "x": 120,
+          "y": 560
+        },
+        "pins": {
+          "wiper": "D15"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_slider_2",
+        "kind": "slider",
+        "label": "Trk 2",
+        "position": {
+          "x": 200,
+          "y": 560
+        },
+        "pins": {
+          "wiper": "D16"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_slider_3",
+        "kind": "slider",
+        "label": "Trk 3",
+        "position": {
+          "x": 280,
+          "y": 560
+        },
+        "pins": {
+          "wiper": "D17"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_slider_4",
+        "kind": "slider",
+        "label": "Trk 4",
+        "position": {
+          "x": 360,
+          "y": 560
+        },
+        "pins": {
+          "wiper": "D18"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_encoder_5",
+        "kind": "encoder",
+        "label": "Nav",
+        "position": {
+          "x": 480,
+          "y": 560
+        },
+        "pins": {
+          "a": "D0",
+          "b": "D1",
+          "sw": "D2"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_oled_ssd1306_6",
+        "kind": "oled_ssd1306",
+        "label": "Display",
+        "position": {
+          "x": 240,
+          "y": 400
+        },
+        "pins": {
+          "sda": "D3",
+          "scl": "D11"
+        },
+        "config": {}
+      }
+    ],
+    "meta": {
+      "name": "daisy-tracker"
+    }
+  },
+  "layout": {
+    "daisyFlashMode": "qspi"
+  }
+}

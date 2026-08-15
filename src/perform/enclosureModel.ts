@@ -54,6 +54,8 @@ const HOLE_DIAMETER_MM: Record<HardwareKind, number> = {
   midi_jack: 14.5, // DIN5 panel hole
   oled_ssd1306: 0, // rectangular window cutout instead
   i2s_codec: 0, // internal board, no faceplate presence
+  pcm5102a: 0, // internal board; its 3.5mm jack is panel-mounted separately
+  max98357a: 0, // internal board, speaker wired off the terminal block
   gyroscope: 0,
   magnetometer: 0,
   tof: 4 // sensor window
@@ -85,6 +87,8 @@ export interface EnclosureComponent {
   size: { w: number; h: number }
   /** Axis-aligned bounds of the rotated footprint in mm. */
   bounds: { w: number; h: number }
+  /** Performance size multiplier already folded into `size`/`bounds`. */
+  scale: number
 }
 
 export interface EnclosureHole {
@@ -148,25 +152,52 @@ export function stageComponents(
   offsetY: number
 ): EnclosureComponent[] {
   return components.map((comp) => {
-    const size = SHAPE_DIMENSIONS[comp.kind] ?? { w: 10, h: 10 }
+    const natural = SHAPE_DIMENSIONS[comp.kind] ?? { w: 10, h: 10 }
+    const scale = performScale(comp)
+    const size = { w: natural.w * scale, h: natural.h * scale }
     const rotation = rotationOf(comp)
-    const bounds = rotatedBounds(comp.kind, rotation)
+    const bounds = rotatedBounds(comp.kind, rotation, scale)
+    // The PERFORMANCE placement wins when there is one; otherwise the panel
+    // position does. See `PerformPlacement` — a surface and a panel answer
+    // different questions and used to share one set of coordinates.
+    const px = comp.perform?.x ?? comp.position.x
+    const py = comp.perform?.y ?? comp.position.y
     // position is the shape's top-left in canvas units; rotation pivots on
-    // the natural center, so center = position + natural size / 2.
-    const cx = (comp.position.x + (size.w * MM_PER_UNIT) / 2) / MM_PER_UNIT + offsetX
-    const cy = (comp.position.y + (size.h * MM_PER_UNIT) / 2) / MM_PER_UNIT + offsetY
-    return { comp, cx, cy, rotation, size, bounds }
+    // the natural center, so center = position + size / 2.
+    const cx = (px + (size.w * MM_PER_UNIT) / 2) / MM_PER_UNIT + offsetX
+    const cy = (py + (size.h * MM_PER_UNIT) / 2) / MM_PER_UNIT + offsetY
+    return { comp, cx, cy, rotation, size, bounds, scale }
   })
+}
+
+/** Size multiplier for a control's performance weight. */
+export function performScale(comp: PlacedComponent): number {
+  switch (comp.perform?.size) {
+    case 'sm':
+      return 0.72
+    case 'lg':
+      return 1.5
+    default:
+      return 1
+  }
+}
+
+/** Controls that belong on the surface. Hidden ones stay on the panel. */
+export function performVisible(components: PlacedComponent[]): PlacedComponent[] {
+  return components.filter((c) => c.perform?.hidden !== true)
 }
 
 /** Rotated axis-aligned bounds of a kind's footprint. */
 function rotatedBounds(
   kind: HardwareKind,
-  rotation: 0 | 90 | 180 | 270
+  rotation: 0 | 90 | 180 | 270,
+  scale = 1
 ): { w: number; h: number } {
   const d = SHAPE_DIMENSIONS[kind]
   const swap = rotation === 90 || rotation === 270
-  return swap ? { w: d.h, h: d.w } : { w: d.w, h: d.h }
+  const w = d.w * scale
+  const h = d.h * scale
+  return swap ? { w: h, h: w } : { w, h }
 }
 
 /**
@@ -203,7 +234,13 @@ function fitStandard(
  * argument — safe to memoize on the layout's `components` array identity.
  */
 export function buildEnclosureModel(layout: HardwareLayout): EnclosureModel {
-  const placed = layout.components
+  /*
+   * Hidden controls are off the SURFACE, not off the panel: the part is
+   * still drilled, still pinned, still in the Hardware view. A trim pot you
+   * set once has no business taking up space you have to reach past
+   * mid-song.
+   */
+  const placed = performVisible(layout.components)
 
   if (placed.length === 0) {
     // Nothing placed: return the classic pedal blank so callers that DO

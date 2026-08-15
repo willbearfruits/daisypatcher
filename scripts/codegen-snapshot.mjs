@@ -163,7 +163,9 @@ for (const name of fixtureNames) {
         fixture.hardware ?? undefined,
         fixture.graph.meta?.name,
         target,
-        { daisyFlashMode: 'qspi' }
+        // `presets` is store state, not part of the graph, so a fixture
+        // that wants preset codegen covered carries its own list.
+        { daisyFlashMode: 'qspi', presets: fixture.presets ?? [] }
       )
     } catch (err) {
       console.error(`[FAIL] ${label}: generateProject threw — fixture is broken`)

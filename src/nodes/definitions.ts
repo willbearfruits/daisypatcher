@@ -12,6 +12,8 @@ import { SEQUENCING_DEFS } from './defs.sequencing'
 import { EFFECTS_DEFS } from './defs.effects'
 import { VISUAL_DEFS } from './defs.visual'
 import { HARDWARE_DEFS } from './defs.hardware'
+import { LOGIC_DEFS } from './defs.logic'
+import { bindingParam } from './bindingParam'
 
 export interface ParamDef {
   id: string
@@ -616,6 +618,10 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     inputs: [],
     outputs: [{ id: 'out', label: 'out', signal: 'cv' }],
     params: [
+      // Runtime already writes params.bindingId for this kind (addNode's
+      // auto-link, and codegen reads it) — it just wasn't declared, so the
+      // Inspector rendered no binding control. Declaring it is the whole fix.
+      bindingParam(),
       {
         id: 'channel',
         label: 'Ch',
@@ -644,6 +650,10 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     inputs: [],
     outputs: [{ id: 'out', label: 'out', signal: 'gate' }],
     params: [
+      // Runtime already writes params.bindingId for this kind (addNode's
+      // auto-link, and codegen reads it) — it just wasn't declared, so the
+      // Inspector rendered no binding control. Declaring it is the whole fix.
+      bindingParam(),
       {
         id: 'channel',
         label: 'Ch',
@@ -671,7 +681,8 @@ export const NODE_DEFINITIONS: Record<NodeKind, NodeDefinition> = {
   ...SEQUENCING_DEFS,
   ...EFFECTS_DEFS,
   ...VISUAL_DEFS,
-  ...HARDWARE_DEFS
+  ...HARDWARE_DEFS,
+  ...LOGIC_DEFS
 } as Record<NodeKind, NodeDefinition>
 
 export const NODE_KINDS: NodeKind[] = Object.keys(NODE_DEFINITIONS) as NodeKind[]

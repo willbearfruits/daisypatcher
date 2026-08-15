@@ -98,6 +98,15 @@ export function activityModeFor(
       // i2s_in outputs stereo audio; pick left.
       if (node.kind === 'i2s_in') return { kind: 'rms', nodeId: node.id }
       return { kind: 'none' }
+    /*
+     * Output-only sinks. They have no bound node to tap (the ESP32 drives
+     * them at board level via walkHardware, not through a patch node), so
+     * there is no per-component signal to meter — the bus-activity dot in
+     * HardwareView is the only indicator.
+     */
+    case 'pcm5102a':
+    case 'max98357a':
+      return { kind: 'none' }
     case 'switch_3way':
     case 'oled_ssd1306':
     case 'encoder':

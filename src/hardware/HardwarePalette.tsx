@@ -18,6 +18,8 @@ import {
   IconMidiJack,
   IconOLED,
   IconI2S,
+  IconLineOut,
+  IconAmp,
   IconEncoder,
   IconSlider,
   IconTouchRibbon,
@@ -28,6 +30,8 @@ import {
   IconElectret,
   IconPiezo
 } from './hardwareIcons'
+import { useEditorStore } from '@/state/store'
+import { isEsp32Target } from '@/codegen/targets'
 import styles from './HardwarePalette.module.css'
 
 export const HARDWARE_DRAG_MIME = 'application/x-dp-hardware-kind'
@@ -37,6 +41,13 @@ interface HwKindCard {
   label: string
   description: string
   icon: () => ReactElement
+  /**
+   * Kinds that only make sense on an ESP32 target. The Daisy Seed has an
+   * onboard AK4556 codec, so an external I2S DAC or amp is never wired to
+   * it — and the Seed's SAI1 path is still a codegen stub, so offering
+   * these there would produce firmware that silently does nothing.
+   */
+  esp32Only?: boolean
 }
 
 const HARDWARE_CARDS: HwKindCard[] = [
@@ -58,24 +69,42 @@ const HARDWARE_CARDS: HwKindCard[] = [
   { kind: 'audio_jack',   label: 'Audio Jack',   description: 'TRS stereo',               icon: IconAudioJack },
   { kind: 'midi_jack',    label: 'MIDI Jack',    description: 'DIN5 / TRS MIDI',          icon: IconMidiJack },
   { kind: 'oled_ssd1306', label: 'OLED 128x64',  description: 'I2C SSD1306 display',      icon: IconOLED },
-  { kind: 'i2s_codec',    label: 'I2S Codec',    description: 'External I2S DAC/ADC',     icon: IconI2S }
+  { kind: 'i2s_codec',    label: 'I2S Codec',    description: 'External I2S DAC/ADC',     icon: IconI2S },
+  { kind: 'pcm5102a',     label: 'PCM5102A',     description: 'I2S line-out DAC + jack',  icon: IconLineOut, esp32Only: true },
+  { kind: 'max98357a',    label: 'MAX98357A',    description: 'I2S class-D amp → speaker', icon: IconAmp,     esp32Only: true }
 ]
 
 export function HardwarePalette() {
+  const target = useEditorStore((s) => s.target)
+  const isEsp32 = isEsp32Target(target)
   return (
     <div className={styles.root}>
       <div className={styles.header}>Hardware</div>
       <div className={styles.scroll}>
         {HARDWARE_CARDS.map((c) => (
-          <HardwareCard key={c.kind} card={c} />
+          <HardwareCard
+            key={c.kind}
+            card={c}
+            unsupported={c.esp32Only === true && !isEsp32}
+          />
         ))}
       </div>
     </div>
   )
 }
 
-function HardwareCard({ card }: { card: HwKindCard }) {
+function HardwareCard({
+  card,
+  unsupported
+}: {
+  card: HwKindCard
+  unsupported: boolean
+}) {
   const onDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    if (unsupported) {
+      e.preventDefault()
+      return
+    }
     e.dataTransfer.effectAllowed = 'copy'
     e.dataTransfer.setData(HARDWARE_DRAG_MIME, card.kind)
     e.dataTransfer.setData('text/plain', card.kind)
@@ -83,18 +112,25 @@ function HardwareCard({ card }: { card: HwKindCard }) {
   const Icon = card.icon
   return (
     <div
-      className={styles.card}
-      draggable
+      className={`${styles.card} ${unsupported ? styles.cardUnsupported : ''}`}
+      draggable={!unsupported}
       onDragStart={onDragStart}
       data-dp-hardware-kind={card.kind}
-      title={card.description}
+      aria-disabled={unsupported || undefined}
+      title={
+        unsupported
+          ? `${card.label} — ESP32 targets only. The Daisy Seed has an onboard audio codec.`
+          : card.description
+      }
     >
       <span className={styles.cardIcon}>
         <Icon />
       </span>
       <span className={styles.cardBody}>
         <span className={styles.cardLabel}>{card.label}</span>
-        <span className={styles.cardDesc}>{card.description}</span>
+        <span className={styles.cardDesc}>
+          {unsupported ? 'ESP32 targets only' : card.description}
+        </span>
       </span>
     </div>
   )

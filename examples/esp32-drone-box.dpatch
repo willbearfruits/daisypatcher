@@ -1,0 +1,563 @@
+{
+  "dpatch": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "knob_in_1",
+        "kind": "knob_in",
+        "position": {
+          "x": -820,
+          "y": -220
+        },
+        "params": {
+          "bindingId": "hw_pot_1",
+          "channel": "1",
+          "value": 0.55,
+          "min": -1,
+          "max": 1
+        }
+      },
+      {
+        "id": "knob_in_2",
+        "kind": "knob_in",
+        "position": {
+          "x": -820,
+          "y": -80
+        },
+        "params": {
+          "bindingId": "hw_pot_2",
+          "channel": "2",
+          "value": 0.3,
+          "min": 0,
+          "max": 0.4
+        }
+      },
+      {
+        "id": "knob_in_3",
+        "kind": "knob_in",
+        "position": {
+          "x": -820,
+          "y": 60
+        },
+        "params": {
+          "bindingId": "hw_pot_3",
+          "channel": "3",
+          "value": 0.45,
+          "min": 120,
+          "max": 5000
+        }
+      },
+      {
+        "id": "knob_in_4",
+        "kind": "knob_in",
+        "position": {
+          "x": -820,
+          "y": 200
+        },
+        "params": {
+          "bindingId": "hw_pot_4",
+          "channel": "4",
+          "value": 0.5,
+          "min": 0.1,
+          "max": 0.85
+        }
+      },
+      {
+        "id": "oscillator_5",
+        "kind": "oscillator",
+        "position": {
+          "x": -60,
+          "y": -380
+        },
+        "params": {
+          "frequency": 55,
+          "amplitude": 0.32,
+          "waveform": "sawtooth"
+        }
+      },
+      {
+        "id": "lfo_6",
+        "kind": "lfo",
+        "position": {
+          "x": -420,
+          "y": -260
+        },
+        "params": {
+          "frequency": 0.037,
+          "depth": 0.3,
+          "offset": 0,
+          "waveform": "sine"
+        }
+      },
+      {
+        "id": "oscillator_7",
+        "kind": "oscillator",
+        "position": {
+          "x": -60,
+          "y": -260
+        },
+        "params": {
+          "frequency": 55.22,
+          "amplitude": 0.28,
+          "waveform": "sawtooth"
+        }
+      },
+      {
+        "id": "lfo_8",
+        "kind": "lfo",
+        "position": {
+          "x": -420,
+          "y": -130
+        },
+        "params": {
+          "frequency": 0.053,
+          "depth": 0.3,
+          "offset": 0,
+          "waveform": "tri"
+        }
+      },
+      {
+        "id": "oscillator_9",
+        "kind": "oscillator",
+        "position": {
+          "x": -60,
+          "y": -130
+        },
+        "params": {
+          "frequency": 55.44,
+          "amplitude": 0.28,
+          "waveform": "triangle"
+        }
+      },
+      {
+        "id": "lfo_10",
+        "kind": "lfo",
+        "position": {
+          "x": -420,
+          "y": 0
+        },
+        "params": {
+          "frequency": 0.017,
+          "depth": 0.3,
+          "offset": 0,
+          "waveform": "sine"
+        }
+      },
+      {
+        "id": "oscillator_11",
+        "kind": "oscillator",
+        "position": {
+          "x": -60,
+          "y": 0
+        },
+        "params": {
+          "frequency": 55.660000000000004,
+          "amplitude": 0.28,
+          "waveform": "sawtooth"
+        }
+      },
+      {
+        "id": "mixer4_12",
+        "kind": "mixer4",
+        "position": {
+          "x": 340,
+          "y": -160
+        },
+        "params": {
+          "gain1": 0.9,
+          "gain2": 0.85,
+          "gain3": 0.8,
+          "gain4": 0.75
+        }
+      },
+      {
+        "id": "filter_moog_13",
+        "kind": "filter_moog",
+        "position": {
+          "x": 580,
+          "y": -160
+        },
+        "params": {
+          "frequency": 1400,
+          "resonance": 0.22
+        }
+      },
+      {
+        "id": "chorus_14",
+        "kind": "chorus",
+        "position": {
+          "x": 800,
+          "y": -160
+        },
+        "params": {
+          "rate": 0.19,
+          "depth": 0.7,
+          "mix": 0.55
+        }
+      },
+      {
+        "id": "reverb_15",
+        "kind": "reverb",
+        "position": {
+          "x": 1020,
+          "y": -160
+        },
+        "params": {
+          "size": 0.85,
+          "damp": 0.3,
+          "mix": 0.55
+        }
+      },
+      {
+        "id": "limiter_16",
+        "kind": "limiter",
+        "position": {
+          "x": 1240,
+          "y": -160
+        },
+        "params": {
+          "ceiling": -0.5,
+          "release": 0.05
+        }
+      },
+      {
+        "id": "audio_output_17",
+        "kind": "audio_output",
+        "position": {
+          "x": 1460,
+          "y": -160
+        },
+        "params": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": {
+          "nodeId": "knob_in_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oscillator_5",
+          "socketId": "pitch_cv"
+        }
+      },
+      {
+        "id": "c2",
+        "from": {
+          "nodeId": "knob_in_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "lfo_6",
+          "socketId": "cv_offset"
+        }
+      },
+      {
+        "id": "c3",
+        "from": {
+          "nodeId": "knob_in_2",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "lfo_6",
+          "socketId": "cv_depth"
+        }
+      },
+      {
+        "id": "c4",
+        "from": {
+          "nodeId": "lfo_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oscillator_7",
+          "socketId": "pitch_cv"
+        }
+      },
+      {
+        "id": "c5",
+        "from": {
+          "nodeId": "knob_in_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "lfo_8",
+          "socketId": "cv_offset"
+        }
+      },
+      {
+        "id": "c6",
+        "from": {
+          "nodeId": "knob_in_2",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "lfo_8",
+          "socketId": "cv_depth"
+        }
+      },
+      {
+        "id": "c7",
+        "from": {
+          "nodeId": "lfo_8",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oscillator_9",
+          "socketId": "pitch_cv"
+        }
+      },
+      {
+        "id": "c8",
+        "from": {
+          "nodeId": "knob_in_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "lfo_10",
+          "socketId": "cv_offset"
+        }
+      },
+      {
+        "id": "c9",
+        "from": {
+          "nodeId": "knob_in_2",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "lfo_10",
+          "socketId": "cv_depth"
+        }
+      },
+      {
+        "id": "c10",
+        "from": {
+          "nodeId": "lfo_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oscillator_11",
+          "socketId": "pitch_cv"
+        }
+      },
+      {
+        "id": "c11",
+        "from": {
+          "nodeId": "oscillator_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_12",
+          "socketId": "in1"
+        }
+      },
+      {
+        "id": "c12",
+        "from": {
+          "nodeId": "oscillator_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_12",
+          "socketId": "in2"
+        }
+      },
+      {
+        "id": "c13",
+        "from": {
+          "nodeId": "oscillator_9",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_12",
+          "socketId": "in3"
+        }
+      },
+      {
+        "id": "c14",
+        "from": {
+          "nodeId": "oscillator_11",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_12",
+          "socketId": "in4"
+        }
+      },
+      {
+        "id": "c15",
+        "from": {
+          "nodeId": "mixer4_12",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_moog_13",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c16",
+        "from": {
+          "nodeId": "knob_in_3",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_moog_13",
+          "socketId": "cv_cutoff"
+        }
+      },
+      {
+        "id": "c17",
+        "from": {
+          "nodeId": "filter_moog_13",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "chorus_14",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c18",
+        "from": {
+          "nodeId": "chorus_14",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "reverb_15",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c19",
+        "from": {
+          "nodeId": "knob_in_4",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "reverb_15",
+          "socketId": "cv_size"
+        }
+      },
+      {
+        "id": "c20",
+        "from": {
+          "nodeId": "reverb_15",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "limiter_16",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c21",
+        "from": {
+          "nodeId": "limiter_16",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_17",
+          "socketId": "left"
+        }
+      },
+      {
+        "id": "c22",
+        "from": {
+          "nodeId": "limiter_16",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_17",
+          "socketId": "right"
+        }
+      }
+    ],
+    "meta": {
+      "name": "esp32-drone-box",
+      "sampleRate": 48000,
+      "blockSize": 48
+    }
+  },
+  "hardware": {
+    "board": "esp32_c3_supermini",
+    "components": [
+      {
+        "id": "hw_pot_1",
+        "kind": "pot",
+        "label": "Root",
+        "position": {
+          "x": 120,
+          "y": 520
+        },
+        "pins": {
+          "wiper": "GPIO0"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_2",
+        "kind": "pot",
+        "label": "Spread",
+        "position": {
+          "x": 210,
+          "y": 520
+        },
+        "pins": {
+          "wiper": "GPIO1"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_3",
+        "kind": "pot",
+        "label": "Tone",
+        "position": {
+          "x": 300,
+          "y": 520
+        },
+        "pins": {
+          "wiper": "GPIO2"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_4",
+        "kind": "pot",
+        "label": "Air",
+        "position": {
+          "x": 390,
+          "y": 520
+        },
+        "pins": {
+          "wiper": "GPIO3"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pcm5102a_5",
+        "kind": "pcm5102a",
+        "label": "Line out",
+        "position": {
+          "x": 260,
+          "y": 660
+        },
+        "pins": {
+          "sck": "GPIO4",
+          "ws": "GPIO5",
+          "sd_out": "GPIO6"
+        },
+        "config": {
+          "jumper": "i2s"
+        }
+      }
+    ],
+    "meta": {
+      "name": "esp32-drone-box"
+    }
+  },
+  "layout": {
+    "daisyFlashMode": "qspi"
+  }
+}

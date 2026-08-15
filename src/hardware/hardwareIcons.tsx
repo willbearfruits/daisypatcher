@@ -124,6 +124,37 @@ export function IconI2S() {
   )
 }
 
+/** PCM5102A line-out: board + headphone jack, i.e. "I2S becomes analog". */
+export function IconLineOut() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="2.5" y="6" width="13" height="12" rx="1" stroke="currentColor" strokeWidth="1.25" />
+      <line x1="5" y1="6" x2="5" y2="4.5" stroke="currentColor" strokeWidth="1" />
+      <line x1="8" y1="6" x2="8" y2="4.5" stroke="currentColor" strokeWidth="1" />
+      <line x1="11" y1="6" x2="11" y2="4.5" stroke="currentColor" strokeWidth="1" />
+      <rect x="5.5" y="9.5" width="5" height="5" stroke="currentColor" strokeWidth="1" opacity="0.8" />
+      {/* jack barrel + tip */}
+      <rect x="15.5" y="9.5" width="6" height="5" rx="1" stroke="currentColor" strokeWidth="1.25" />
+      <circle cx="19" cy="12" r="1.4" fill="currentColor" opacity="0.85" />
+    </svg>
+  )
+}
+
+/** MAX98357A: board driving a speaker cone. */
+export function IconAmp() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="2.5" y="7" width="10" height="10" rx="1" stroke="currentColor" strokeWidth="1.25" />
+      <line x1="5" y1="17" x2="5" y2="18.5" stroke="currentColor" strokeWidth="1" />
+      <line x1="7.5" y1="17" x2="7.5" y2="18.5" stroke="currentColor" strokeWidth="1" />
+      <line x1="10" y1="17" x2="10" y2="18.5" stroke="currentColor" strokeWidth="1" />
+      {/* speaker */}
+      <path d="M15.5 9.5v5h1.8l2.7 2.2V7.3l-2.7 2.2z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M21.5 9.8a3.2 3.2 0 0 1 0 4.4" stroke="currentColor" strokeWidth="1" opacity="0.7" />
+    </svg>
+  )
+}
+
 export function IconEncoder() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -244,6 +275,8 @@ export const HARDWARE_ICON: Record<HardwareKind, () => ReactElement> = {
   midi_jack: IconMidiJack,
   oled_ssd1306: IconOLED,
   i2s_codec: IconI2S,
+  pcm5102a: IconLineOut,
+  max98357a: IconAmp,
   encoder: IconEncoder,
   slider: IconSlider,
   touch_ribbon: IconTouchRibbon,

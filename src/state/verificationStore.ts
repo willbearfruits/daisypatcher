@@ -20,6 +20,7 @@
 import { create } from 'zustand'
 import type { NodeKind } from '@/types/graph'
 import type { BoardTarget } from '@/types/store'
+import { LEGACY_BOARD_IDS } from '../../shared/boards'
 
 export type VerificationResult = 'pass' | 'fail' | 'unknown'
 
@@ -46,6 +47,36 @@ function api(): MaybeDaisyApi {
   if (typeof window === 'undefined') return {}
   const w = window as unknown as { daisy?: MaybeDaisyApi }
   return w.daisy ?? {}
+}
+
+/**
+ * Rewrite records saved under a legacy target id.
+ *
+ * Keys are `${nodeKind}:${target}`, and the compile target `'esp32_s3'`
+ * became `'esp32_s3_devkitc'` when boards and targets merged into one
+ * union. Without this pass every node the user verified on hardware
+ * would silently show as untested — the records are still on disk, just
+ * filed under a name nothing looks up any more.
+ *
+ * Only rewrites when the destination key is free, so a genuine result
+ * recorded under the new id always wins.
+ */
+function migrateLegacyKeys(table: VerifiedTable): VerifiedTable {
+  let changed = false
+  const out: VerifiedTable = { ...table }
+  for (const [key, entry] of Object.entries(table)) {
+    const sep = key.lastIndexOf(':')
+    if (sep < 0) continue
+    const kind = key.slice(0, sep)
+    const target = key.slice(sep + 1)
+    const mapped = LEGACY_BOARD_IDS[target]
+    if (!mapped) continue
+    const nextKey = `${kind}:${mapped}`
+    if (!(nextKey in out)) out[nextKey] = { ...entry, target: mapped }
+    delete out[key]
+    changed = true
+  }
+  return changed ? out : table
 }
 
 export function verificationKey(kind: NodeKind, target: BoardTarget): string {
@@ -116,7 +147,7 @@ export const useVerificationStore = create<VerificationState & VerificationActio
       const ls = readLocalStorage()
       if (!bridge) {
         // No preload bridge — use localStorage as authority.
-        set({ table: ls ?? {}, loaded: true })
+        set({ table: migrateLegacyKeys(ls ?? {}), loaded: true })
         return
       }
       try {
@@ -127,11 +158,11 @@ export const useVerificationStore = create<VerificationState & VerificationActio
         const diskEmpty = !fromDisk || Object.keys(fromDisk).length === 0
         const lsHasData = ls && Object.keys(ls).length > 0
         const chosen = diskEmpty && lsHasData ? ls : fromDisk ?? ls ?? {}
-        set({ table: chosen, loaded: true })
+        set({ table: migrateLegacyKeys(chosen), loaded: true })
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[verification] IPC load failed, falling back to localStorage', err)
-        set({ table: ls ?? {}, loaded: true })
+        set({ table: migrateLegacyKeys(ls ?? {}), loaded: true })
       }
     },
 

@@ -39,12 +39,17 @@ import {
   useState
 } from 'react'
 import { useEditorStore } from '@/state/store'
+import { getBoardPinout } from '@/hardware/boardPinout'
+import { PresetBar } from '@/components/layout/PresetBar'
 import type { HardwareKind } from '@/types/hardware'
 import { useAudioEngine } from '@/audio/AudioEngineContext'
 import { HardwareActivityManager } from '@/hardware/HardwareActivity'
 import activityStyles from '@/hardware/HardwareActivity.module.css'
 import { tapInput } from '@/editor/oled/tapInput'
 import { parseElements, type BindingSource, type DisplayElement } from '@/editor/oled/elements'
+import { parseMenuTree } from '@/editor/menu/tree'
+import { menuStateFor } from '@/state/menuRuntime'
+import type { MenuMap } from '@/editor/oled/render'
 import {
   getPixel,
   renderFrame,
@@ -58,6 +63,7 @@ import { MM_PER_UNIT, nextRotation, rotationOf } from '@/hardware/componentShape
 import {
   buildEnclosureModel,
   stageComponents,
+  performVisible,
   type EnclosureComponent,
   type EnclosureFrame,
   type EnclosureModel
@@ -111,6 +117,19 @@ const NUDGE_UNITS_COARSE = 5 * MM_PER_UNIT
 const INK = 'var(--dp-perform-ink)'
 
 const OLED_INPUT_SOCKETS: BindingSource[] = ['a', 'b', 'c', 'd', 'e', 'f']
+
+/**
+ * What a control is called ON THE SURFACE.
+ *
+ * The silkscreen name and the performance name are not always the same
+ * thing: a panel says "POT 3" because that is what is printed next to the
+ * shaft, and the surface should say "Filter" because that is what you are
+ * reaching for.
+ */
+function performLabel(comp: { label: string; perform?: { label?: string } }): string {
+  const l = comp.perform?.label
+  return l && l.trim() ? l : comp.label
+}
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v
@@ -170,7 +189,7 @@ export function PerformView() {
     const f = arrangeDrag.frame
     return {
       ...f,
-      components: stageComponents(hardware.components, f.offsetX, f.offsetY),
+      components: stageComponents(performVisible(hardware.components), f.offsetX, f.offsetY),
       holes: []
     }
   }, [liveModel, arrangeDrag, hardware])
@@ -382,8 +401,11 @@ export function PerformView() {
         compId: ec.comp.id,
         lastX: p.x,
         lastY: p.y,
-        trueX: comp.position.x,
-        trueY: comp.position.y
+        // Seed from the performance placement when there is one, so the
+        // first drag continues from where the control is rather than
+        // jumping back to its panel position.
+        trueX: comp.perform?.x ?? comp.position.x,
+        trueY: comp.perform?.y ?? comp.position.y
       }
       setArrangeDrag({
         compId: ec.comp.id,
@@ -418,7 +440,9 @@ export function PerformView() {
         nx = Math.round(nx / ARRANGE_SNAP_UNITS) * ARRANGE_SNAP_UNITS
         ny = Math.round(ny / ARRANGE_SNAP_UNITS) * ARRANGE_SNAP_UNITS
       }
-      useEditorStore.getState().moveHardware(d.compId, { x: nx, y: ny })
+      // Arranging the SURFACE, not the panel. Moving a control here used
+      // to move the drill hole with it — see `PerformPlacement`.
+      useEditorStore.getState().setPerformPlacement(d.compId, { x: nx, y: ny })
     },
     [toCanvas]
   )
@@ -450,9 +474,11 @@ export function PerformView() {
       const comp = store.hardware.components.find((c) => c.id === id)
       if (!comp) return
       const step = e.shiftKey ? NUDGE_UNITS_COARSE : NUDGE_UNITS
+      const baseX = comp.perform?.x ?? comp.position.x
+      const baseY = comp.perform?.y ?? comp.position.y
       const move = (dx: number, dy: number) => {
         e.preventDefault()
-        store.moveHardware(id, { x: comp.position.x + dx, y: comp.position.y + dy })
+        store.setPerformPlacement(id, { x: baseX + dx, y: baseY + dy })
       }
       if (e.key === 'ArrowLeft') move(-step, 0)
       else if (e.key === 'ArrowRight') move(step, 0)
@@ -462,17 +488,49 @@ export function PerformView() {
         e.preventDefault()
         store.setHardwareConfig(id, 'rotation', nextRotation(rotationOf(comp)))
       }
+      /*
+       * Size and visibility are performance decisions, so they live on the
+       * same keys you already have your hand on while arranging. `[`/`]`
+       * step the weight; `h` takes a control off the surface without
+       * removing the part from the panel.
+       */
+      else if (e.key === '[' || e.key === ']') {
+        e.preventDefault()
+        const order = ['sm', 'md', 'lg'] as const
+        const cur = comp.perform?.size ?? 'md'
+        const i = order.indexOf(cur)
+        const next = order[Math.max(0, Math.min(order.length - 1, i + (e.key === ']' ? 1 : -1)))]
+        store.setPerformPlacement(id, { size: next })
+      } else if (e.key === 'h' || e.key === 'H') {
+        e.preventDefault()
+        store.setPerformPlacement(id, { hidden: !(comp.perform?.hidden ?? false) })
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [arrange])
 
-  const boardLabel = hardware.board === 'daisy_seed' ? 'DAISY SEED' : 'ESP32-S3'
+  // Data-driven: the ternary this replaces labelled every ESP32 board
+  // "ESP32-S3", so a C3 SuperMini enclosure was captioned with the wrong
+  // chip. Adding a board should never require editing this view.
+  const boardLabel = getBoardPinout(hardware.board).label.toUpperCase()
 
   const cursorClass = isPanning ? styles.panning : spaceHeld ? styles.panReady : ''
 
   return (
     <div className={`${styles.root} ${cursorClass}`} onWheel={onWheel} onMouseDown={onPanStart}>
+      {/*
+        Presets on the surface, not only in the Inspector rail. A preset you
+        have to leave the performance view to recall is a preset you will
+        not use mid-song — which was most of what made this view feel like a
+        drawing rather than an instrument. Hidden while arranging: laying
+        out the face and playing it are different jobs.
+      */}
+      {!arrange && !empty ? (
+        <div className={styles.presetDock}>
+          <PresetBar compact />
+        </div>
+      ) : null}
       <svg
         ref={svgRef}
         className={styles.svg}
@@ -516,6 +574,29 @@ export function PerformView() {
         </g>
       </svg>
 
+      {/*
+        Arrange help. The surface-specific keys are new and there is nowhere
+        else they could be discovered — an affordance nobody can find is the
+        same as one that does not exist.
+      */}
+      {arrange ? (
+        <div className={styles.arrangeHint}>
+          <span><b>drag</b> move</span>
+          <span><b>R</b> rotate</span>
+          <span><b>[ ]</b> size</span>
+          <span><b>H</b> hide from surface</span>
+          <span><b>shift</b> free / coarse</span>
+          <button
+            type="button"
+            className={styles.arrangeReset}
+            onClick={() => useEditorStore.getState().resetPerformLayout()}
+            title="Drop every performance placement — the surface mirrors the panel again"
+          >
+            reset surface
+          </button>
+        </div>
+      ) : null}
+
       <div className={activityStyles.toolbar}>
         <button
           type="button"
@@ -534,7 +615,7 @@ export function PerformView() {
           className={activityStyles.toolbarButton}
           data-active={arrange ? 'true' : 'false'}
           onClick={() => setMode('arrange')}
-          title="Arrange — drag components, R rotates, arrows nudge"
+          title="Arrange the performance surface — drag, R rotates, arrows nudge, [ ] resize, H hides"
         >
           <svg className={activityStyles.toolbarIcon} viewBox="0 0 16 16" aria-hidden>
             <path d="M8 2v12M2 8h12" strokeLinecap="round" />
@@ -792,6 +873,8 @@ function SilkLabel({ text, y, dim = false }: { text: string; y: number; dim?: bo
 
 const BADGE_KINDS: Partial<Record<HardwareKind, true>> = {
   i2s_codec: true,
+  pcm5102a: true,
+  max98357a: true,
   gyroscope: true,
   magnetometer: true,
   piezo: true
@@ -852,7 +935,7 @@ function PerformComponent({
       break
     default:
       body = BADGE_KINDS[kind] ? (
-        <InternalBadgeShape wMm={ec.size.w} hMm={ec.size.h} text={ec.comp.label} />
+        <InternalBadgeShape wMm={ec.size.w} hMm={ec.size.h} text={performLabel(ec.comp)} />
       ) : (
         <GenericShape />
       )
@@ -863,7 +946,7 @@ function PerformComponent({
   return (
     <g style={groupStyle(ec, animate)} pointerEvents="none">
       <g transform={ec.rotation ? `rotate(${ec.rotation})` : undefined}>{body}</g>
-      {showLabel ? <SilkLabel text={ec.comp.label} y={labelY} /> : null}
+      {showLabel ? <SilkLabel text={performLabel(ec.comp)} y={labelY} /> : null}
     </g>
   )
 }
@@ -889,6 +972,32 @@ function SweepControl({
 
   const [engaged, setEngaged] = useState(false)
   const dragRef = useRef<{ pointerId: number; lastY: number; acc: number } | null>(null)
+
+  /*
+   * Push-encoder switch.
+   *
+   * The knob body drags to turn, so the press needs its own target — a
+   * centre cap, which is also where you'd push a real encoder. Down and up
+   * are reported separately so the press duration is real, which is what
+   * lets the shared click classifier tell a click from a hold from a
+   * double without any extra plumbing here.
+   */
+  const isEncoder = comp.kind === 'encoder'
+  const swDown = useEditorStore((s) => {
+    if (comp.kind !== 'encoder') return false
+    const n = s.graph.nodes.find((x) => x.params.bindingId === comp.id)
+    const v = n?.params.sw_value
+    return typeof v === 'number' && v >= 0.5
+  })
+  const setSwitch = useCallback(
+    (down: boolean) => {
+      const st = useEditorStore.getState()
+      const node = st.graph.nodes.find((n) => n.params.bindingId === comp.id)
+      if (!node || node.kind !== 'encoder_in') return
+      st.setParam(node.id, 'sw_value', down ? 1 : 0)
+    },
+    [comp.id]
+  )
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<SVGGElement>) => {
@@ -972,7 +1081,31 @@ function SweepControl({
       >
         {shape}
       </g>
-      <SilkLabel text={comp.label} y={labelY} dim={!bound} />
+      {isEncoder ? (
+        <circle
+          r={Math.max(1.6, ec.size.w * 0.16)}
+          fill={swDown ? 'var(--dp-accent)' : 'var(--dp-perform-hardware)'}
+          fillOpacity={swDown ? 0.9 : 0.001}
+          stroke={swDown ? 'var(--dp-accent)' : 'none'}
+          strokeWidth={0.3}
+          style={{ cursor: 'pointer' }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+            setSwitch(true)
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation()
+            setSwitch(false)
+          }}
+          onPointerCancel={() => setSwitch(false)}
+          onLostPointerCapture={() => setSwitch(false)}
+        >
+          <title>Push (hold for long press, tap twice for double)</title>
+        </circle>
+      ) : null}
+      <SilkLabel text={performLabel(comp)} y={labelY} dim={!bound} />
       {readout !== null ? (
         <text
           y={labelY + 3.4}
@@ -1052,7 +1185,7 @@ function PressControl({
       >
         <FootswitchShape pressed={pressed} bound={bound} />
       </g>
-      <SilkLabel text={comp.label} y={labelY} dim={!bound} />
+      <SilkLabel text={performLabel(comp)} y={labelY} dim={!bound} />
     </g>
   )
 }
@@ -1097,7 +1230,7 @@ function ToggleControl({
       >
         <ToggleShape position={position} bound={bound} />
       </g>
-      <SilkLabel text={comp.label} y={labelY} dim={!bound} />
+      <SilkLabel text={performLabel(comp)} y={labelY} dim={!bound} />
     </g>
   )
 }
@@ -1161,7 +1294,7 @@ function LedControl({
       <g transform={ec.rotation ? `rotate(${ec.rotation})` : undefined}>
         <LedShape colorVar={ledColorVar(comp.config.color)} glowRef={glowRef} litRef={litRef} />
       </g>
-      <SilkLabel text={comp.label} y={labelY} />
+      <SilkLabel text={performLabel(comp)} y={labelY} />
     </g>
   )
 }
@@ -1264,7 +1397,20 @@ function OledControl({
       for (const sock of OLED_INPUT_SOCKETS) {
         inputMap[sock] = isPlaying ? bufsRef.current[sock] ?? 0 : 0
       }
-      renderFrame(elementsRef.current, inputMap, bitmap)
+      /*
+       * Same live-menu lookup as the in-node preview. Without it a `menu`
+       * element renders "NO MENU BOUND" here — the enclosure would show a
+       * blank screen while the patch canvas showed a working menu.
+       */
+      let menus: MenuMap | undefined
+      if (elementsRef.current.some((e) => e.kind === 'menu')) {
+        menus = {}
+        for (const n of useEditorStore.getState().graph.nodes) {
+          if (n.kind !== 'menu') continue
+          menus[n.id] = { tree: parseMenuTree(n.params.tree), state: menuStateFor(n.id) }
+        }
+      }
+      renderFrame(elementsRef.current, inputMap, bitmap, menus)
       ctx.fillStyle = pixelOff
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       ctx.fillStyle = pixelOn
@@ -1302,7 +1448,7 @@ function OledControl({
       <g transform={ec.rotation ? `rotate(${ec.rotation})` : undefined}>
         <OledWindowShape canvasRef={canvasRef} />
       </g>
-      <SilkLabel text={comp.label} y={labelY} />
+      <SilkLabel text={performLabel(comp)} y={labelY} />
     </g>
   )
 }

@@ -13,6 +13,7 @@
  */
 
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
+import { tryParseCode } from '@/codegen/codeNode/lang'
 import type { AudioGraph, Connection, NodeInstance, NodeKind } from '@/types/graph'
 import type {
   AudioEngine as AudioEngineInterface,
@@ -62,6 +63,22 @@ interface LiveConnection {
 
 type Listener = (state: EngineState, error?: Error) => void
 
+/** What a `preset_recall` node asks the app to do. Slots are indices. */
+export type PresetRequest =
+  | { action: 'apply'; slot: number }
+  | { action: 'morph'; a: number; b: number; t: number }
+
+export type PresetRequestHandler = (req: PresetRequest) => void
+
+/** Deinterleaved PCM, matching `state/sampleStore.ts`. */
+export interface EnginePcm {
+  channels: Float32Array[]
+  sampleRate: number
+  frames: number
+}
+
+export type SampleReader = (id: string) => Promise<EnginePcm | null>
+
 export class AudioEngine implements AudioEngineInterface {
   private ctx: AudioContext | null = null
   private nodes: Map<string, LiveNode> = new Map()
@@ -74,6 +91,20 @@ export class AudioEngine implements AudioEngineInterface {
   private _state: EngineState = 'stopped'
   private listeners: Set<Listener> = new Set()
   private modulesLoaded = false
+
+  /**
+   * Where a `preset_recall` node's requests go.
+   *
+   * The engine cannot import the store — the store imports the engine's
+   * types, and closing that loop would make the module graph cyclic — so
+   * the owner wires this up, the same way `setMenuEngine` hands the engine
+   * to the menu runtime. Null until then, and a recall with no handler is
+   * silently ignored rather than throwing inside an audio callback.
+   */
+  private presetHandler: PresetRequestHandler | null = null
+
+  /** Set by the app; see `setSampleReader`. */
+  private sampleReader: SampleReader | null = null
 
   /** All active taps, keyed by a monotonically-increasing id. */
   private taps: Map<number, TapEntry> = new Map()
@@ -185,6 +216,16 @@ export class AudioEngine implements AudioEngineInterface {
 
     // Enum or unknown param → forward to the processor via port.
     live.worklet.port.postMessage({ type: 'param', paramId, value })
+    /*
+     * A `code` node's body has to be PARSED before the worklet can run it —
+     * worklets cannot import a parser, and the CSP forbids compiling one at
+     * runtime. So the main thread parses and posts the AST; editing the
+     * source has to re-post it or the node keeps playing the old body.
+     */
+    if (live.kind === 'code' && paramId === 'source') {
+      const node = this.currentGraph.nodes.find((n) => n.id === nodeId)
+      if (node) this.postCodeAst(live.worklet, node)
+    }
   }
 
   // ---------- internals ----------
@@ -308,11 +349,116 @@ export class AudioEngine implements AudioEngineInterface {
         worklet.port.postMessage({ type: 'param', paramId: p.id, value: val })
       }
     }
+    this.postCodeAst(worklet, node)
+    this.attachPresetPort(worklet, node)
+    void this.postSamplePcm(worklet, node)
 
     this.nodes.set(node.id, { kind: node.kind, worklet })
 
     // Any taps that were queued for this node can now attach their analyser.
     this.attachPendingTaps(node.id)
+  }
+
+  /**
+   * Ship a sample player's PCM to its worklet.
+   *
+   * Async and fire-and-forget: reading a few megabytes off disk must not
+   * block graph construction, and the worklet plays silence until the
+   * buffer arrives — which is the honest behaviour for "this sample is
+   * still loading" and takes one frame in practice, since the library
+   * caches after the first read.
+   *
+   * The buffer is TRANSFERRED, not copied. A copy would double the peak
+   * memory of a big sample for no benefit, and the store's cached original
+   * is untouched because `.slice()` hands over a fresh one.
+   */
+  private async postSamplePcm(worklet: AudioWorkletNode, node: NodeInstance): Promise<void> {
+    if (node.kind !== 'sample_player') return
+    const id = typeof node.params.sampleId === 'string' ? node.params.sampleId : ''
+    if (!id) {
+      worklet.port.postMessage({ type: 'sample', pcm: null })
+      return
+    }
+    const pcm = await this.sampleReader?.(id)
+    if (!pcm || pcm.channels.length === 0) {
+      worklet.port.postMessage({ type: 'sample', pcm: null })
+      return
+    }
+    // Mono, matching what the firmware compiles in — see sampleCodegen.ts.
+    let mono: Float32Array
+    if (pcm.channels.length === 1) {
+      mono = pcm.channels[0].slice()
+    } else {
+      mono = new Float32Array(pcm.frames)
+      for (let i = 0; i < pcm.frames; i++) {
+        let sum = 0
+        for (const ch of pcm.channels) sum += ch[i] ?? 0
+        mono[i] = sum / pcm.channels.length
+      }
+    }
+    worklet.port.postMessage(
+      { type: 'sample', pcm: mono, sampleRate: pcm.sampleRate },
+      [mono.buffer]
+    )
+  }
+
+  /** Where the engine gets sample PCM from. Wired by the app, like the preset handler. */
+  setSampleReader(fn: SampleReader | null): void {
+    this.sampleReader = fn
+  }
+
+  /** Register the handler a `preset_recall` node's messages are routed to. */
+  setPresetHandler(fn: PresetRequestHandler | null): void {
+    this.presetHandler = fn
+  }
+
+  /**
+   * Route a preset node's outbound messages to the handler.
+   *
+   * Only `preset_recall` gets a listener: attaching one to every worklet
+   * would mean every node paid for a message channel it never uses, and
+   * `port.onmessage` is single-slot — a second assignment would silently
+   * replace whatever else was listening.
+   */
+  private attachPresetPort(worklet: AudioWorkletNode, node: NodeInstance): void {
+    if (node.kind !== 'preset_recall') return
+    worklet.port.onmessage = (event: MessageEvent) => {
+      const d = event.data as {
+        type?: string
+        action?: string
+        slot?: number
+        a?: number
+        b?: number
+        t?: number
+      }
+      if (d?.type !== 'preset' || !this.presetHandler) return
+      if (d.action === 'apply' && typeof d.slot === 'number') {
+        this.presetHandler({ action: 'apply', slot: d.slot })
+      } else if (
+        d.action === 'morph' &&
+        typeof d.a === 'number' &&
+        typeof d.b === 'number' &&
+        typeof d.t === 'number'
+      ) {
+        this.presetHandler({ action: 'morph', a: d.a, b: d.b, t: d.t })
+      }
+    }
+  }
+
+  /**
+   * Parse a `code` node's body and hand the AST to its worklet.
+   *
+   * The worklet cannot do this itself: it has no imports, and the built
+   * app's CSP (`script-src 'self'`) rules out compiling a parser at
+   * runtime. So the main thread parses and posts an AST, which the worklet
+   * turns into closures. A body that does not parse posts nothing and the
+   * node stays silent — the in-node editor is where the error is shown.
+   */
+  private postCodeAst(worklet: AudioWorkletNode, node: NodeInstance): void {
+    if (node.kind !== 'code') return
+    const parsed = tryParseCode(String(node.params.source ?? ''))
+    if ('error' in parsed) return
+    worklet.port.postMessage({ type: 'param', paramId: 'ast', value: parsed.program })
   }
 
   private removeLiveNode(id: string): void {

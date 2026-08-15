@@ -6,11 +6,19 @@
  */
 import type { AudioGraph } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
+import type { BoardId } from '../../../shared/boards'
+import { isEsp32Family } from '../../../shared/boards'
 import type { GenerateOptions, GeneratedProject } from '../generateProject'
 import { daisySeedTarget } from './daisySeed'
-import { esp32S3Target } from './esp32s3'
+import { esp32S3Target, esp32C3SuperMiniTarget, esp32S3SuperMiniTarget } from './esp32s3'
 
-export type BoardTarget = 'daisy_seed' | 'esp32_s3'
+/**
+ * A compile target IS a board — the two used to be separate unions joined
+ * by a fallback ternary, which meant a new board silently compiled as a
+ * Daisy. Kept as a named alias because ~40 call sites read better as
+ * "target" than "board id"; they are the same type.
+ */
+export type BoardTarget = BoardId
 
 export interface ToolCheckEntry {
   name: string
@@ -22,6 +30,8 @@ export interface ToolCheckEntry {
 export interface TargetBackend {
   id: BoardTarget
   label: string
+  /** Compact label for the TopBar switcher, where four boards must fit. */
+  shortLabel: string
   description: string
   /**
    * Pure function: graph + hardware → project files. `options` carries
@@ -46,21 +56,40 @@ export interface TargetBackend {
   artifactExtension: 'bin' | 'elf' | 'hex'
 }
 
-export const TARGETS: Record<BoardTarget, TargetBackend> = {
+export const TARGETS = {
   daisy_seed: daisySeedTarget,
-  esp32_s3: esp32S3Target
-}
+  esp32_s3_devkitc: esp32S3Target,
+  esp32_c3_supermini: esp32C3SuperMiniTarget,
+  esp32_s3_supermini: esp32S3SuperMiniTarget
+} satisfies Record<BoardTarget, TargetBackend>
 
+/**
+ * No `?? daisy_seed` fallback on purpose. The table is total, so a miss is
+ * impossible unless an invalid id came in from deserialization — and
+ * silently compiling Daisy firmware for an ESP32 layout is far worse than
+ * failing loudly. Untrusted ids are narrowed by `coerceBoardId` at the two
+ * boundaries that can produce them (`.dpatch` load and IPC).
+ */
 export function getTarget(id: BoardTarget): TargetBackend {
-  return TARGETS[id] ?? TARGETS.daisy_seed
+  return TARGETS[id]
 }
 
-/** Map a hardware layout's `board` field to its target. */
-export function targetForBoard(board: HardwareLayout['board']): BoardTarget {
-  return board === 'esp32_s3_devkitc' ? 'esp32_s3' : 'daisy_seed'
-}
+/**
+ * Board and target are the same value now; these two remain as identity
+ * functions so the ~15 existing call sites keep reading intentionally.
+ *
+ * @deprecated They are identity — prefer using the id directly.
+ */
+export const targetForBoard = (board: HardwareLayout['board']): BoardTarget => board
+/** @deprecated Identity — see {@link targetForBoard}. */
+export const boardForTarget = (target: BoardTarget): HardwareLayout['board'] => target
 
-/** Map a target id back to the canonical HardwareLayout board id. */
-export function boardForTarget(target: BoardTarget): HardwareLayout['board'] {
-  return target === 'esp32_s3' ? 'esp32_s3_devkitc' : 'daisy_seed'
+/**
+ * Targets that are an Espressif part — built with PlatformIO, flashed over
+ * serial, and able to drive an external I2S peripheral.
+ *
+ * Prefer this over `target === 'esp32_s3_devkitc'`.
+ */
+export function isEsp32Target(target: BoardTarget): boolean {
+  return isEsp32Family(target)
 }

@@ -25,6 +25,7 @@ import { useCompileStore, type DeviceDetail } from '@/state/compileState'
 import { useSerialStore, BAUD_RATES } from '@/state/serialState'
 import { estimateCpu, topCostNodes, KIND_COST, FALLBACK_COST } from '@/state/cpuBudget'
 import type { DaisyFlashMode } from '@/types/store'
+import { getTarget, isEsp32Target } from '@/codegen/targets'
 import styles from './StatusBar.module.css'
 
 /**
@@ -101,7 +102,7 @@ export function StatusBar() {
     pillState === 'serial'
       ? 'Daisy Seed \u00B7 Serial'
       : pillState === 'dfu'
-        ? (deviceLabel ?? (target === 'esp32_s3' ? 'ESP32 \u00B7 Ready' : 'Daisy Seed \u00B7 DFU'))
+        ? (deviceLabel ?? (isEsp32Target(target) ? 'ESP32 \u00B7 Ready' : 'Daisy Seed \u00B7 DFU'))
         : pillState === 'running'
           ? 'Daisy Seed \u00B7 Running'
           : 'no device'
@@ -284,7 +285,7 @@ function DevicePopover({ onClose }: { onClose: () => void }) {
 
   const firstDfu: DeviceDetail | undefined = dfuDevices[0]
   const bootloader = describeBootloader(firstDfu?.dfuseInterfaceName, firstDfu?.altName)
-  const title = target === 'esp32_s3' ? 'ESP32-S3' : 'DAISY SEED'
+  const title = getTarget(target).label.toUpperCase()
 
   return (
     <div

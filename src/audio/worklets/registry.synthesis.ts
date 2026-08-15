@@ -15,5 +15,9 @@ export const SYNTHESIS_REGISTRY: Partial<Record<NodeKind, WorkletEntry>> = {
   wavefolder:  { processorName: 'dp-wavefolder',  moduleUrl: new URL('./wavefolder.worklet.js',  import.meta.url) },
   drum_kick:   { processorName: 'dp-drum-kick',   moduleUrl: new URL('./drum_kick.worklet.js',   import.meta.url) },
   drum_snare:  { processorName: 'dp-drum-snare',  moduleUrl: new URL('./drum_snare.worklet.js',  import.meta.url) },
-  drum_hat:    { processorName: 'dp-drum-hat',    moduleUrl: new URL('./drum_hat.worklet.js',    import.meta.url) }
+  drum_hat:    { processorName: 'dp-drum-hat',    moduleUrl: new URL('./drum_hat.worklet.js',    import.meta.url) },
+  sample_player: {
+    processorName: 'dp-sample-player',
+    moduleUrl: new URL('./sample_player.worklet.js', import.meta.url)
+  }
 }

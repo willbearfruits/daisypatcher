@@ -17,6 +17,7 @@ import type {
   DisplayElement,
   CircleElement,
   LineElement,
+  MenuElement,
   MeterElement,
   PatternElement,
   RectElement,
@@ -25,6 +26,17 @@ import type {
   ValueElement
 } from './elements'
 import { GLYPH_STRIDE_X, GLYPH_STRIDE_Y, glyphColumns } from './font5x7'
+import { buildMenuScreen } from '../menu/render'
+import type { MenuState } from '../menu/machine'
+import type { MenuTree } from '../menu/tree'
+
+/** Live menu data the renderer needs, keyed by graph node id. */
+export interface MenuRenderData {
+  tree: MenuTree
+  state: MenuState
+}
+
+export type MenuMap = Record<string, MenuRenderData>
 
 export const OLED_WIDTH = 128
 export const OLED_HEIGHT = 64
@@ -44,6 +56,11 @@ function clearBitmap(bitmap: Uint8Array): void {
 function setPixel(bitmap: Uint8Array, x: number, y: number): void {
   if (x < 0 || x >= OLED_WIDTH || y < 0 || y >= OLED_HEIGHT) return
   bitmap[y * ROW_STRIDE + (x >> 3)] |= 1 << (x & 7)
+}
+
+function clearPixel(bitmap: Uint8Array, x: number, y: number): void {
+  if (x < 0 || x >= OLED_WIDTH || y < 0 || y >= OLED_HEIGHT) return
+  bitmap[y * ROW_STRIDE + (x >> 3)] &= ~(1 << (x & 7))
 }
 
 function sampleBuffer(
@@ -80,7 +97,16 @@ function unipolar(v: number): number {
   return a > 1 ? 1 : a
 }
 
-function drawText(bitmap: Uint8Array, text: string, x: number, y: number, size: 1 | 2): void {
+function drawText(
+  bitmap: Uint8Array,
+  text: string,
+  x: number,
+  y: number,
+  size: 1 | 2,
+  /** Clear pixels instead of setting them — for text on a filled bar. */
+  invert = false
+): void {
+  const put = invert ? clearPixel : setPixel
   let cx = x
   for (let i = 0; i < text.length; i++) {
     const cp = text.charCodeAt(i)
@@ -90,15 +116,15 @@ function drawText(bitmap: Uint8Array, text: string, x: number, y: number, size: 
       for (let row = 0; row < 7; row++) {
         if ((bits >> row) & 1) {
           if (size === 1) {
-            setPixel(bitmap, cx + col, y + row)
+            put(bitmap, cx + col, y + row)
           } else {
             // 2x scale: fill a 2x2 block per pixel.
             const px = cx + col * 2
             const py = y + row * 2
-            setPixel(bitmap, px, py)
-            setPixel(bitmap, px + 1, py)
-            setPixel(bitmap, px, py + 1)
-            setPixel(bitmap, px + 1, py + 1)
+            put(bitmap, px, py)
+            put(bitmap, px + 1, py)
+            put(bitmap, px, py + 1)
+            put(bitmap, px + 1, py + 1)
           }
         }
       }
@@ -309,11 +335,60 @@ function drawPatternElement(
   }
 }
 
+
+/* =====================================================================
+ * Menu element.
+ *
+ * Uses `buildMenuScreen` so the bitmap, the in-node preview and the
+ * firmware emitters all lay a menu out identically. The selected row is a
+ * filled bar with the text knocked out of it, which is how a 1-bit panel
+ * shows focus.
+ * ===================================================================== */
+
+function drawMenuElement(
+  bitmap: Uint8Array,
+  el: MenuElement,
+  menus: MenuMap | undefined
+): void {
+  const data = menus?.[el.menuNodeId]
+  if (!data) {
+    drawText(bitmap, 'NO MENU BOUND', el.x + 2, el.y + 2, 1)
+    return
+  }
+  const screen = buildMenuScreen(data.tree, data.state, el.rows)
+
+  // Title line + rule.
+  drawText(bitmap, screen.title.slice(0, 20), el.x + 1, el.y + 1, 1)
+  for (let x = el.x; x < el.x + el.width; x++) setPixel(bitmap, x, el.y + 9)
+  // Scroll markers, right-aligned on the title line.
+  if (screen.moreAbove) drawText(bitmap, '^', el.x + el.width - 7, el.y + 1, 1)
+  if (screen.moreBelow) drawText(bitmap, 'v', el.x + el.width - 7, el.y + 1, 1)
+
+  const rowH = 8
+  let y = el.y + 12
+  for (const row of screen.rows) {
+    if (y + rowH > el.y + el.height) break
+    if (row.selected) {
+      drawRectFilled(bitmap, el.x, y - 1, el.width, rowH)
+    }
+    const inv = row.selected
+    drawText(bitmap, row.label, el.x + 2, y, 1, inv)
+    const tail = row.submenu ? '>' : row.editing ? `[${row.value}]` : row.value
+    if (tail) {
+      const w = tail.length * 6
+      drawText(bitmap, tail, el.x + el.width - w - 2, y, 1, inv)
+    }
+    y += rowH
+  }
+}
+
 /** Render the whole frame. Clears `bitmap` first. */
 export function renderFrame(
   elements: DisplayElement[],
   inputs: InputMap,
-  bitmap: Uint8Array
+  bitmap: Uint8Array,
+  /** Live tree + cursor per menu node id, for `menu` elements. */
+  menus?: MenuMap
 ): void {
   clearBitmap(bitmap)
   for (const el of elements) {
@@ -341,6 +416,9 @@ export function renderFrame(
         break
       case 'pattern':
         drawPatternElement(bitmap, el, inputs)
+        break
+      case 'menu':
+        drawMenuElement(bitmap, el, menus)
         break
     }
   }

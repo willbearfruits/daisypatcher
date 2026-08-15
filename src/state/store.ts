@@ -26,7 +26,22 @@ import type { BoardPin, HardwareKind, HardwareLayout, PlacedComponent } from '@/
 import { emptyHardwareLayout, KIND_ROLES } from '@/types/hardware'
 import { getBoardPinout } from '@/hardware/boardPinout'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
+import {
+  captureFrom,
+  morphEdits,
+  prunePresets,
+  recallEdits,
+  type Preset
+} from '@/state/presets'
 import { boardForTarget, targetForBoard } from '@/codegen/targets'
+import {
+  SUB_INPUTS,
+  SUB_OUTPUTS,
+  bodyOf,
+  collapseSelection,
+  expandSubpatch,
+  withBody
+} from '@/state/subpatch'
 
 const HISTORY_LIMIT = 50
 
@@ -40,6 +55,8 @@ const DEFAULT_LAYOUT: LayoutSizes = {
   inspectorW: 280,
   buildLogH: 220,
   serialMonitorH: 260,
+  // Tall by default: this is for reading a 700-line file, not peeking.
+  codePanelH: 380,
   paletteCollapsed: false,
   // Compact = grid tiles (icon + short label) instead of one line per kind
   // with a description. Default ON so the 70+ catalog is browsable at a
@@ -47,7 +64,13 @@ const DEFAULT_LAYOUT: LayoutSizes = {
   paletteCompact: true,
   categoriesCollapsed: [],
   paletteFilter: 'available',
-  recentKinds: []
+  recentKinds: [],
+  // Grid on, snap off by default: the guides help you line things up, but
+  // forcing every drop onto a lattice is a preference, not a default.
+  gridShow: true,
+  gridSnap: false,
+  gridSize: 20,
+  marqueeSelect: true
 }
 
 /** FIFO cap for `layout.recentKinds`. */
@@ -59,7 +82,8 @@ const LAYOUT_LIMITS = {
   inspectorW: { min: 200, max: 520 },
   /** Build log height is clamped to 70% of the viewport at apply time. */
   buildLogH: { min: 120, max: 2000 },
-  serialMonitorH: { min: 160, max: 2000 }
+  serialMonitorH: { min: 160, max: 2000 },
+  codePanelH: { min: 140, max: 2000 }
 } as const
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -141,8 +165,13 @@ function pushHistory(
  * primary case: an OLED + a gyroscope + a ToF sensor can and should share
  * the same two pins. Everything else (wiper, io, signal, anode, rx, ...)
  * is single-ownership.
+ *
+ * `ws` belongs here for the same reason `sck` does: an I2S bus driving a
+ * PCM5102A line-out and a MAX98357A amp shares bit clock AND word select,
+ * and only the data line is per-device. Without it the second module gets
+ * denied the word-select pin and lands unassigned.
  */
-const SHARED_BUS_ROLES = new Set(['sda', 'scl', 'sck', 'mclk'])
+const SHARED_BUS_ROLES = new Set(['sda', 'scl', 'sck', 'ws', 'mclk'])
 
 /**
  * Map a patch-side NodeKind to the HardwareKind it represents physically.
@@ -153,6 +182,29 @@ const SHARED_BUS_ROLES = new Set(['sda', 'scl', 'sck', 'mclk'])
  * `midi_jack`); first-drop creates, subsequent drops still spawn a new
  * one — users can manually coalesce via the hardware view if desired.
  */
+/**
+ * The whole patch, regardless of which level is being edited.
+ *
+ * `state.graph` is the level you are LOOKING at — that is what keeps the
+ * editor, inspector and undo working unchanged while you are inside a
+ * subpatch. But the engine and codegen want the instrument, so they ask
+ * here: re-embed the current level into each outer level, innermost first.
+ */
+export function rootGraphOf(state: {
+  graph: AudioGraph
+  subpatchStack: { nodeId: string; graph: AudioGraph }[]
+}): AudioGraph {
+  let current = state.graph
+  for (let i = state.subpatchStack.length - 1; i >= 0; i--) {
+    const level = state.subpatchStack[i]
+    current = {
+      ...level.graph,
+      nodes: level.graph.nodes.map((n) => (n.id === level.nodeId ? withBody(n, current) : n))
+    }
+  }
+  return current
+}
+
 export function hardwareKindForNodeKind(nodeKind: NodeKind): HardwareKind | null {
   switch (nodeKind) {
     case 'knob_in':       return 'pot'
@@ -160,6 +212,10 @@ export function hardwareKindForNodeKind(nodeKind: NodeKind): HardwareKind | null
     case 'button':        return 'button'
     case 'led':           return 'led'
     case 'switch_3way':   return 'switch_3way'
+    case 'encoder_in':    return 'encoder'
+    case 'imu_in':        return 'gyroscope'
+    case 'compass_in':    return 'magnetometer'
+    case 'distance_in':   return 'tof'
     case 'i2s_in':        return 'i2s_codec'
     case 'i2s_out':       return 'i2s_codec'
     case 'midi_in_note':  return 'midi_jack'
@@ -168,6 +224,347 @@ export function hardwareKindForNodeKind(nodeKind: NodeKind): HardwareKind | null
     case 'oled':          return 'oled_ssd1306'
     default:              return null
   }
+}
+
+/**
+ * Inverse of {@link hardwareKindForNodeKind}: the patch node to create
+ * when a component is placed from the Hardware view.
+ *
+ * Declared as its own total table rather than inverted at runtime, because
+ * the forward map is many-to-one and its inverse is genuinely ambiguous.
+ * `satisfies Record<HardwareKind, …>` makes a new HardwareKind a compile
+ * error here instead of a silently node-less component.
+ *
+ * `null` means "place the component, create no node", which is now the
+ * exception rather than the norm — only the four genuinely ambiguous or
+ * board-level kinds have no patch-side counterpart.
+ *
+ * The two ambiguous kinds are deliberately null:
+ *   - `i2s_codec` could be `i2s_in` OR `i2s_out` (both stubs on ESP32).
+ *   - `midi_jack` could be any of three MIDI node kinds.
+ * Guessing here would drop junk into a graph the user isn't looking at,
+ * which is worse than creating nothing and saying so in the status line.
+ */
+const NODE_KIND_FOR_HARDWARE_KIND = {
+  pot: 'knob_in',
+  button: 'button',
+  led: 'led',
+  switch_3way: 'switch_3way',
+  gate_jack: 'gate_in',
+  oled_ssd1306: 'oled',
+  /*
+   * The analog-input family all read as one normalized CV, which is
+   * exactly what `knob_in` emits — its label says "Knob" but it is really
+   * "analog pin → CV", with min/max scaling. Routing them here means a
+   * placed Ribbon or Slider arrives with something to patch instead of
+   * silently doing nothing. Keep in step with ANALOG_INPUT_ROLE.
+   */
+  slider: 'knob_in',
+  touch_ribbon: 'knob_in',
+  ldr: 'knob_in',
+  electret: 'knob_in',
+  piezo: 'knob_in',
+  cv_jack: 'knob_in',
+
+  // ambiguous — see above
+  i2s_codec: null,
+  midi_jack: null,
+
+  // Relative quadrature — its own node kind, with A/B decoding in both
+  // emitters (libDaisy Encoder on Seed, an inline Gray-code table on ESP32).
+  encoder: 'encoder_in',
+
+  /*
+   * Multi-axis I2C sensors. Each gets ONE node that fans its axes out as
+   * separate CV outputs — three nodes bound to one physical device would
+   * be three chances for them to disagree about which device that is.
+   */
+  gyroscope: 'imu_in',
+  magnetometer: 'compass_in',
+  tof: 'distance_in',
+
+  /*
+   * No patch-side counterpart.
+   *   audio_jack   — the Seed's is hardwired to the onboard codec, and
+   *                  in/out is ambiguous.
+   *   pcm5102a /
+   *   max98357a    — driven at board level by walkHardware, not through
+   *                  a node; `audio_output` already feeds the I2S bus.
+   */
+  audio_jack: null,
+  pcm5102a: null,
+  max98357a: null
+} satisfies Record<HardwareKind, NodeKind | null>
+
+export function nodeKindForHardwareKind(kind: HardwareKind): NodeKind | null {
+  return NODE_KIND_FOR_HARDWARE_KIND[kind]
+}
+
+/**
+ * Every HardwareKind a given node kind can legitimately bind to.
+ *
+ * The forward map is one-to-one, but several hardware kinds now share a
+ * node: a `knob_in` reads a pot, a fader, a ribbon, an LDR, a mic, a
+ * piezo or a CV jack. Filtering the Inspector's binding dropdown by the
+ * forward map alone would offer only Pots and make the component the node
+ * was auto-created for unselectable.
+ */
+export function hardwareKindsForNodeKind(nodeKind: NodeKind): HardwareKind[] {
+  const out: HardwareKind[] = []
+  const forward = hardwareKindForNodeKind(nodeKind)
+  if (forward) out.push(forward)
+  for (const [hw, nk] of Object.entries(NODE_KIND_FOR_HARDWARE_KIND)) {
+    if (nk === nodeKind && !out.includes(hw as HardwareKind)) out.push(hw as HardwareKind)
+  }
+  return out
+}
+
+/**
+ * Auto-assign each required role to the first free compatible pin.
+ *
+ * Shared-bus roles (I2C sda/scl, I2S sck/ws/mclk) may reuse a pin another
+ * component already holds — that is what a bus is. Single-ownership roles
+ * skip anything already taken. Unfillable roles are simply left out; the
+ * user wires them by hand.
+ *
+ * Extracted so both directions behave identically. `addHardware` used to
+ * hardcode `pins: {}`, so a pot placed from the Hardware view arrived
+ * unwired while an identical pot created from the Patch view arrived
+ * fully pinned — a difference with no reason behind it.
+ */
+function autoAssignPins(
+  layout: HardwareLayout,
+  kind: HardwareKind
+): Record<string, string> {
+  const pinout = getBoardPinout(layout.board)
+
+  /*
+   * Pins held for exclusive use by an existing component. Shared-bus roles
+   * are excluded from this set — that is the whole point of a bus.
+   */
+  const singleOwned = new Set<string>()
+  /*
+   * Where each shared bus line already lives, e.g. sda -> GPIO8. A second
+   * I2C device should join the EXISTING bus rather than pick a fresh pin,
+   * so this is a reuse table, not an exclusion set.
+   */
+  const busPinForRole = new Map<string, string>()
+  /*
+   * Reverse index: which bus line a pin is already carrying. Sharing is
+   * only legitimate between the SAME role — an I2C `sda` may join another
+   * device's `sda`, but must never land on a pin already carrying I2S
+   * `sck`. Without this the two buses silently overlap.
+   */
+  const roleForBusPin = new Map<string, string>()
+  /** Pins this component has already claimed for one of its own roles. */
+  const takenByThisComponent = new Set<string>()
+  for (const c of layout.components) {
+    for (const [role, pin] of Object.entries(c.pins)) {
+      if (!pin) continue
+      if (SHARED_BUS_ROLES.has(role)) {
+        busPinForRole.set(role, pin as string)
+        roleForBusPin.set(pin as string, role)
+      } else singleOwned.add(pin as string)
+    }
+  }
+
+  /** A pin is free for `role` if nothing else claims it for another purpose. */
+  const availableFor = (pin: string, role: string): boolean => {
+    if (singleOwned.has(pin)) return false
+    if (takenByThisComponent.has(pin)) return false
+    const busRole = roleForBusPin.get(pin)
+    return busRole === undefined || busRole === role
+  }
+
+  /*
+   * "Shared" previously meant `shared ? true` — take the first candidate,
+   * unconditionally. That happened to work only because on the Seed and S3
+   * `pinsForRole` returns a different list per bus role (i2s === 'sck' vs
+   * 'ws'), so the roles landed on different pins by accident.
+   *
+   * On a C3 the I2S peripheral routes through the GPIO matrix, so every
+   * role returns the SAME list — and the old rule put BCK, LCK and the
+   * pot's wiper all on GPIO0. Sharing has to mean "join the same bus line
+   * another device already uses", never "collide with an unrelated pin or
+   * with a sibling role on my own component".
+   */
+  const assigned: Record<string, string> = {}
+  for (const role of KIND_ROLES[kind]) {
+    const shared = SHARED_BUS_ROLES.has(role)
+
+    // Join an existing bus line if one is already established for this role.
+    const existingBusPin = shared ? busPinForRole.get(role) : undefined
+    if (existingBusPin && !takenByThisComponent.has(existingBusPin)) {
+      assigned[role] = existingBusPin
+      takenByThisComponent.add(existingBusPin)
+      continue
+    }
+
+    /*
+     * Prefer a pin with no boot-strapping duty. On a C3 the first three
+     * GPIOs include GPIO2 (strap), so plain table order hands out a
+     * strapping pin before a safe one — it works, but it's a trap the
+     * user has to notice and undo. Fall back to the full list when
+     * nothing unencumbered is left.
+     */
+    const candidates = pinout.pinsForRole(role, kind).filter((p) => availableFor(p, role))
+    const chosen =
+      candidates.find((p) => !pinout.pinCaps[p]?.strapping) ?? candidates[0]
+    if (!chosen) continue
+    assigned[role] = chosen
+    takenByThisComponent.add(chosen)
+    if (shared) {
+      // A newly-created bus line becomes the one later devices join.
+      busPinForRole.set(role, chosen)
+      roleForBusPin.set(chosen, role)
+    } else singleOwned.add(chosen)
+  }
+  return assigned
+}
+
+/** "Pot 1", "Pot 2", ... advancing past the highest numeric suffix in use. */
+function nextLabelFor(components: PlacedComponent[], kind: HardwareKind): string {
+  const existing = components.filter((c) => c.kind === kind)
+  let n = 1
+  for (const c of existing) {
+    const m = c.label.match(/\b(\d+)\s*$/)
+    if (m) n = Math.max(n, Number(m[1]) + 1)
+    else n = Math.max(n, existing.length + 1)
+  }
+  return `${defaultHardwareLabel(kind)} ${n}`
+}
+
+/**
+ * Remove `ids` from the graph, dropping any hardware component left with
+ * nothing referencing it.
+ *
+ * Shared by `removeNode` and `deleteSelection` so the two cannot drift.
+ * `deleteSelection` previously had no `hardware` key at all and leaked an
+ * orphaned component on every Delete keypress — which is the path users
+ * actually take, since `removeNode` is only reached from Rete's
+ * `noderemoved` pipe.
+ *
+ * Orphan detection runs against the SURVIVORS rather than "every node but
+ * this one". That matters under multi-select: `paste()` copies params
+ * verbatim, so two selected nodes can share a bindingId, and the
+ * pairwise test would have each see the other as a live reference and
+ * keep the component forever.
+ */
+function dropNodes(
+  s: { graph: AudioGraph; hardware: HardwareLayout },
+  ids: Set<string>
+): { graph: AudioGraph; hardware?: HardwareLayout } {
+  const survivors = s.graph.nodes.filter((n) => !ids.has(n.id))
+  const graph: AudioGraph = {
+    ...s.graph,
+    nodes: survivors,
+    connections: s.graph.connections.filter(
+      (c) => !ids.has(c.from.nodeId) && !ids.has(c.to.nodeId)
+    )
+  }
+  const bindingOf = (n: NodeInstance): string | null => {
+    const b = n.params.bindingId
+    return typeof b === 'string' && b !== '' ? b : null
+  }
+  const stillWanted = new Set(survivors.map(bindingOf).filter((b): b is string => b !== null))
+  const orphaned = new Set(
+    s.graph.nodes
+      .filter((n) => ids.has(n.id))
+      .map(bindingOf)
+      .filter((b): b is string => b !== null && !stillWanted.has(b))
+  )
+  if (orphaned.size === 0) return { graph }
+  return {
+    graph,
+    hardware: {
+      ...s.hardware,
+      components: s.hardware.components.filter((c) => !orphaned.has(c.id))
+    }
+  }
+}
+
+
+/**
+ * Reassign only the pin bindings that don't exist on `layout.board`.
+ *
+ * Switching boards deliberately leaves bindings dangling rather than
+ * silently clearing them (see `applyTargetSwitch`), which is right — but
+ * it left the user to repin every role by hand. Moving a patch from an S3
+ * DevKitC to a C3 SuperMini invalidates seven roles in a modest layout.
+ *
+ * Valid pins are kept exactly as they are, so a deliberate assignment
+ * survives; only the impossible ones move. Shared bus lines are honoured
+ * the same way `autoAssignPins` does, so two I2S devices still land on one
+ * clock pair.
+ */
+function repinLayoutForBoard(layout: HardwareLayout): {
+  layout: HardwareLayout
+  moved: number
+  unfilled: number
+} {
+  const pinout = getBoardPinout(layout.board)
+  const valid = (p: unknown): p is string => typeof p === 'string' && p in pinout.pinCaps
+
+  // Seed the "taken" sets from the bindings we're keeping.
+  const singleOwned = new Set<string>()
+  const busPinForRole = new Map<string, string>()
+  const roleForBusPin = new Map<string, string>()
+  for (const c of layout.components) {
+    for (const [role, pin] of Object.entries(c.pins)) {
+      if (!valid(pin)) continue
+      if (SHARED_BUS_ROLES.has(role)) {
+        busPinForRole.set(role, pin)
+        roleForBusPin.set(pin, role)
+      } else singleOwned.add(pin)
+    }
+  }
+
+  let moved = 0
+  let unfilled = 0
+  const components = layout.components.map((c) => {
+    const taken = new Set<string>()
+    for (const pin of Object.values(c.pins)) if (valid(pin)) taken.add(pin)
+    const pins: Record<string, string> = {}
+    for (const role of KIND_ROLES[c.kind]) {
+      const cur = c.pins[role]
+      if (valid(cur)) {
+        pins[role] = cur
+        continue
+      }
+      if (cur === undefined) continue // never assigned; leave it that way
+      const shared = SHARED_BUS_ROLES.has(role)
+      const existingBus = shared ? busPinForRole.get(role) : undefined
+      if (existingBus && !taken.has(existingBus)) {
+        pins[role] = existingBus
+        taken.add(existingBus)
+        moved++
+        continue
+      }
+      const candidates = pinout
+        .pinsForRole(role, c.kind)
+        .filter(
+          (p) =>
+            !singleOwned.has(p) &&
+            !taken.has(p) &&
+            (roleForBusPin.get(p) === undefined || roleForBusPin.get(p) === role)
+        )
+      const chosen = candidates.find((p) => !pinout.pinCaps[p]?.strapping) ?? candidates[0]
+      if (!chosen) {
+        unfilled++
+        continue
+      }
+      pins[role] = chosen
+      taken.add(chosen)
+      moved++
+      if (shared) {
+        busPinForRole.set(role, chosen)
+        roleForBusPin.set(chosen, role)
+      } else singleOwned.add(chosen)
+    }
+    return { ...c, pins }
+  })
+
+  return { layout: { ...layout, components }, moved, unfilled }
 }
 
 /** Default labels for newly-placed hardware components. */
@@ -183,6 +580,8 @@ function defaultHardwareLabel(kind: HardwareKind): string {
     midi_jack: 'MIDI',
     oled_ssd1306: 'OLED',
     i2s_codec: 'I2S',
+    pcm5102a: 'Line Out',
+    max98357a: 'Amp',
     encoder: 'Encoder',
     slider: 'Slider',
     touch_ribbon: 'Ribbon',
@@ -198,30 +597,30 @@ function defaultHardwareLabel(kind: HardwareKind): string {
 
 /**
  * Count placed components whose pin bindings reference pins that don't
- * exist on the target board's pinout. Used by `setTarget` to surface a
- * warn-status when switching boards leaves a patch in an inconsistent
- * state. Implementation is simple prefix-checks so we avoid importing
- * the full pinout tables here (which would create a circular import).
+ * exist on the target board. Used by `setTarget` to warn when switching
+ * boards leaves a patch inconsistent.
+ *
+ * This used to be a `/^D\d+$/` vs `/^GPIO\d+$/` prefix test, justified by
+ * a comment about avoiding a circular import. That constraint was stale —
+ * this module already imports `getBoardPinout` — and the heuristic could
+ * only tell Seed from ESP32. With three ESP32 boards it would report
+ * "0 components need repinning" when switching an S3 DevKitC layout to a
+ * C3 SuperMini, even though every GPIO35/GPIO46 binding just died.
  */
 function countInvalidComponentsForBoard(
   layout: HardwareLayout,
   board: HardwareLayout['board']
 ): number {
+  const { pinCaps } = getBoardPinout(board)
   let bad = 0
   for (const c of layout.components) {
     for (const pin of Object.values(c.pins)) {
       if (typeof pin !== 'string') continue
-      const isSeed = /^D\d{1,2}$/.test(pin)
-      const isEsp = /^GPIO\d+$/.test(pin)
-      if (board === 'daisy_seed' && !isSeed) { bad++; break }
-      if (board === 'esp32_s3_devkitc' && !isEsp) { bad++; break }
+      if (!(pin in pinCaps)) { bad++; break }
     }
   }
   return bad
 }
-
-/** Silence unused-import warning — the helper is pulled in for future use. */
-void targetForBoard
 
 function defaultHardwareConfig(kind: HardwareKind): Record<string, number | string | boolean> {
   // `rotation` and kind-specific defaults. Rotation lives in config to keep
@@ -235,6 +634,20 @@ function defaultHardwareConfig(kind: HardwareKind): Record<string, number | stri
     case 'encoder':      return { ...base, detents: 24, withSwitch: true }
     case 'oled_ssd1306': return { ...base, width: 128, height: 64, address: '0x3C' }
     case 'i2s_codec':    return { ...base, model: 'pcm3060' }
+    /*
+     * GY-PCM5102 straps. `xsmt` is the one that actually bites people:
+     * the purple board ships jumper 3 on the LOW side, which holds the
+     * DAC muted, so a correctly-wired module is silent until it's moved
+     * HIGH. Default to the working configuration and surface it.
+     */
+    case 'pcm5102a':     return { ...base, xsmtHigh: true, fmt: 'i2s', flt: 'normal', deemphasis: false, sckToGnd: true }
+    /*
+     * MAX98357A straps. `gainDb` and `channel` are set by resistors on the
+     * GAIN and SD pins, not by the MCU — config, not roles.
+     */
+    // gainDb is a string: the GAIN pad has five discrete resistor taps, so
+    // the inspector renders it as an enum (a slider would imply a range).
+    case 'max98357a':    return { ...base, gainDb: '9', channel: 'stereo_avg', i2sOnly: false }
     case 'slider':       return { ...base, orientation: 'vertical', travel: 60 }
     case 'touch_ribbon': return { ...base, orientation: 'vertical', length: 80 }
     case 'ldr':          return { ...base }
@@ -253,34 +666,39 @@ export const useEditorStore = create<EditorStore>((set, get) => {
    * tuple and commits atomically — a single undo step captures both halves.
    */
   function mutate(
-    producer: (s: { graph: AudioGraph; hardware: HardwareLayout }) => {
+    producer: (s: { graph: AudioGraph; hardware: HardwareLayout; presets: Preset[] }) => {
       graph?: AudioGraph
       hardware?: HardwareLayout
+      presets?: Preset[]
     } | null,
     opts?: { dirty?: boolean }
   ) {
     const prevGraph = get().graph
     const prevHw = get().hardware
-    const patch = producer({ graph: prevGraph, hardware: prevHw })
+    const prevPresets = get().presets
+    const patch = producer({ graph: prevGraph, hardware: prevHw, presets: prevPresets })
     if (!patch) return
     const nextGraph = patch.graph ?? prevGraph
     const nextHw = patch.hardware ?? prevHw
-    if (nextGraph === prevGraph && nextHw === prevHw) return
+    const nextPresets = patch.presets ?? prevPresets
+    if (nextGraph === prevGraph && nextHw === prevHw && nextPresets === prevPresets) return
 
     if (txDepth > 0) {
       set({
         graph: nextGraph,
         hardware: nextHw,
+        presets: nextPresets,
         isDirty: opts?.dirty !== false
       })
       return
     }
 
-    const snapshot: HistorySnapshot = { graph: prevGraph, hardware: prevHw }
+    const snapshot: HistorySnapshot = { graph: prevGraph, hardware: prevHw, presets: prevPresets }
     const { past, future } = pushHistory(get().history.past, get().history.future, snapshot)
     set({
       graph: nextGraph,
       hardware: nextHw,
+      presets: nextPresets,
       history: { past, future },
       isDirty: opts?.dirty !== false
     })
@@ -310,6 +728,10 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     view: 'patch',
     selectedHardwareId: null,
 
+    subpatchStack: [] as { nodeId: string; label: string; graph: AudioGraph }[],
+    presets: [] as Preset[],
+    activePresetId: null,
+
     layout: { ...DEFAULT_LAYOUT },
 
     target: 'daisy_seed' as BoardTarget,
@@ -337,55 +759,16 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       let hwComponent: PlacedComponent | null = null
       if (hwKind) {
         const hwId = nanoid(8)
-        const existingOfKind = get().hardware.components.filter((c) => c.kind === hwKind)
-        // Auto-number the label: "Pot 1", "Pot 2" — match `addHardware`.
-        let n = 1
-        for (const c of existingOfKind) {
-          const m = c.label.match(/\b(\d+)\s*$/)
-          if (m) n = Math.max(n, Number(m[1]) + 1)
-          else n = Math.max(n, existingOfKind.length + 1)
-        }
+        const layout = get().hardware
         // Cascade placement so multiple drops don't stack exactly on top
         // of each other in the hardware view. User moves them later.
-        const totalPlaced = get().hardware.components.length
-        /*
-         * Auto-assign each required role to the first free compatible
-         * pin on the active board. I2C-ish roles (sda/scl/sck/mclk)
-         * share buses — an OLED placed when another I2C sensor already
-         * occupies SDA/SCL will reuse the same pins (that's the point
-         * of a bus). Single-ownership roles exclude any pin already
-         * bound for that role by another component. If no compatible
-         * pin is free, the role stays unassigned — user wires manually
-         * in the hardware view.
-         */
-        const pinout = getBoardPinout(get().hardware.board)
-        const allExisting = get().hardware.components
-        const usedSingleOwnershipPins = new Set<string>()
-        for (const c of allExisting) {
-          for (const [role, pin] of Object.entries(c.pins)) {
-            if (!pin) continue
-            if (!SHARED_BUS_ROLES.has(role)) usedSingleOwnershipPins.add(pin as string)
-          }
-        }
-        const assigned: Record<string, string> = {}
-        for (const role of KIND_ROLES[hwKind]) {
-          const candidates = pinout.pinsForRole(role, hwKind)
-          const shared = SHARED_BUS_ROLES.has(role)
-          const chosen = candidates.find((p) =>
-            shared ? true : !usedSingleOwnershipPins.has(p)
-          )
-          if (chosen) {
-            assigned[role] = chosen
-            if (!shared) usedSingleOwnershipPins.add(chosen)
-          }
-        }
-
+        const totalPlaced = layout.components.length
         hwComponent = {
           id: hwId,
           kind: hwKind,
-          label: `${defaultHardwareLabel(hwKind)} ${n}`,
+          label: nextLabelFor(layout.components, hwKind),
           position: { x: 100 + totalPlaced * 40, y: 100 + totalPlaced * 40 },
-          pins: assigned,
+          pins: autoAssignPins(layout, hwKind),
           config: defaultHardwareConfig(hwKind)
         }
         params.bindingId = hwId
@@ -414,33 +797,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     },
 
     removeNode(id) {
-      // If this node auto-created a paired hardware component and no other
-      // graph node still references that component, remove the hardware
-      // side too — symmetric with the auto-link in `addNode`. Preserves
-      // the rule: hardware components that live in the layout are exactly
-      // the ones the patch graph wants. Undo restores both halves.
-      mutate((s) => {
-        const leaving = s.graph.nodes.find((n) => n.id === id)
-        const bindingId = leaving?.params.bindingId
-        const stillReferenced = bindingId
-          ? s.graph.nodes.some((n) => n.id !== id && n.params.bindingId === bindingId)
-          : false
-        const nextGraph = {
-          ...s.graph,
-          nodes: s.graph.nodes.filter((n) => n.id !== id),
-          connections: s.graph.connections.filter(
-            (c) => c.from.nodeId !== id && c.to.nodeId !== id
-          )
-        }
-        const dropHw = bindingId && !stillReferenced
-        const nextHardware = dropHw
-          ? {
-              ...s.hardware,
-              components: s.hardware.components.filter((c) => c.id !== bindingId)
-            }
-          : undefined
-        return { graph: nextGraph, hardware: nextHardware }
-      })
+      mutate((s) => dropNodes(s, new Set([id])))
       const sel = new Set(get().selection)
       if (sel.delete(id)) set(syncedSelection(sel))
     },
@@ -472,6 +829,12 @@ export const useEditorStore = create<EditorStore>((set, get) => {
           )
         }
       }))
+      /*
+       * Any parameter move means the patch no longer IS the recalled
+       * preset. A highlighted name next to a sound that has since been
+       * turned somewhere else is worse than no highlight at all.
+       */
+      if (get().activePresetId !== null) set({ activePresetId: null })
     },
 
     connect(from, to) {
@@ -521,6 +884,13 @@ export const useEditorStore = create<EditorStore>((set, get) => {
           else next.add(id)
         }
       }
+      /*
+       * Bail when nothing actually changed. A marquee drag calls this on
+       * every animation frame; without the guard each frame publishes a new
+       * Set, which re-renders every node and re-runs the Rete selector sync
+       * for a selection that is identical to the one already on screen.
+       */
+      if (next.size === cur.size && [...next].every((id) => cur.has(id))) return
       set(syncedSelection(next))
     },
 
@@ -537,11 +907,37 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       set({ status })
     },
 
-    loadGraph(graph, filePath = null, hardware) {
+    loadGraph(graph, filePath = null, hardware, presets) {
+      const nextHardware = hardware ?? emptyHardwareLayout()
+      // Presets name nodes by id; a preset from another patch would be a
+      // pile of references to nodes that do not exist here.
+      const nextPresets = prunePresets(presets ?? [], graph)
+      /*
+       * Adopt the loaded layout's board as the compile target.
+       *
+       * This was missing entirely: `loadGraph` restored `hardware.board`
+       * but left `target` at whatever it happened to be (default
+       * 'daisy_seed'), so opening an ESP32 patch on a fresh launch would
+       * generate Daisy firmware from an ESP32 layout with no warning.
+       * `targetForBoard` existed for exactly this and had never been
+       * called — the module had a literal `void targetForBoard` to
+       * silence the unused-import lint.
+       *
+       * A user who explicitly pinned the target keeps their pin, matching
+       * how `autoSetTarget` respects the lock.
+       */
+      const nextTarget = get().targetLockedByUser
+        ? get().target
+        : targetForBoard(nextHardware.board)
       // Loading wipes history — a freshly opened patch has no prior edits.
       set({
         graph,
-        hardware: hardware ?? emptyHardwareLayout(),
+        hardware: nextHardware,
+        presets: nextPresets,
+        // A loaded patch is a fresh root; any level we were inside is gone.
+        subpatchStack: [],
+        activePresetId: null,
+        target: nextTarget,
         selection: new Set(),
         selectedNodeId: null,
         selectedHardwareId: null,
@@ -555,6 +951,9 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       set({
         graph: emptyGraph(),
         hardware: emptyHardwareLayout(),
+        presets: [],
+        activePresetId: null,
+        subpatchStack: [],
         selection: new Set(),
         selectedNodeId: null,
         selectedHardwareId: null,
@@ -570,10 +969,11 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       const { past, future } = get().history
       if (past.length === 0) return
       const prev = past[past.length - 1]
-      const cur: HistorySnapshot = { graph: get().graph, hardware: get().hardware }
+      const cur: HistorySnapshot = { graph: get().graph, hardware: get().hardware, presets: get().presets }
       set({
         graph: prev.graph,
         hardware: prev.hardware,
+        presets: prev.presets ?? [],
         history: { past: past.slice(0, -1), future: [...future, cur] },
         isDirty: true
       })
@@ -583,10 +983,11 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       const { past, future } = get().history
       if (future.length === 0) return
       const next = future[future.length - 1]
-      const cur: HistorySnapshot = { graph: get().graph, hardware: get().hardware }
+      const cur: HistorySnapshot = { graph: get().graph, hardware: get().hardware, presets: get().presets }
       set({
         graph: next.graph,
         hardware: next.hardware,
+        presets: next.presets ?? [],
         history: { past: [...past, cur], future: future.slice(0, -1) },
         isDirty: true
       })
@@ -602,7 +1003,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
 
     beginTransaction() {
       if (txDepth === 0) {
-        txSnapshot = { graph: get().graph, hardware: get().hardware }
+        txSnapshot = { graph: get().graph, hardware: get().hardware, presets: get().presets }
       }
       txDepth++
     },
@@ -614,9 +1015,15 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       const snapshot = txSnapshot
       txSnapshot = null
       if (!snapshot) return
-      const cur: HistorySnapshot = { graph: get().graph, hardware: get().hardware }
+      const cur: HistorySnapshot = { graph: get().graph, hardware: get().hardware, presets: get().presets }
       // No net change — discard the transaction quietly.
-      if (snapshot.graph === cur.graph && snapshot.hardware === cur.hardware) return
+      if (
+        snapshot.graph === cur.graph &&
+        snapshot.hardware === cur.hardware &&
+        snapshot.presets === cur.presets
+      ) {
+        return
+      }
       const { past, future } = pushHistory(get().history.past, get().history.future, snapshot)
       set({ history: { past, future }, isDirty: true })
     },
@@ -696,15 +1103,10 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     deleteSelection() {
       const sel = get().selection
       if (sel.size === 0) return
-      mutate((s) => ({
-        graph: {
-          ...s.graph,
-          nodes: s.graph.nodes.filter((n) => !sel.has(n.id)),
-          connections: s.graph.connections.filter(
-            (c) => !sel.has(c.from.nodeId) && !sel.has(c.to.nodeId)
-          )
-        }
-      }))
+      // Routed through `dropNodes` so the Delete key tears down paired
+      // hardware exactly like `removeNode` does. It previously returned
+      // only a `graph` patch and orphaned a component every time.
+      mutate((s) => dropNodes(s, sel))
       set(syncedSelection(new Set()))
     },
 
@@ -716,42 +1118,114 @@ export const useEditorStore = create<EditorStore>((set, get) => {
 
     addHardware(kind, position) {
       const id = nanoid(8)
-      // Auto-number the label from existing same-kind components so the
-      // first "Pot 1", second "Pot 2" etc. If the user renames one, the
-      // counter still advances past the highest numeric suffix found.
-      const existing = get().hardware.components.filter((c) => c.kind === kind)
-      const base = defaultHardwareLabel(kind)
-      let n = 1
-      for (const c of existing) {
-        const m = c.label.match(/\b(\d+)\s*$/)
-        if (m) n = Math.max(n, Number(m[1]) + 1)
-        else n = Math.max(n, existing.length + 1)
-      }
+      const layout = get().hardware
       const component: PlacedComponent = {
         id,
         kind,
-        label: `${base} ${n}`,
+        label: nextLabelFor(layout.components, kind),
         position,
-        pins: {},
+        // Was `{}`: a component placed here arrived unwired while the same
+        // component created from the Patch view arrived fully pinned.
+        pins: autoAssignPins(layout, kind),
         config: defaultHardwareConfig(kind)
       }
+
+      /*
+       * The reverse of `addNode`'s auto-link: placing a physical control
+       * in the Hardware view also creates the patch node that reads it,
+       * already bound. Previously this direction did nothing, so the
+       * Hardware view could only ever react to the patch.
+       *
+       * Built before the commit and returned from ONE `mutate()` alongside
+       * the component, so undo reverts the pair atomically — calling
+       * `addNode()` separately would be two history entries and two Rete
+       * sync passes. Rete itself needs no notification: it stays mounted
+       * (hidden) and reconciles off `graph` reference identity.
+       *
+       * Node position cascades off the graph size, mirroring how `addNode`
+       * cascades the hardware side. The two canvases are unrelated
+       * coordinate spaces, so reusing the drop point would scatter nodes
+       * meaninglessly.
+       */
+      const nodeKind = nodeKindForHardwareKind(kind)
+      let node: NodeInstance | null = null
+      if (nodeKind) {
+        const n = get().graph.nodes.length
+        node = {
+          id: nanoid(8),
+          kind: nodeKind,
+          position: { x: 100 + n * 40, y: 100 + n * 40 },
+          params: { ...initialParams(nodeKind), bindingId: id }
+        }
+      }
+
       mutate((s) => ({
         hardware: {
           ...s.hardware,
           components: [...s.hardware.components, component]
-        }
+        },
+        graph: node ? { ...s.graph, nodes: [...s.graph.nodes, node] } : undefined
       }))
+
+      /*
+       * Say what happened. Most kinds (sensors, jacks, the I2S modules)
+       * have no patch-side counterpart, so without this "a node sometimes
+       * appears in the other view" reads as a bug rather than a rule.
+       */
+      set({
+        status: {
+          kind: 'info',
+          message: node
+            ? `${component.label} added \u00B7 ${NODE_DEFINITIONS[nodeKind!].label} node created`
+            : `${component.label} added \u00B7 no patch node for this kind`
+        }
+      })
       return id
     },
 
     removeHardware(id) {
-      mutate((s) => ({
-        hardware: {
-          ...s.hardware,
-          components: s.hardware.components.filter((c) => c.id !== id)
+      /*
+       * Deleting a component deletes the node it drives.
+       *
+       * The user works hardware-first: lay out the physical controls, then
+       * patch what they feed. Under that workflow the hardware layout is
+       * the authoritative side, so a control removed from the board should
+       * not leave a dangling node behind in the patch for them to hunt
+       * down — symmetric with `removeNode`, which already drops the paired
+       * component.
+       *
+       * Both halves go through one `mutate()`, so a single undo brings the
+       * component AND its node (and the node's connections) back together.
+       */
+      mutate((s) => {
+        const nextComponents = s.hardware.components.filter((c) => c.id !== id)
+        if (nextComponents.length === s.hardware.components.length) return null
+
+        const doomed = new Set(
+          s.graph.nodes.filter((n) => n.params.bindingId === id).map((n) => n.id)
+        )
+        const hardware = { ...s.hardware, components: nextComponents }
+        if (doomed.size === 0) return { hardware }
+
+        return {
+          hardware,
+          graph: {
+            ...s.graph,
+            nodes: s.graph.nodes.filter((n) => !doomed.has(n.id)),
+            connections: s.graph.connections.filter(
+              (c) => !doomed.has(c.from.nodeId) && !doomed.has(c.to.nodeId)
+            )
+          }
         }
-      }))
+      })
       if (get().selectedHardwareId === id) set({ selectedHardwareId: null })
+      // Drop any removed node from the selection so the Inspector doesn't
+      // keep pointing at something that no longer exists.
+      const live = new Set(get().graph.nodes.map((n) => n.id))
+      const sel = get().selection
+      if ([...sel].some((nid) => !live.has(nid))) {
+        set(syncedSelection(new Set([...sel].filter((nid) => live.has(nid)))))
+      }
     },
 
     moveHardware(id, position) {
@@ -806,8 +1280,227 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       set({ selectedHardwareId: id })
     },
 
+    repinForBoard() {
+      const before = get().hardware
+      const { layout, moved, unfilled } = repinLayoutForBoard(before)
+      if (moved === 0 && unfilled === 0) {
+        set({ status: { kind: 'info', message: 'all pins are valid for this board' } })
+        return
+      }
+      mutate(() => ({ hardware: layout }))
+      const parts = [`repinned ${moved} binding${moved === 1 ? '' : 's'}`]
+      if (unfilled > 0) parts.push(`${unfilled} could not be placed — no free pin`)
+      set({
+        status: { kind: unfilled > 0 ? 'warn' : 'info', message: parts.join(' \u00B7 ') }
+      })
+    },
+
+    setPerformPlacement(id, patch) {
+      mutate((s) => {
+        const i = s.hardware.components.findIndex((c) => c.id === id)
+        if (i < 0) return null
+        const cur = s.hardware.components[i]
+        const next = patch === null ? undefined : { ...(cur.perform ?? {}), ...patch }
+        const components = s.hardware.components.slice()
+        components[i] = { ...cur, perform: next }
+        return { hardware: { ...s.hardware, components } }
+      })
+    },
+
+    resetPerformLayout() {
+      mutate((s) => {
+        if (!s.hardware.components.some((c) => c.perform)) return null
+        return {
+          hardware: {
+            ...s.hardware,
+            components: s.hardware.components.map((c) =>
+              c.perform ? { ...c, perform: undefined } : c
+            )
+          }
+        }
+      })
+    },
+
+    /* ---------------- subpatches ---------------- */
+
+    collapseSelectionToSubpatch() {
+      const st = get()
+      if (st.selection.size === 0) return null
+      const id = nanoid(8)
+      // Place the box where the collapsed chunk was, so the patch does not
+      // visually jump.
+      const picked = st.graph.nodes.filter((n) => st.selection.has(n.id))
+      const cx = picked.reduce((a, n) => a + n.position.x, 0) / picked.length
+      const cy = picked.reduce((a, n) => a + n.position.y, 0) / picked.length
+      const res = collapseSelection(st.graph, st.selection, id, { x: cx, y: cy })
+      if (!res) {
+        st.setStatus({
+          kind: 'warn',
+          message: `selection needs more than ${SUB_INPUTS.length} inputs or ${SUB_OUTPUTS.length} outputs`
+        })
+        return null
+      }
+      mutate(() => ({ graph: res.graph }))
+      set(syncedSelection(new Set([id])))
+      return id
+    },
+
+    expandSubpatchNode(id) {
+      mutate((s) => {
+        const next = expandSubpatch(s.graph, id)
+        return next ? { graph: next } : null
+      })
+      set(syncedSelection(new Set()))
+    },
+
+    enterSubpatch(id) {
+      const st = get()
+      const node = st.graph.nodes.find(
+        (n) => n.id === id && (n.kind === 'subpatch' || n.kind === 'poly')
+      )
+      if (!node) return
+      /*
+       * `poly` is entered by exactly the same gesture. Its body IS a
+       * subpatch body — one voice of it — and giving it a second, parallel
+       * way in would be two mechanisms for one idea.
+       */
+      const fallback = node.kind === 'poly' ? 'Poly' : 'Subpatch'
+      const label = typeof node.params.label === 'string' ? node.params.label : fallback
+      set({
+        subpatchStack: [...st.subpatchStack, { nodeId: id, label, graph: st.graph }],
+        graph: bodyOf(node),
+        ...syncedSelection(new Set())
+      })
+    },
+
+    exitSubpatch() {
+      const st = get()
+      const top = st.subpatchStack[st.subpatchStack.length - 1]
+      if (!top) return
+      /*
+       * Write the edited body back into the node it came from. This is a
+       * real edit to the outer graph, so it goes through history like any
+       * other — leaving a subpatch and pressing undo should put back what
+       * you changed inside it.
+       */
+      const outer: AudioGraph = {
+        ...top.graph,
+        nodes: top.graph.nodes.map((n) => (n.id === top.nodeId ? withBody(n, st.graph) : n))
+      }
+      set({ subpatchStack: st.subpatchStack.slice(0, -1) })
+      mutate(() => ({ graph: outer }))
+      set(syncedSelection(new Set([top.nodeId])))
+    },
+
+    /* ---------------- presets ---------------- */
+
+    capturePreset(name) {
+      const id = nanoid(8)
+      const graph = get().graph
+      const preset = captureFrom(graph, name?.trim() || `Preset ${get().presets.length + 1}`, id)
+      mutate((st) => ({ presets: [...st.presets, preset] }))
+      set({ activePresetId: id })
+      return id
+    },
+
+    recallPreset(id) {
+      const preset = get().presets.find((p) => p.id === id)
+      if (!preset) return
+      const edits = recallEdits(get().graph, preset)
+      // One transaction for the whole recall: sixty params is one undo
+      // step, not sixty. `setParam` is the single write path so live
+      // worklets and the code node's AST re-post stay correct.
+      get().beginTransaction()
+      for (const e of edits) get().setParam(e.nodeId, e.paramId, e.value)
+      get().endTransaction()
+      set({ activePresetId: id })
+    },
+
+    updatePreset(id) {
+      const graph = get().graph
+      mutate((st) => {
+        const i = st.presets.findIndex((p) => p.id === id)
+        if (i < 0) return null
+        const next = st.presets.slice()
+        next[i] = captureFrom(graph, st.presets[i].name, id)
+        return { presets: next }
+      })
+      set({ activePresetId: id })
+    },
+
+    deletePreset(id) {
+      mutate((st) => {
+        if (!st.presets.some((p) => p.id === id)) return null
+        return { presets: st.presets.filter((p) => p.id !== id) }
+      })
+      if (get().activePresetId === id) set({ activePresetId: null })
+    },
+
+    renamePreset(id, name) {
+      mutate((st) => {
+        const i = st.presets.findIndex((p) => p.id === id)
+        if (i < 0 || st.presets[i].name === name) return null
+        const next = st.presets.slice()
+        next[i] = { ...next[i], name }
+        return { presets: next }
+      })
+    },
+
+    reorderPreset(id, toIndex) {
+      mutate((st) => {
+        const from = st.presets.findIndex((p) => p.id === id)
+        if (from < 0) return null
+        const to = Math.max(0, Math.min(st.presets.length - 1, toIndex))
+        if (from === to) return null
+        const next = st.presets.slice()
+        const [item] = next.splice(from, 1)
+        next.splice(to, 0, item)
+        return { presets: next }
+      })
+    },
+
+    morphPresets(aId, bId, t) {
+      const presets = get().presets
+      const a = presets.find((p) => p.id === aId)
+      const b = presets.find((p) => p.id === bId)
+      if (!a || !b) return
+      const edits = morphEdits(get().graph, a, b, t)
+      if (edits.length === 0) return
+      /*
+       * A morph is a gesture, not an edit: dragging the slider produces a
+       * continuous stream of these. The caller brackets the whole drag in
+       * one transaction (see the Presets panel), so this deliberately does
+       * not open its own — nesting would make each frame an undo entry.
+       */
+      for (const e of edits) get().setParam(e.nodeId, e.paramId, e.value)
+      set({ activePresetId: null })
+    },
+
     resetHardware() {
-      mutate(() => ({ hardware: emptyHardwareLayout() }))
+      /*
+       * Clearing the board clears the controls it drove — same rule as
+       * `removeHardware`, applied wholesale. Keeps `emptyHardwareLayout`
+       * on the CURRENT board too; calling it bare defaults to 'daisy_seed'
+       * and would silently reset the target's board.
+       */
+      mutate((s) => {
+        const bound = new Set(s.hardware.components.map((c) => c.id))
+        const doomed = new Set(
+          s.graph.nodes
+            .filter((n) => typeof n.params.bindingId === 'string' && bound.has(n.params.bindingId))
+            .map((n) => n.id)
+        )
+        return {
+          hardware: emptyHardwareLayout(s.hardware.board),
+          graph: {
+            ...s.graph,
+            nodes: s.graph.nodes.filter((n) => !doomed.has(n.id)),
+            connections: s.graph.connections.filter(
+              (c) => !doomed.has(c.from.nodeId) && !doomed.has(c.to.nodeId)
+            )
+          }
+        }
+      })
       set({ selectedHardwareId: null })
     },
 
@@ -858,6 +1551,13 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       set({ layout: { ...cur, serialMonitorH: next } })
     },
 
+    setCodePanelH(px) {
+      const cur = get().layout
+      const next = clamp(px, LAYOUT_LIMITS.codePanelH.min, LAYOUT_LIMITS.codePanelH.max)
+      if (next === cur.codePanelH) return
+      set({ layout: { ...cur, codePanelH: next } })
+    },
+
     setLayout(patch) {
       const cur = get().layout
       const merged: LayoutSizes = {
@@ -881,11 +1581,20 @@ export const useEditorStore = create<EditorStore>((set, get) => {
           LAYOUT_LIMITS.serialMonitorH.min,
           LAYOUT_LIMITS.serialMonitorH.max
         ),
+        codePanelH: clamp(
+          patch.codePanelH ?? cur.codePanelH,
+          LAYOUT_LIMITS.codePanelH.min,
+          LAYOUT_LIMITS.codePanelH.max
+        ),
         paletteCollapsed: patch.paletteCollapsed ?? cur.paletteCollapsed,
         paletteCompact: patch.paletteCompact ?? cur.paletteCompact,
         categoriesCollapsed: patch.categoriesCollapsed ?? cur.categoriesCollapsed,
         paletteFilter: patch.paletteFilter ?? cur.paletteFilter,
-        recentKinds: patch.recentKinds ?? cur.recentKinds
+        recentKinds: patch.recentKinds ?? cur.recentKinds,
+        gridShow: patch.gridShow ?? cur.gridShow,
+        gridSnap: patch.gridSnap ?? cur.gridSnap,
+        gridSize: clamp(patch.gridSize ?? cur.gridSize, 5, 200),
+        marqueeSelect: patch.marqueeSelect ?? cur.marqueeSelect
       }
       set({ layout: merged })
     },
@@ -919,6 +1628,24 @@ export const useEditorStore = create<EditorStore>((set, get) => {
         ? list.filter((c) => c !== category)
         : [...list, category]
       set({ layout: { ...cur, categoriesCollapsed: next } })
+    },
+
+    setCanvasPrefs(patch) {
+      const cur = get().layout
+      const next = {
+        ...cur,
+        ...patch,
+        gridSize: clamp(patch.gridSize ?? cur.gridSize, 5, 200)
+      }
+      if (
+        next.gridShow === cur.gridShow &&
+        next.gridSnap === cur.gridSnap &&
+        next.gridSize === cur.gridSize &&
+        next.marqueeSelect === cur.marqueeSelect
+      ) {
+        return
+      }
+      set({ layout: next })
     },
 
     setPaletteFilter(mode) {

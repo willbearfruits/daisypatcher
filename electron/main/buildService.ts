@@ -4,6 +4,8 @@ import * as path from 'node:path'
 import { dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { LIBDAISY_PATH, DAISYSP_PATH, WORKSPACE } from './sdk'
+import type { BoardId } from '../../shared/boards'
+import { PIO_ENV, WORKSPACE_DIR, coerceBoardId } from '../../shared/boards'
 
 /**
  * Cross-platform containment check. `path.relative()` yields OS-appropriate
@@ -15,7 +17,7 @@ export function isInside(base: string, target: string): boolean {
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
 }
 
-export type BuildTarget = 'daisy_seed' | 'esp32_s3'
+export type BuildTarget = BoardId
 
 export interface BuildInput {
   projectName: string
@@ -39,18 +41,30 @@ interface TargetRecipe {
   env: NodeJS.ProcessEnv
 }
 
+/**
+ * Build recipe per board.
+ *
+ * Every Espressif board shares the same `pio run` recipe — only the
+ * workspace directory and the artifact path differ, and both are derived
+ * from the shared board tables so the PlatformIO env name exists in
+ * exactly one place. Each board gets its own workspace dir: three ESP32
+ * variants sharing one directory would overwrite each other's
+ * `platformio.ini` and meet a warm `.pio` cache built for a different
+ * chip, which surfaces as a baffling "it flashed the wrong firmware".
+ */
 function recipeFor(target: BuildTarget): TargetRecipe {
-  if (target === 'esp32_s3') {
+  const pioEnv = PIO_ENV[target]
+  if (pioEnv !== null) {
     return {
-      workspaceDir: 'esp32',
+      workspaceDir: WORKSPACE_DIR[target],
       command: 'pio',
       args: ['run'],
-      artifact: () => '.pio/build/esp32-s3-devkitc-1/firmware.bin',
+      artifact: () => `.pio/build/${pioEnv}/firmware.bin`,
       env: {}
     }
   }
   return {
-    workspaceDir: 'seed',
+    workspaceDir: WORKSPACE_DIR[target],
     command: 'make',
     args: [],
     clean: { command: 'make', args: ['clean'] },
@@ -173,6 +187,51 @@ async function cleanProjectDir(projectPath: string): Promise<void> {
   )
 }
 
+/**
+ * Write a generated project into the workspace and return its path.
+ *
+ * Split out of `buildProject` so "show me this on disk" does not have to
+ * run a compiler. Both paths share it, so an ejected project is byte-for-
+ * byte the one that would have been built — which is the whole point of
+ * offering the button.
+ */
+export async function writeProjectFiles(
+  input: BuildInput,
+  emit: (line: string) => void = () => undefined
+): Promise<string> {
+  // Trust boundary: the renderer supplies this. coerceBoardId also maps
+  // the legacy 'esp32_s3' spelling onto the DevKitC id.
+  const target: BuildTarget = coerceBoardId(input.target)
+  const recipe = recipeFor(target)
+  const safeName = sanitizeProjectName(input.projectName)
+  const targetRoot = join(WORKSPACE, recipe.workspaceDir)
+  const projectPath = join(targetRoot, safeName)
+
+  // Defense in depth: re-resolve and verify containment.
+  const workspaceAbs = resolve(WORKSPACE)
+  const projectAbs = resolve(projectPath)
+  if (!isInside(workspaceAbs, projectAbs)) {
+    throw new Error(`refusing to write outside workspace: ${projectAbs}`)
+  }
+
+  await mkdir(WORKSPACE, { recursive: true })
+  await mkdir(targetRoot, { recursive: true })
+  await mkdir(projectPath, { recursive: true })
+  await cleanProjectDir(projectPath)
+
+  // Write every file; reject keys that try to escape the dir.
+  for (const [relPath, contents] of Object.entries(input.files)) {
+    const dest = resolve(projectPath, relPath)
+    if (!isInside(projectAbs, dest)) {
+      throw new Error(`refusing to write file outside project: ${relPath}`)
+    }
+    await mkdir(dirname(dest), { recursive: true })
+    await writeFile(dest, contents, 'utf8')
+    emit(`[write] ${relPath}`)
+  }
+  return projectPath
+}
+
 export async function buildProject(
   input: BuildInput,
   emit: (line: string) => void
@@ -184,37 +243,14 @@ export async function buildProject(
     emit(line)
   }
 
-  const target: BuildTarget = input.target === 'esp32_s3' ? 'esp32_s3' : 'daisy_seed'
+  // Trust boundary: the renderer supplies this. coerceBoardId also maps
+  // the legacy 'esp32_s3' spelling onto the DevKitC id.
+  const target: BuildTarget = coerceBoardId(input.target)
   const recipe = recipeFor(target)
 
-  const safeName = sanitizeProjectName(input.projectName)
   // Per-target subdirectory keeps Seed and ESP32 builds from colliding.
-  const targetRoot = join(WORKSPACE, recipe.workspaceDir)
-  const projectPath = join(targetRoot, safeName)
-
-  // Defense in depth: re-resolve and verify containment.
-  const workspaceAbs = resolve(WORKSPACE)
-  const projectAbs = resolve(projectPath)
-  if (!isInside(workspaceAbs, projectAbs)) {
-    throw new Error(`refusing to build outside workspace: ${projectAbs}`)
-  }
-
-  await mkdir(WORKSPACE, { recursive: true })
-  await mkdir(targetRoot, { recursive: true })
-  await mkdir(projectPath, { recursive: true })
-  await cleanProjectDir(projectPath)
-
-  // Write every file; reject keys that try to escape the dir.
-  for (const [relPath, contents] of Object.entries(input.files)) {
-    const dest = resolve(projectPath, relPath)
-    const fileAbs = dest
-    if (!isInside(projectAbs, fileAbs)) {
-      throw new Error(`refusing to write file outside project: ${relPath}`)
-    }
-    await mkdir(dirname(dest), { recursive: true })
-    await writeFile(dest, contents, 'utf8')
-    pushLog(`[write] ${relPath}`)
-  }
+  const safeName = sanitizeProjectName(input.projectName)
+  const projectPath = await writeProjectFiles(input, pushLog)
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,

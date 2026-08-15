@@ -23,8 +23,9 @@ import {
   useRef,
   useState
 } from 'react'
+import type { ReactElement } from 'react'
 import { useEditorStore } from '@/state/store'
-import { KIND_ROLES } from '@/types/hardware'
+import { KIND_ROLES, roleLabel } from '@/types/hardware'
 import type {
   BoardPin,
   HardwareKind,
@@ -32,7 +33,8 @@ import type {
   PlacedComponent
 } from '@/types/hardware'
 import { getBoardPinout } from './boardPinout'
-import type { BoardPhysicalPinPosition, BoardPinout } from './boardPinout'
+import type { BoardPhysicalPinPosition, BoardPinout, ResolvedGeometry } from './boardPinout'
+import { resolveGeometry } from './boardPinout'
 import { HARDWARE_DRAG_MIME } from './HardwarePalette'
 import {
   MM_PER_UNIT,
@@ -57,18 +59,14 @@ import { BindingLabels } from './BindingLabels'
 const CANVAS_W = 1400
 const CANVAS_H = 1500
 
-/** Board silhouette box. */
-const BOARD_W = 260
-const BOARD_H = 1000
-const BOARD_X = (CANVAS_W - BOARD_W) / 2
-const BOARD_Y = 240
-
-const ROWS_PER_SIDE = 20
-const PIN_EDGE_INSET = 14
-const PIN_ROW_TOP_MARGIN = 30
-const PIN_ROW_BOTTOM_MARGIN = 30
-const PIN_SPACING =
-  (BOARD_H - PIN_ROW_TOP_MARGIN - PIN_ROW_BOTTOM_MARGIN) / (ROWS_PER_SIDE - 1)
+/*
+ * Board box + pin pitch used to live here as module constants, with a
+ * hardcoded ROWS_PER_SIDE = 20. That worked only because both original
+ * boards happen to have exactly 20 pins per side; a SuperMini has 8.
+ * They now come from `getBoardPinout(board).geometry`, resolved once per
+ * render by `resolveGeometry` — see boardPinout.ts. The Seed and S3
+ * DevKitC values are unchanged, so their rendering is pixel-identical.
+ */
 
 const NAME_PILL_W = 62
 const NAME_PILL_H = 22
@@ -219,21 +217,30 @@ interface PinCoord {
   pillsX: number
 }
 
-function computePinCoords(layout: BoardPhysicalPinPosition[]): PinCoord[] {
+function computePinCoords(
+  layout: BoardPhysicalPinPosition[],
+  g: ResolvedGeometry
+): PinCoord[] {
   return layout.map((p) => {
     if (p.side === 'bottom') {
-      const x = BOARD_X + BOARD_W / 2 + (p.index - 0.5) * 110
-      const y = BOARD_Y + BOARD_H + 48
+      const x = g.boardX + g.boardW / 2 + (p.index - 0.5) * 110
+      const y = g.boardY + g.boardH + 48
       return { pin: p.pin, side: p.side, index: p.index, label: p.label, x, y, pillsX: x }
     }
     const x =
       p.side === 'left'
-        ? BOARD_X + PIN_EDGE_INSET
-        : BOARD_X + BOARD_W - PIN_EDGE_INSET
+        ? g.boardX + g.pinEdgeInset
+        : g.boardX + g.boardW - g.pinEdgeInset
+    /*
+     * Reverse within the LEFT column's OWN length, not the global row
+     * count. For the symmetric legacy boards these are the same number,
+     * so nothing moves; on an asymmetric board reversing against the
+     * global max would push the shorter column off the silhouette.
+     */
     const rowIndex =
-      p.side === 'left' ? ROWS_PER_SIDE - 1 - p.index : p.index
-    const y = BOARD_Y + PIN_ROW_TOP_MARGIN + rowIndex * PIN_SPACING
-    const pillsX = p.side === 'left' ? BOARD_X : BOARD_X + BOARD_W
+      p.side === 'left' && g.leftColumnBottomUp ? g.leftCount - 1 - p.index : p.index
+    const y = g.boardY + g.rowTopMargin + rowIndex * g.pitch
+    const pillsX = p.side === 'left' ? g.boardX : g.boardX + g.boardW
     return { pin: p.pin, side: p.side, index: p.index, label: p.label, x, y, pillsX }
   })
 }
@@ -291,8 +298,25 @@ function HardwareViewInner() {
   const svgRef = useRef<SVGSVGElement>(null)
 
   const pinout = useMemo(() => getBoardPinout(board), [board])
+  const geom = useMemo(() => resolveGeometry(pinout, CANVAS_W), [pinout])
+
+  /*
+   * How many bindings point at pins this board doesn't have. Switching
+   * boards deliberately leaves them dangling rather than clearing them,
+   * so the user needs to see that there's something to fix — and a way to
+   * fix it that isn't repinning every role by hand.
+   */
+  const invalidPins = useEditorStore((s) => {
+    const caps = getBoardPinout(s.hardware.board).pinCaps
+    let n = 0
+    for (const c of s.hardware.components)
+      for (const p of Object.values(c.pins))
+        if (typeof p === 'string' && !(p in caps)) n++
+    return n
+  })
+  const repinForBoard = useEditorStore((s) => s.repinForBoard)
   const pinCoords = useMemo(
-    () => computePinCoords(pinout.physicalLayout),
+    () => computePinCoords(pinout.physicalLayout, geom),
     [pinout]
   )
   const pinCoordMap = useMemo(() => {
@@ -621,18 +645,19 @@ function HardwareViewInner() {
       >
         {showGrid ? <GridLayer /> : null}
 
-        <Caption boardLabel={pinout.label} />
+        <Caption boardLabel={pinout.label} provisional={pinout.provisional} />
         <Legend cx={CANVAS_W / 2} cy={168} />
 
-        {board === 'daisy_seed' ? (
-          <SeedSilhouette />
-        ) : (
-          <Esp32SilhouettePlaceholder />
-        )}
+        {/* Data-driven: adding a board never touches this file. */}
+        {(() => {
+          const Silhouette = SILHOUETTES[geom.silhouette]
+          return <Silhouette geom={geom} />
+        })()}
 
         <PinRows
           pinCoords={pinCoords}
           pinout={pinout}
+          geom={geom}
           allowedPins={allowedPins}
           draggingSnapPin={drag?.snappedPin ?? null}
           components={components}
@@ -648,8 +673,8 @@ function HardwareViewInner() {
           <BindingLabels
             components={components}
             pinCoordMap={pinCoordMap}
-            boardX={BOARD_X}
-            boardW={BOARD_W}
+            boardX={geom.boardX}
+            boardW={geom.boardW}
           />
         ) : null}
 
@@ -681,6 +706,8 @@ function HardwareViewInner() {
       </svg>
 
       <HardwareToolbar
+        invalidPins={invalidPins}
+        onRepin={repinForBoard}
         showLabels={showLabels}
         onToggleLabels={() => setShowLabels((v) => !v)}
         showGrid={showGrid}
@@ -737,6 +764,8 @@ function HardwareViewInner() {
  * ===================================================================== */
 
 function HardwareToolbar({
+  invalidPins,
+  onRepin,
   showLabels,
   onToggleLabels,
   showGrid,
@@ -749,6 +778,8 @@ function HardwareToolbar({
   onZoomIn,
   onZoomOut
 }: {
+  invalidPins: number
+  onRepin: () => void
   showLabels: boolean
   onToggleLabels: () => void
   showGrid: boolean
@@ -763,6 +794,16 @@ function HardwareToolbar({
 }) {
   return (
     <div className={activityStyles.toolbar}>
+      {invalidPins > 0 ? (
+        <button
+          type="button"
+          className={`${activityStyles.toolbarButton} ${activityStyles.toolbarWarn}`}
+          onClick={onRepin}
+          title={`${invalidPins} pin binding${invalidPins === 1 ? '' : 's'} don't exist on this board — click to reassign them`}
+        >
+          repin {invalidPins}
+        </button>
+      ) : null}
       <button
         type="button"
         className={activityStyles.toolbarButton}
@@ -901,7 +942,7 @@ function GridLayer() {
  * Caption + legend.
  * ===================================================================== */
 
-function Caption({ boardLabel }: { boardLabel: string }) {
+function Caption({ boardLabel, provisional }: { boardLabel: string; provisional?: string }) {
   return (
     <g pointerEvents="none">
       <text
@@ -913,7 +954,13 @@ function Caption({ boardLabel }: { boardLabel: string }) {
         fill="var(--dp-text)"
         letterSpacing="0.32em"
       >
-        DAISY PINOUT
+        {/*
+          Was the literal "DAISY PINOUT", which captioned an ESP32-C3
+          board as a Daisy. The board name is the headline; "PINOUT" drops
+          to the sub-line, so the two-line rhythm is unchanged and every
+          board reads correctly.
+        */}
+        {boardLabel.toUpperCase()}
       </text>
       <text
         x={CANVAS_W / 2}
@@ -924,8 +971,26 @@ function Caption({ boardLabel }: { boardLabel: string }) {
         fill="var(--dp-text-dim)"
         letterSpacing="0.28em"
       >
-        {boardLabel.toUpperCase()}
+        PINOUT
       </text>
+      {/*
+        A board whose pin order we could not confirm is still usable, but the
+        caveat has to be visible to someone holding the board — one that lives
+        only in a source comment reaches nobody.
+      */}
+      {provisional ? (
+        <text
+          x={CANVAS_W / 2}
+          y={130}
+          textAnchor="middle"
+          fontFamily="var(--dp-font-mono)"
+          fontSize="11"
+          fill="var(--dp-warning)"
+          letterSpacing="0.12em"
+        >
+          {provisional.toUpperCase()}
+        </text>
+      ) : null}
     </g>
   )
 }
@@ -987,7 +1052,15 @@ function Legend({ cx, cy }: { cx: number; cy: number }) {
  * Seed / ESP32 silhouettes — retained from the prior iteration.
  * ===================================================================== */
 
-function SeedSilhouette() {
+function SeedSilhouette({ geom }: { geom: ResolvedGeometry }) {
+  /*
+   * Destructured under the old module-constant names on purpose: every
+   * expression below (`BOARD_X + (BOARD_W - chipW) / 2` and ~30 more) is
+   * left exactly as it was when these were module constants. Rewriting
+   * them all would be a large diff with a big typo surface and no
+   * behavioural gain.
+   */
+  const { boardX: BOARD_X, boardY: BOARD_Y, boardW: BOARD_W, boardH: BOARD_H } = geom
   const pcbFill = 'color-mix(in srgb, var(--dp-surface-sunken) 70%, var(--dp-warning) 4%)'
 
   const chipW = 140
@@ -1224,7 +1297,8 @@ function SeedSilhouette() {
   )
 }
 
-function Esp32SilhouettePlaceholder() {
+function Esp32DevkitSilhouette({ geom }: { geom: ResolvedGeometry }) {
+  const { boardX: BOARD_X, boardY: BOARD_Y, boardW: BOARD_W, boardH: BOARD_H } = geom
   return (
     <g pointerEvents="none">
       <rect
@@ -1292,6 +1366,90 @@ function Esp32SilhouettePlaceholder() {
   )
 }
 
+/**
+ * SuperMini-class boards: a small PCB that is almost entirely module,
+ * with a USB-C shell overhanging one end and an RF antenna keep-out at
+ * the same end. Drawn in proportion to the board box so both the C3 and
+ * the (taller) S3 variants use it without adjustment.
+ */
+function Esp32SuperminiSilhouette({ geom }: { geom: ResolvedGeometry }) {
+  const { boardX: BOARD_X, boardY: BOARD_Y, boardW: BOARD_W, boardH: BOARD_H } = geom
+  const usbW = BOARD_W * 0.42
+  const antH = BOARD_H * 0.11
+  return (
+    <g>
+      <rect
+        x={BOARD_X}
+        y={BOARD_Y}
+        width={BOARD_W}
+        height={BOARD_H}
+        rx={10}
+        fill="var(--dp-surface-sunken)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="1.5"
+      />
+      {/* USB-C shell, overhanging the top edge */}
+      <rect
+        x={BOARD_X + (BOARD_W - usbW) / 2}
+        y={BOARD_Y - 14}
+        width={usbW}
+        height={26}
+        rx={5}
+        fill="var(--dp-surface-elevated)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="1.5"
+      />
+      {/* antenna keep-out */}
+      <rect
+        x={BOARD_X + 10}
+        y={BOARD_Y + 20}
+        width={BOARD_W - 20}
+        height={antH}
+        rx={4}
+        fill="none"
+        stroke="var(--dp-border)"
+        strokeWidth="1"
+        strokeDasharray="4 3"
+      />
+      {/* shielded module can */}
+      <rect
+        x={BOARD_X + 14}
+        y={BOARD_Y + 20 + antH + 10}
+        width={BOARD_W - 28}
+        height={BOARD_H * 0.44}
+        rx={4}
+        fill="var(--dp-bg)"
+        stroke="var(--dp-border-strong)"
+        strokeWidth="1"
+      />
+      <text
+        x={BOARD_X + BOARD_W / 2}
+        y={BOARD_Y + BOARD_H * 0.52}
+        textAnchor="middle"
+        fontFamily="var(--dp-font-mono)"
+        fontSize="11"
+        fill="var(--dp-text-dim)"
+        letterSpacing="0.16em"
+      >
+        SUPERMINI
+      </text>
+    </g>
+  )
+}
+
+/**
+ * Silhouette artwork per board style. A new board that reuses an existing
+ * style costs zero view code — it just names the style in its geometry.
+ */
+const SILHOUETTES = {
+  seed: SeedSilhouette,
+  esp32_devkit: Esp32DevkitSilhouette,
+  esp32_supermini: Esp32SuperminiSilhouette
+} satisfies Record<
+  ResolvedGeometry['silhouette'],
+  (props: { geom: ResolvedGeometry }) => ReactElement
+>
+
 /* =====================================================================
  * Pin rows.
  * ===================================================================== */
@@ -1299,12 +1457,14 @@ function Esp32SilhouettePlaceholder() {
 function PinRows({
   pinCoords,
   pinout,
+  geom,
   allowedPins,
   draggingSnapPin,
   components
 }: {
   pinCoords: PinCoord[]
   pinout: BoardPinout
+  geom: ResolvedGeometry
   allowedPins: Set<string> | null
   draggingSnapPin: string | null
   components: PlacedComponent[]
@@ -1328,6 +1488,7 @@ function PinRows({
           <PinRow
             key={`${coord.side}-${coord.index}`}
             coord={coord}
+            geom={geom}
             cap={cap}
             bound={bound}
             dimmed={dimmed}
@@ -1341,12 +1502,14 @@ function PinRows({
 
 function PinRow({
   coord,
+  geom,
   cap,
   bound,
   dimmed,
   snapping
 }: {
   coord: PinCoord
+  geom: ResolvedGeometry
   cap: PinCapabilities | undefined
   bound: boolean
   dimmed: boolean
@@ -1372,8 +1535,8 @@ function PinRow({
   }, [cap?.label, coord.label, coord.pin])
 
   const nameX = isLeft
-    ? BOARD_X - ROW_GAP_FROM_BOARD - NAME_PILL_W
-    : BOARD_X + BOARD_W + ROW_GAP_FROM_BOARD
+    ? geom.boardX - ROW_GAP_FROM_BOARD - NAME_PILL_W
+    : geom.boardX + geom.boardW + ROW_GAP_FROM_BOARD
   const y = coord.y
   const nameTop = y - NAME_PILL_H / 2
 
@@ -1416,7 +1579,7 @@ function PinRow({
         pointerEvents="all"
       />
       <line
-        x1={isLeft ? BOARD_X : BOARD_X + BOARD_W}
+        x1={isLeft ? geom.boardX : geom.boardX + geom.boardW}
         y1={y}
         x2={isLeft ? nameX + NAME_PILL_W : nameX}
         y2={y}
@@ -1841,7 +2004,10 @@ function PlacedComponentView({
           pointerEvents="none"
         />
       ) : null}
-      {comp.kind === 'midi_jack' || comp.kind === 'i2s_codec' ? (
+      {comp.kind === 'midi_jack' ||
+      comp.kind === 'i2s_codec' ||
+      comp.kind === 'pcm5102a' ||
+      comp.kind === 'max98357a' ? (
         <circle
           cx={nat.w / 2 - boundW / 2 + 6}
           cy={nat.h / 2 - boundH / 2 + 6}
@@ -2109,8 +2275,8 @@ function RoleDot({
       >
         <title>
           {pin
-            ? `${role} → ${pin} (drag to rewire, right-click to clear)`
-            : `${role} (drag to a pin)`}
+            ? `${roleLabel(kind, role)} → ${pin} (drag to rewire, right-click to clear)`
+            : `${roleLabel(kind, role)} (drag to a pin)`}
         </title>
       </circle>
       <text
@@ -2123,7 +2289,7 @@ function RoleDot({
         fill="var(--dp-text-muted)"
         pointerEvents="none"
       >
-        {role}
+        {roleLabel(kind, role)}
       </text>
     </g>
   )

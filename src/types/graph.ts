@@ -89,6 +89,13 @@ export type NodeKind =
   | 'button'
   | 'led'
   | 'switch_3way'
+  | 'encoder_in'
+  | 'menu'
+  // I2C sensors. One node per placed sensor component; each fans its axes
+  // out as separate CV outputs rather than making you place three nodes.
+  | 'imu_in'
+  | 'compass_in'
+  | 'distance_in'
   | 'i2s_in'
   | 'i2s_out'
   | 'midi_in_note'
@@ -96,6 +103,27 @@ export type NodeKind =
   | 'midi_out_note'
   | 'oled'
   // ---- Logic / debug / scripting ----
+  // The escape hatch: a node whose body the user writes. Runs in the
+  // emulator AND compiles to firmware — see codegen/codeNode/.
+  | 'code'
+  // Nesting. Flattened away before codegen or the engine ever see them —
+  // see state/subpatch.ts.
+  | 'subpatch'
+  | 'sub_in'
+  | 'sub_out'
+  // Voice stacking: N copies of a body, summed. Also flattened away.
+  | 'poly'
+  | 'preset_recall'
+  | 'sample_player'
+  // Logic layer — see nodes/defs.logic.ts.
+  | 'logic'
+  | 'toggle'
+  | 'counter'
+  | 'timer'
+  | 'state_machine'
+  | 'select'
+  | 'edge'
+  | 'voice_id'
   | 'expression'
   | 'print'
 

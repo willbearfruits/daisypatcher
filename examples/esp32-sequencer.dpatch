@@ -1,0 +1,542 @@
+{
+  "dpatch": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "clock_1",
+        "kind": "clock",
+        "position": {
+          "x": -760,
+          "y": 0
+        },
+        "params": {
+          "bpm": 112,
+          "pulse_width": 0.12
+        }
+      },
+      {
+        "id": "clock_divider_2",
+        "kind": "clock_divider",
+        "position": {
+          "x": -540,
+          "y": 0
+        },
+        "params": {}
+      },
+      {
+        "id": "step_seq_3",
+        "kind": "step_seq",
+        "position": {
+          "x": -540,
+          "y": -220
+        },
+        "params": {
+          "s1": 0,
+          "s2": 0.25,
+          "s3": 0.42,
+          "s4": 0.25,
+          "s5": 0.58,
+          "s6": 0.42,
+          "s7": 0.75,
+          "s8": 0.33,
+          "g1": "on",
+          "g2": "on",
+          "g3": "on",
+          "g4": "on",
+          "g5": "on",
+          "g6": "on",
+          "g7": "on",
+          "g8": "on"
+        }
+      },
+      {
+        "id": "range_4",
+        "kind": "range",
+        "position": {
+          "x": -300,
+          "y": -260
+        },
+        "params": {
+          "in_min": 0,
+          "in_max": 1,
+          "out_min": -1,
+          "out_max": 1,
+          "clamp": "on"
+        }
+      },
+      {
+        "id": "oscillator_5",
+        "kind": "oscillator",
+        "position": {
+          "x": -60,
+          "y": -300
+        },
+        "params": {
+          "frequency": 220,
+          "amplitude": 0.6,
+          "waveform": "sawtooth"
+        }
+      },
+      {
+        "id": "adsr_6",
+        "kind": "adsr",
+        "position": {
+          "x": -300,
+          "y": -140
+        },
+        "params": {
+          "attack": 0.005,
+          "decay": 0.14,
+          "sustain": 0.25,
+          "release": 0.18
+        }
+      },
+      {
+        "id": "vca_7",
+        "kind": "vca",
+        "position": {
+          "x": 180,
+          "y": -280
+        },
+        "params": {
+          "bias": 0
+        }
+      },
+      {
+        "id": "filter_moog_8",
+        "kind": "filter_moog",
+        "position": {
+          "x": 420,
+          "y": -280
+        },
+        "params": {
+          "frequency": 1800,
+          "resonance": 0.35
+        }
+      },
+      {
+        "id": "euclidean_9",
+        "kind": "euclidean",
+        "position": {
+          "x": -540,
+          "y": 200
+        },
+        "params": {
+          "steps": 16,
+          "pulses": 7,
+          "rotate": 0
+        }
+      },
+      {
+        "id": "drum_kick_10",
+        "kind": "drum_kick",
+        "position": {
+          "x": -300,
+          "y": 140
+        },
+        "params": {
+          "tune": 52,
+          "decay": 0.4,
+          "punch": 0.6,
+          "sweep": 0.6
+        }
+      },
+      {
+        "id": "drum_hat_11",
+        "kind": "drum_hat",
+        "position": {
+          "x": -300,
+          "y": 280
+        },
+        "params": {
+          "decay": 0.06,
+          "tone": 0.8
+        }
+      },
+      {
+        "id": "drum_snare_12",
+        "kind": "drum_snare",
+        "position": {
+          "x": -300,
+          "y": 420
+        },
+        "params": {
+          "tune": 190,
+          "decay": 0.18,
+          "tone": 0.55
+        }
+      },
+      {
+        "id": "mixer4_13",
+        "kind": "mixer4",
+        "position": {
+          "x": 660,
+          "y": 0
+        },
+        "params": {
+          "gain1": 0.9,
+          "gain2": 0.8,
+          "gain3": 0.5,
+          "gain4": 0.35
+        }
+      },
+      {
+        "id": "delay_14",
+        "kind": "delay",
+        "position": {
+          "x": 900,
+          "y": 0
+        },
+        "params": {
+          "time": 0.24,
+          "feedback": 0.32,
+          "mix": 0.28
+        }
+      },
+      {
+        "id": "audio_output_15",
+        "kind": "audio_output",
+        "position": {
+          "x": 1140,
+          "y": 0
+        },
+        "params": {}
+      },
+      {
+        "id": "encoder_in_16",
+        "kind": "encoder_in",
+        "position": {
+          "x": -1020,
+          "y": 320
+        },
+        "params": {
+          "bindingId": "hw_encoder_1",
+          "value": 0.5,
+          "step": 0.02,
+          "min": 0,
+          "max": 1,
+          "wrap": "clamp",
+          "sw_value": 0
+        }
+      },
+      {
+        "id": "menu_17",
+        "kind": "menu",
+        "position": {
+          "x": -760,
+          "y": 320
+        },
+        "params": {
+          "tree": "{\"root\":[{\"id\":\"tempo\",\"kind\":\"value\",\"label\":\"TEMPO\",\"type\":\"number\",\"min\":40,\"max\":200,\"step\":1,\"value\":112,\"defaultValue\":112,\"unit\":\"bpm\",\"target\":{\"nodeId\":\"clock_1\",\"paramId\":\"bpm\"},\"out\":\"a\"},{\"id\":\"voice\",\"kind\":\"submenu\",\"label\":\"VOICE\",\"children\":[{\"id\":\"wave\",\"kind\":\"value\",\"label\":\"WAVE\",\"type\":\"enum\",\"min\":0,\"max\":3,\"step\":1,\"options\":[\"SINE\",\"SAW\",\"SQR\",\"TRI\"],\"value\":1,\"defaultValue\":1,\"out\":\"none\"},{\"id\":\"cutoff\",\"kind\":\"value\",\"label\":\"CUTOFF\",\"type\":\"number\",\"min\":120,\"max\":9000,\"step\":20,\"value\":1800,\"defaultValue\":1800,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"filter_moog_8\",\"paramId\":\"frequency\"},\"out\":\"b\"},{\"id\":\"reso\",\"kind\":\"value\",\"label\":\"RESO\",\"type\":\"number\",\"min\":0,\"max\":0.9,\"step\":0.02,\"value\":0.35,\"defaultValue\":0.35,\"target\":{\"nodeId\":\"filter_moog_8\",\"paramId\":\"resonance\"},\"out\":\"none\"},{\"id\":\"decay\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.02,\"max\":1,\"step\":0.01,\"value\":0.14,\"defaultValue\":0.14,\"unit\":\"s\",\"target\":{\"nodeId\":\"adsr_6\",\"paramId\":\"decay\"},\"out\":\"none\"}]},{\"id\":\"rhythm\",\"kind\":\"submenu\",\"label\":\"RHYTHM\",\"children\":[{\"id\":\"pulses\",\"kind\":\"value\",\"label\":\"PULSES\",\"type\":\"number\",\"min\":1,\"max\":16,\"step\":1,\"value\":7,\"defaultValue\":7,\"target\":{\"nodeId\":\"euclidean_9\",\"paramId\":\"pulses\"},\"out\":\"c\"},{\"id\":\"rotate\",\"kind\":\"value\",\"label\":\"ROTATE\",\"type\":\"number\",\"min\":0,\"max\":15,\"step\":1,\"value\":0,\"defaultValue\":0,\"target\":{\"nodeId\":\"euclidean_9\",\"paramId\":\"rotate\"},\"out\":\"none\"},{\"id\":\"kicklvl\",\"kind\":\"value\",\"label\":\"KICK\",\"type\":\"number\",\"min\":0,\"max\":1.5,\"step\":0.05,\"value\":0.8,\"defaultValue\":0.8,\"target\":{\"nodeId\":\"mixer4_13\",\"paramId\":\"gain2\"},\"out\":\"none\"}]},{\"id\":\"space\",\"kind\":\"submenu\",\"label\":\"SPACE\",\"children\":[{\"id\":\"dtime\",\"kind\":\"value\",\"label\":\"TIME\",\"type\":\"number\",\"min\":0.02,\"max\":0.9,\"step\":0.01,\"value\":0.24,\"defaultValue\":0.24,\"unit\":\"s\",\"target\":{\"nodeId\":\"delay_14\",\"paramId\":\"time\"},\"out\":\"none\"},{\"id\":\"dfb\",\"kind\":\"value\",\"label\":\"FBACK\",\"type\":\"number\",\"min\":0,\"max\":0.85,\"step\":0.02,\"value\":0.32,\"defaultValue\":0.32,\"target\":{\"nodeId\":\"delay_14\",\"paramId\":\"feedback\"},\"out\":\"none\"},{\"id\":\"dmix\",\"kind\":\"value\",\"label\":\"MIX\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.28,\"defaultValue\":0.28,\"target\":{\"nodeId\":\"delay_14\",\"paramId\":\"mix\"},\"out\":\"d\"}]}],\"longPress\":\"back\",\"doubleClick\":\"home\",\"longMs\":500,\"doubleMs\":300}"
+        }
+      },
+      {
+        "id": "oled_18",
+        "kind": "oled",
+        "position": {
+          "x": -460,
+          "y": 320
+        },
+        "params": {
+          "bindingId": "hw_oled_ssd1306_2",
+          "elements": "[{\"id\":\"el_870596966\",\"kind\":\"menu\",\"x\":0,\"y\":0,\"width\":128,\"height\":64,\"rows\":6,\"menuNodeId\":\"menu_17\"}]"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": {
+          "nodeId": "clock_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "clock_divider_2",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c2",
+        "from": {
+          "nodeId": "clock_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "step_seq_3",
+          "socketId": "clock"
+        }
+      },
+      {
+        "id": "c3",
+        "from": {
+          "nodeId": "step_seq_3",
+          "socketId": "cv"
+        },
+        "to": {
+          "nodeId": "range_4",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c4",
+        "from": {
+          "nodeId": "range_4",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oscillator_5",
+          "socketId": "pitch_cv"
+        }
+      },
+      {
+        "id": "c5",
+        "from": {
+          "nodeId": "step_seq_3",
+          "socketId": "gate"
+        },
+        "to": {
+          "nodeId": "adsr_6",
+          "socketId": "gate"
+        }
+      },
+      {
+        "id": "c6",
+        "from": {
+          "nodeId": "oscillator_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "vca_7",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c7",
+        "from": {
+          "nodeId": "adsr_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "vca_7",
+          "socketId": "cv"
+        }
+      },
+      {
+        "id": "c8",
+        "from": {
+          "nodeId": "vca_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_moog_8",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c9",
+        "from": {
+          "nodeId": "clock_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "euclidean_9",
+          "socketId": "clock"
+        }
+      },
+      {
+        "id": "c10",
+        "from": {
+          "nodeId": "clock_divider_2",
+          "socketId": "d4"
+        },
+        "to": {
+          "nodeId": "drum_kick_10",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c11",
+        "from": {
+          "nodeId": "euclidean_9",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "drum_hat_11",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c12",
+        "from": {
+          "nodeId": "clock_divider_2",
+          "socketId": "d8"
+        },
+        "to": {
+          "nodeId": "drum_snare_12",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c13",
+        "from": {
+          "nodeId": "filter_moog_8",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in1"
+        }
+      },
+      {
+        "id": "c14",
+        "from": {
+          "nodeId": "drum_kick_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in2"
+        }
+      },
+      {
+        "id": "c15",
+        "from": {
+          "nodeId": "drum_snare_12",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in3"
+        }
+      },
+      {
+        "id": "c16",
+        "from": {
+          "nodeId": "drum_hat_11",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_13",
+          "socketId": "in4"
+        }
+      },
+      {
+        "id": "c17",
+        "from": {
+          "nodeId": "mixer4_13",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "delay_14",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c18",
+        "from": {
+          "nodeId": "delay_14",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_15",
+          "socketId": "left"
+        }
+      },
+      {
+        "id": "c19",
+        "from": {
+          "nodeId": "delay_14",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_15",
+          "socketId": "right"
+        }
+      },
+      {
+        "id": "c20",
+        "from": {
+          "nodeId": "encoder_in_16",
+          "socketId": "delta"
+        },
+        "to": {
+          "nodeId": "menu_17",
+          "socketId": "delta"
+        }
+      },
+      {
+        "id": "c21",
+        "from": {
+          "nodeId": "encoder_in_16",
+          "socketId": "sw"
+        },
+        "to": {
+          "nodeId": "menu_17",
+          "socketId": "click"
+        }
+      }
+    ],
+    "meta": {
+      "name": "esp32-sequencer",
+      "sampleRate": 48000,
+      "blockSize": 48
+    }
+  },
+  "hardware": {
+    "board": "esp32_s3_devkitc",
+    "components": [
+      {
+        "id": "hw_encoder_1",
+        "kind": "encoder",
+        "label": "Nav",
+        "position": {
+          "x": 140,
+          "y": 560
+        },
+        "pins": {
+          "a": "GPIO0",
+          "b": "GPIO1",
+          "sw": "GPIO2"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_oled_ssd1306_2",
+        "kind": "oled_ssd1306",
+        "label": "Display",
+        "position": {
+          "x": 300,
+          "y": 420
+        },
+        "pins": {
+          "sda": "GPIO3",
+          "scl": "GPIO4"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pcm5102a_3",
+        "kind": "pcm5102a",
+        "label": "Line out",
+        "position": {
+          "x": 300,
+          "y": 700
+        },
+        "pins": {
+          "sck": "GPIO5",
+          "ws": "GPIO6",
+          "sd_out": "GPIO7"
+        },
+        "config": {
+          "jumper": "i2s"
+        }
+      }
+    ],
+    "meta": {
+      "name": "esp32-sequencer"
+    }
+  },
+  "layout": {
+    "daisyFlashMode": "qspi"
+  }
+}

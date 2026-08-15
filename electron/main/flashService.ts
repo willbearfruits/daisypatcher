@@ -2,8 +2,10 @@ import { execFile, spawn } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import { listSerialPorts } from './serialService'
+import type { BoardId } from '../../shared/boards'
+import { isEsp32Family } from '../../shared/boards'
 
-export type FlashTarget = 'daisy_seed' | 'esp32_s3'
+export type FlashTarget = BoardId
 
 /**
  * Daisy-only flash mode (mirror of `DaisyFlashMode` in the renderer's
@@ -266,7 +268,7 @@ async function enumerateSerialInfo(): Promise<FlashSerialInfo[]> {
 
 export async function detectFlashDevices(target: FlashTarget = 'daisy_seed'): Promise<FlashStatus> {
   // ESP32 path — no DFU; look for a serial port instead.
-  if (target === 'esp32_s3') {
+  if (isEsp32Family(target)) {
     const [esp32Ports, serialPorts] = await Promise.all([
       detectEsp32Ports(),
       enumerateSerialInfo()
@@ -407,7 +409,7 @@ const DAISY_UDEV_RULE =
 function linuxPermissionHint(log: string, target: FlashTarget): string[] | undefined {
   if (process.platform !== 'linux') return undefined
 
-  if (target === 'esp32_s3') {
+  if (isEsp32Family(target)) {
     const serialDenied =
       (/permission denied/i.test(log) && /\/dev\/tty/i.test(log)) ||
       /\[Errno 13\]/i.test(log) ||
@@ -451,7 +453,7 @@ export async function flashBinary(
   let cwd: string | undefined
   let successRegex: RegExp
 
-  if (target === 'esp32_s3') {
+  if (isEsp32Family(target)) {
     // Idiomatic path: `pio run --target upload` auto-detects the port and
     // handles DTR/RTS bootloader entry. We run it inside the project dir
     // that buildProject created — derive it from the binary path by

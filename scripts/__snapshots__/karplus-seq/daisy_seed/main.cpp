@@ -29,6 +29,7 @@ float step_seq_seq1_prev_clk = 0.f;
 float step_seq_seq1_prev_rst = 0.f;
 // karplus kp1
 String karplus_kp1;
+Random karplus_kp1_rng;
 
 void AudioCallback(AudioHandle::InputBuffer in,
                    AudioHandle::OutputBuffer out,
@@ -48,22 +49,29 @@ void AudioCallback(AudioHandle::InputBuffer in,
     {
         float ci = clock_clk1_out;
         float ri = 0.f;
-        if (ri > 0.5f && step_seq_seq1_prev_rst <= 0.5f) step_seq_seq1_step = 0;
+        if (ri > 0.5f && step_seq_seq1_prev_rst <= 0.5f) {
+            step_seq_seq1_step = 0;
+        } else if (ci > 0.5f && step_seq_seq1_prev_clk <= 0.5f) {
+            step_seq_seq1_step = (step_seq_seq1_step + 1u) & 7u;
+        }
         step_seq_seq1_prev_rst = ri;
-        if (ci > 0.5f && step_seq_seq1_prev_clk <= 0.5f) step_seq_seq1_step = (step_seq_seq1_step + 1u) & 7u;
         step_seq_seq1_prev_clk = ci;
     }
     float step_seq_seq1_cv = step_seq_seq1_steps[step_seq_seq1_step];
     float step_seq_seq1_gate = step_seq_seq1_gates[step_seq_seq1_step] * ((clock_clk1_out) > 0.5f ? 1.f : 0.f);
 
     static float karplus_kp1_prev_trig = 0.f;
-    karplus_kp1.SetFreq(fmaxf(20.f, fminf(2000.f, step_seq_seq1_cv)));
+    karplus_kp1.SetFreq(fmaxf(50.f, fminf(2000.f, step_seq_seq1_cv)));
     karplus_kp1.SetBrightness(0.99f);
     karplus_kp1.SetDamping(0.5f);
     float karplus_kp1_trig_in = step_seq_seq1_gate;
     bool karplus_kp1_edge = (karplus_kp1_trig_in > 0.5f) && (karplus_kp1_prev_trig <= 0.5f);
     karplus_kp1_prev_trig = karplus_kp1_trig_in;
-    float karplus_kp1_out = karplus_kp1.Process(karplus_kp1_edge ? 1.f : 0.f);
+    static int karplus_kp1_burst = 0;
+    if (karplus_kp1_edge) karplus_kp1_burst = (int)(sr / fmaxf(50.f, fmaxf(50.f, fminf(2000.f, step_seq_seq1_cv))));
+    float karplus_kp1_exc = 0.f;
+    if (karplus_kp1_burst > 0) { karplus_kp1_exc = karplus_kp1_rng.GetFloat(-1.f, 1.f); karplus_kp1_burst--; }
+    float karplus_kp1_out = karplus_kp1.Process(karplus_kp1_exc);
 
         float out_l = karplus_kp1_out;
         float out_r = karplus_kp1_out;

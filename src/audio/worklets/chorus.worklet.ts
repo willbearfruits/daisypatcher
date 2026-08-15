@@ -1,18 +1,127 @@
 /// <reference path="./worklet.d.ts" />
 
 /**
- * Chorus — short delay line modulated by an internal sine LFO, blended
- * with the dry signal. Base delay 8ms, modulation ±6ms scaled by depth,
- * yielding a read tap in the 2..15ms range. 2048-sample circular buffer
- * is large enough for all supported sample rates at these tap lengths.
- * Fractional read via linear interpolation.
+ * Chorus — a port of DaisySP's `Chorus`: two independently panned engines,
+ * each a short modulated delay with feedback, summed and halved.
+ *
+ * This used to be one delay line swept by a sine LFO over a fixed 2–15 ms
+ * range, which is a chorus and not the one the device plays. Three things
+ * differ and all of them are audible:
+ *
+ *   - the LFO is a TRIANGLE that ping-pongs by flipping the sign of its
+ *     own increment at the turnaround, not a sine;
+ *   - `SetLfoFreq` scales by `4 * freq / sr` and clamps at +/-0.25, so the
+ *     Rate knob does not mean Hz — it means roughly `rate / 2` Hz;
+ *   - each engine returns `(in + wet) * .5` internally, and the wrapper
+ *     sums two of them at 0.75/0.25 pan weights and halves again, so the
+ *     dry signal arrives at a quarter of its input level before this
+ *     node's own `mix` knob has done anything.
+ *
+ * `npm run test:audio` measured 11% on level; the character gap was wider.
+ *
+ * Both engines get identical settings here because the node exposes one
+ * Rate and one Depth, which is what the emitter does too. Keeping the pair
+ * rather than collapsing them to one engine preserves the pan-weighted sum
+ * exactly, and leaves room for a stereo spread param later.
+ *
  * Registered as `'dp-chorus'`.
  */
 
 const CHORUS_BUF_SIZE = 2048
-const CHORUS_TWO_PI = Math.PI * 2
-const BASE_DELAY_MS = 8
-const MOD_RANGE_MS = 6
+
+/** One `ChorusEngine`: a modulated delay with feedback and an equal mix. */
+class ChorusEngine {
+  private readonly line = new Float32Array(CHORUS_BUF_SIZE)
+  private writePtr = 0
+  private delaySamples = 0
+  private frac = 0
+
+  private sr = 48000
+  private lfoPhase = 0
+  private lfoFreq = 0
+  private lfoAmp = 0
+  private delay = 0
+  private feedback = 0.2
+
+  init(sampleRate: number): void {
+    this.sr = sampleRate
+    this.line.fill(0)
+    this.writePtr = 0
+    this.lfoAmp = 0
+    this.feedback = 0.2
+    this.setDelay(0.75)
+    this.lfoPhase = 0
+    this.lfoFreq = 0
+    this.setLfoFreq(0.3)
+    this.setLfoDepth(0.9)
+  }
+
+  /** `SetDelay`: the 0..1 knob maps to 0.1..8 ms. */
+  setDelay(d: number): void {
+    const ms = Math.max(0.1, 0.1 + d * 7.9)
+    this.delay = ms * 0.001 * this.sr
+    this.lfoAmp = Math.min(this.lfoAmp, this.delay)
+  }
+
+  setLfoDepth(depth: number): void {
+    const d = depth < 0 ? 0 : depth > 0.93 ? 0.93 : depth
+    this.lfoAmp = d * this.delay
+  }
+
+  /**
+   * `SetLfoFreq`. The sign carry is not incidental — the LFO reverses by
+   * negating its increment, so re-setting the rate mid-sweep must not
+   * silently flip the direction of travel.
+   */
+  setLfoFreq(freq: number): void {
+    let f = (4 * freq) / this.sr
+    f *= this.lfoFreq < 0 ? -1 : 1
+    this.lfoFreq = f < -0.25 ? -0.25 : f > 0.25 ? 0.25 : f
+  }
+
+  setFeedback(fb: number): void {
+    this.feedback = fb < 0 ? 0 : fb > 1 ? 1 : fb
+  }
+
+  private setDelaySamples(d: number): void {
+    const intDelay = Math.trunc(d)
+    this.frac = d - intDelay
+    this.delaySamples = intDelay < CHORUS_BUF_SIZE ? intDelay : CHORUS_BUF_SIZE - 1
+    if (this.delaySamples < 0) this.delaySamples = 0
+  }
+
+  private read(): number {
+    const a = this.line[(this.writePtr + this.delaySamples) % CHORUS_BUF_SIZE]
+    const b = this.line[(this.writePtr + this.delaySamples + 1) % CHORUS_BUF_SIZE]
+    return a + (b - a) * this.frac
+  }
+
+  private write(sample: number): void {
+    this.line[this.writePtr] = sample
+    this.writePtr = (this.writePtr - 1 + CHORUS_BUF_SIZE) % CHORUS_BUF_SIZE
+  }
+
+  /** Triangle LFO that ping-pongs by flipping its own increment. */
+  private processLfo(): number {
+    this.lfoPhase += this.lfoFreq
+    if (this.lfoPhase > 1) {
+      this.lfoPhase = 1 - (this.lfoPhase - 1)
+      this.lfoFreq *= -1
+    } else if (this.lfoPhase < -1) {
+      this.lfoPhase = -1 - (this.lfoPhase + 1)
+      this.lfoFreq *= -1
+    }
+    return this.lfoPhase * this.lfoAmp
+  }
+
+  process(input: number): number {
+    const lfoSig = this.processLfo()
+    this.setDelaySamples(lfoSig + this.delay)
+    const out = this.read()
+    this.write(input + out * this.feedback)
+    return (input + out) * 0.5 // equal mix, as in the original
+  }
+}
 
 class ChorusProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors(): AudioParamDescriptor[] {
@@ -23,9 +132,11 @@ class ChorusProcessor extends AudioWorkletProcessor {
     ]
   }
 
-  private buffer = new Float32Array(CHORUS_BUF_SIZE)
-  private writeIdx = 0
-  private lfoPhase = 0
+  private readonly engines = [new ChorusEngine(), new ChorusEngine()]
+  /** `SetPan(.25, .75)` from `Chorus::Init`. */
+  private readonly pan = [0.25, 0.75]
+  private readonly gainFrac = 0.5
+  private ready = false
 
   process(
     inputs: Float32Array[][],
@@ -37,68 +148,55 @@ class ChorusProcessor extends AudioWorkletProcessor {
     const outCh = output[0]
     if (!outCh) return true
 
+    if (!this.ready) {
+      for (const e of this.engines) e.init(sampleRate)
+      // The emitter's init leaves feedback at DaisySP's 0.1 for this node.
+      for (const e of this.engines) e.setFeedback(0.1)
+      this.ready = true
+    }
+
     const inCh = inputs[0] && inputs[0].length > 0 ? inputs[0][0] : undefined
     const rateCv = inputs[1] && inputs[1].length > 0 ? inputs[1][0] : undefined
     const depthCv = inputs[2] && inputs[2].length > 0 ? inputs[2][0] : undefined
     const mixCv = inputs[3] && inputs[3].length > 0 ? inputs[3][0] : undefined
 
-    const rateBase = parameters.rate[0] ?? 0.8
-    const depthBase = parameters.depth[0] ?? 0.5
-    const mixBase = parameters.mix[0] ?? 0.5
+    let rate = parameters.rate[0] ?? 0.8
+    if (rateCv) rate = rateCv[0]
+    if (rate < 0.05) rate = 0.05
+    else if (rate > 8) rate = 8
+    let depth = parameters.depth[0] ?? 0.5
+    if (depthCv) depth = depthCv[0]
+    if (depth < 0) depth = 0
+    else if (depth > 1) depth = 1
+    let mix = parameters.mix[0] ?? 0.5
+    if (mixCv) mix = mixCv[0]
+    if (mix < 0) mix = 0
+    else if (mix > 1) mix = 1
 
-    const buf = this.buffer
-    const bufLen = buf.length
-    const sr = sampleRate
-    const baseSamples = (BASE_DELAY_MS / 1000) * sr
-    const modRange = (MOD_RANGE_MS / 1000) * sr
+    // Block-rate, matching the emitter — it calls the setters once per
+    // sample but from the same k-rate values.
+    for (const e of this.engines) {
+      e.setLfoFreq(rate)
+      e.setLfoDepth(depth)
+    }
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
       const x = inCh ? inCh[i] : 0
-
-      let rate = rateBase
-      if (rateCv) {
-        rate = rateCv[i]
-        if (rate < 0.05) rate = 0.05
-        else if (rate > 8) rate = 8
+      let sigL = 0
+      let sigR = 0
+      for (let e = 0; e < 2; e++) {
+        const sig = this.engines[e].process(x)
+        sigL += (1 - this.pan[e]) * sig
+        sigR += this.pan[e] * sig
       }
-      let depth = depthBase
-      if (depthCv) {
-        depth = depthCv[i]
-        if (depth < 0) depth = 0
-        else if (depth > 1) depth = 1
-      }
-      let mix = mixBase
-      if (mixCv) {
-        mix = mixCv[i]
-        if (mix < 0) mix = 0
-        else if (mix > 1) mix = 1
-      }
-      const modSamples = modRange * depth
-      const phaseInc = (CHORUS_TWO_PI * rate) / sr
+      sigL *= this.gainFrac
+      sigR *= this.gainFrac
 
-      // Write dry input into delay line.
-      buf[this.writeIdx] = x
-
-      // Read tap offset wobbles around base delay.
-      let delaySamples = baseSamples + Math.sin(this.lfoPhase) * modSamples
-      if (delaySamples < 1) delaySamples = 1
-      const maxDelay = bufLen - 2
-      if (delaySamples > maxDelay) delaySamples = maxDelay
-
-      let readPos = this.writeIdx - delaySamples
-      while (readPos < 0) readPos += bufLen
-      const r0 = Math.floor(readPos)
-      const frac = readPos - r0
-      const r1 = (r0 + 1) % bufLen
-      const delayed = buf[r0] * (1 - frac) + buf[r1] * frac
-
-      outCh[i] = x * (1 - mix) + delayed * mix
-
-      this.writeIdx++
-      if (this.writeIdx >= bufLen) this.writeIdx = 0
-      this.lfoPhase += phaseInc
-      if (this.lfoPhase >= CHORUS_TWO_PI) this.lfoPhase -= CHORUS_TWO_PI
+      // The emitter takes 0.5 * (GetLeft() + GetRight()) as its wet signal.
+      let wet = 0.5 * (sigL + sigR)
+      if (!isFinite(wet)) wet = 0
+      outCh[i] = x * (1 - mix) + wet * mix
     }
 
     for (let c = 1; c < output.length; c++) output[c].set(outCh)

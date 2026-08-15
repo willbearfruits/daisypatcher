@@ -11,8 +11,9 @@
  * unified history stack. No local buffering.
  */
 
+import { useEffect, useRef } from 'react'
 import { useEditorStore } from '@/state/store'
-import { KIND_ROLES } from '@/types/hardware'
+import { KIND_ROLES, roleLabel } from '@/types/hardware'
 import type { BoardPin, HardwareKind, PlacedComponent } from '@/types/hardware'
 import { getBoardPinout } from './boardPinout'
 import styles from './HardwareInspector.module.css'
@@ -61,12 +62,40 @@ export function HardwareInspector() {
   )
 }
 
+/**
+ * Renaming is one edit, not one edit per keystroke.
+ *
+ * Without the transaction a twelve-character rename pushes twelve history
+ * entries and burns a quarter of the fifty-entry undo stack, so the edit
+ * before it becomes unreachable. Bracketing on focus/blur is the same
+ * gesture-coalescing the Inspector's sliders and Rete's node drags already
+ * use — one undo step per visit to the field.
+ */
 function LabelEditor({ comp }: { comp: PlacedComponent }) {
   const rename = useEditorStore((s) => s.renameHardware)
+  const begin = useEditorStore((s) => s.beginTransaction)
+  const end = useEditorStore((s) => s.endTransaction)
+  const openRef = useRef(false)
+
+  const close = (): void => {
+    if (!openRef.current) return
+    openRef.current = false
+    end()
+  }
+  // Unmounting mid-edit (component deselected, view switched) must not leave
+  // the transaction open, or the next unrelated edit joins this undo step.
+  useEffect(() => close, [])
+
   return (
     <input
       className={styles.labelInput}
       value={comp.label}
+      onFocus={() => {
+        if (openRef.current) return
+        openRef.current = true
+        begin()
+      }}
+      onBlur={close}
       onChange={(e) => rename(comp.id, e.target.value)}
       aria-label="Component label"
     />
@@ -84,7 +113,7 @@ function PinRow({ comp, role }: { comp: PlacedComponent; role: string }) {
   return (
     <div className={styles.field}>
       <div className={styles.fieldHead}>
-        <span className={styles.fieldLabel}>{role}</span>
+        <span className={styles.fieldLabel}>{roleLabel(comp.kind, role)}</span>
         {current ? (
           <span className={styles.pinBadge}>
             {current}{invalid ? ' \u26A0' : ''}
@@ -239,6 +268,66 @@ const CONFIG_ROWS: Partial<Record<HardwareKind, ConfigRowDef[]>> = {
         { value: 'wm8731', label: 'WM8731' }
       ]
     }
+  ],
+  /*
+   * GY-PCM5102 strap pins. None of these are wired to the MCU — they are
+   * solder jumpers on the module — so they generate no code. They live
+   * here as a wiring checklist, and because `xsmtHigh` is the single most
+   * common reason a correctly-wired PCM5102A stays silent: the purple
+   * board ships jumper 3 on the LOW side, which holds the DAC muted.
+   */
+  pcm5102a: [
+    { key: 'xsmtHigh', label: 'XSMT high (unmuted)', kind: 'bool' },
+    { key: 'sckToGnd', label: 'SCK to GND (int. PLL)', kind: 'bool' },
+    {
+      key: 'fmt',
+      label: 'Format (FMT)',
+      kind: 'enum',
+      options: [
+        { value: 'i2s', label: 'I2S (FMT low)' },
+        { value: 'left_justified', label: 'Left-justified (FMT high)' }
+      ]
+    },
+    {
+      key: 'flt',
+      label: 'Filter (FLT)',
+      kind: 'enum',
+      options: [
+        { value: 'normal', label: 'Normal latency' },
+        { value: 'low', label: 'Low latency' }
+      ]
+    },
+    { key: 'deemphasis', label: 'De-emphasis (DEMP)', kind: 'bool' }
+  ],
+  /*
+   * MAX98357A straps. GAIN and SD are set by resistors on the module, not
+   * driven by the MCU — enum, not a slider, because the taps are discrete.
+   * `i2sOnly` documents the common case of leaving both pads untouched.
+   */
+  max98357a: [
+    {
+      key: 'gainDb',
+      label: 'Gain',
+      kind: 'enum',
+      options: [
+        { value: '15', label: '15 dB — 100k to GND' },
+        { value: '12', label: '12 dB — GAIN to GND' },
+        { value: '9',  label: '9 dB — floating (default)' },
+        { value: '6',  label: '6 dB — GAIN to Vin' },
+        { value: '3',  label: '3 dB — 100k to Vin' }
+      ]
+    },
+    {
+      key: 'channel',
+      label: 'Channel (SD pin)',
+      kind: 'enum',
+      options: [
+        { value: 'stereo_avg', label: '(L+R)/2 — 0.16-0.77V' },
+        { value: 'right', label: 'Right only — 0.77-1.4V' },
+        { value: 'left',  label: 'Left only — above 1.4V' }
+      ]
+    },
+    { key: 'i2sOnly', label: 'I2S only (GAIN/SD unwired)', kind: 'bool' }
   ],
   slider: [
     {

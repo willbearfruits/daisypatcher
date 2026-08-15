@@ -5,7 +5,9 @@
  */
 
 import type { AudioGraph, Connection, NodeInstance, NodeKind } from './graph'
-import type { BoardPin, HardwareKind, HardwareLayout } from './hardware'
+import type { Preset } from '@/state/presets'
+import type { BoardPin, HardwareKind, HardwareLayout, PerformPlacement } from './hardware'
+import type { BoardId as BoardTarget } from '../../shared/boards'
 
 /**
  * Target-filter mode for the palette + command palette.
@@ -19,8 +21,12 @@ export type PaletteFilterMode = 'all' | 'available' | 'native'
 /**
  * Compile target selected in the TopBar. Drives codegen, build-command
  * dispatch, and device detection.
+ *
+ * Identical to the hardware layout's `BoardId` — one board, one target.
+ * Declared in `shared/boards.ts` so the Electron main process and the
+ * renderer read from the same list.
  */
-export type BoardTarget = 'daisy_seed' | 'esp32_s3'
+export type { BoardTarget }
 
 /**
  * Daisy-only flash mode. Controls the linker script libDaisy emits
@@ -51,6 +57,12 @@ export interface HistoryState {
 export interface HistorySnapshot {
   graph: AudioGraph
   hardware: HardwareLayout
+  /**
+   * Presets ride in the snapshot because capturing or deleting one is an
+   * edit to the patch, and undoing a capture that left the preset behind
+   * would be worse than not offering undo at all.
+   */
+  presets: Preset[]
 }
 
 export interface Clipboard {
@@ -74,6 +86,8 @@ export interface LayoutSizes {
   buildLogH: number
   /** Bottom-right serial-monitor panel height in px (applied only while open). */
   serialMonitorH: number
+  /** Generated-code panel height in px (applied only while open). */
+  codePanelH: number
   /**
    * Palette whole-panel collapse. When true the palette rail renders as a
    * thin 44px vertical bar; the grid template still consumes the same
@@ -94,6 +108,22 @@ export interface LayoutSizes {
    * palette's "RECENT" strip and the command palette's quick-pick.
    */
   recentKinds: NodeKind[]
+
+  /**
+   * Patch-canvas grid. Separate from the Hardware view's grid, which is in
+   * millimetres and describes a physical panel; this one is in canvas units
+   * and exists purely to line nodes up.
+   */
+  gridShow: boolean
+  gridSnap: boolean
+  /** Grid pitch in canvas units. Also the snap increment. */
+  gridSize: number
+  /**
+   * Left-drag on empty canvas draws a selection rectangle instead of
+   * panning. Panning stays available on middle-drag and space-drag, so this
+   * is a preference about which gesture is primary, not which is possible.
+   */
+  marqueeSelect: boolean
 }
 
 export interface EditorStoreState {
@@ -117,6 +147,29 @@ export interface EditorStoreState {
   view: 'patch' | 'hardware' | 'perform'
   /** Currently-selected placed-component id, or null. */
   selectedHardwareId: string | null
+
+  /**
+   * Outer levels, while editing inside a subpatch.
+   *
+   * `graph` is always the level you are LOOKING at, so every existing
+   * reader keeps working unchanged — the editor, the inspector, selection,
+   * undo. What changes is that the engine and codegen must ask for the root
+   * instead (`rootGraphOf`), because editing inside a box should not
+   * silence the rest of the instrument.
+   */
+  subpatchStack: { nodeId: string; label: string; graph: AudioGraph }[]
+
+  /**
+   * Named parameter snapshots. Travel with the patch; see state/presets.ts
+   * for what they do and do not capture.
+   */
+  presets: Preset[]
+  /**
+   * Preset the patch was last set from, for UI affordance only. Cleared as
+   * soon as any param moves — a dot next to a name that no longer describes
+   * what you are hearing is worse than no dot.
+   */
+  activePresetId: string | null
 
   /**
    * Shell panel sizes. Not history-tracked — resizing a rail is a UI
@@ -170,7 +223,12 @@ export interface EditorStoreActions {
   setPlaying(playing: boolean): void
   setStatus(status: EditorStoreState['status']): void
 
-  loadGraph(graph: AudioGraph, filePath?: string | null, hardware?: HardwareLayout): void
+  loadGraph(
+    graph: AudioGraph,
+    filePath?: string | null,
+    hardware?: HardwareLayout,
+    presets?: Preset[]
+  ): void
   resetGraph(): void
 
   /* hardware view */
@@ -182,7 +240,44 @@ export interface EditorStoreActions {
   setHardwarePin(id: string, role: string, pin: BoardPin | null): void
   setHardwareConfig(id: string, key: string, value: number | string | boolean): void
   selectHardware(id: string | null): void
+  /**
+   * Reassign pin bindings that don't exist on the current board, leaving
+   * valid ones untouched. The escape hatch after a board switch.
+   */
+  repinForBoard(): void
   resetHardware(): void
+
+  /**
+   * Move / resize / hide a control on the PERFORMANCE surface.
+   *
+   * Separate from `moveHardware`, which moves the physical part. Arranging
+   * for playability must not move a drill hole. Passing `null` clears the
+   * override so the control follows the panel again.
+   */
+  setPerformPlacement(id: string, patch: PerformPlacement | null): void
+
+  /* subpatches — see state/subpatch.ts */
+  /** Pull the current selection into a new subpatch. No-op if it needs too many ports. */
+  collapseSelectionToSubpatch(): string | null
+  /** Dissolve a subpatch back into this level. */
+  expandSubpatchNode(id: string): void
+  /** Descend into a subpatch; `graph` becomes its body. */
+  enterSubpatch(id: string): void
+  /** Come back up one level, writing the edited body back. */
+  exitSubpatch(): void
+  /** Drop every performance override; the surface mirrors the panel again. */
+  resetPerformLayout(): void
+
+  /* presets — see state/presets.ts */
+  capturePreset(name?: string): string
+  recallPreset(id: string): void
+  deletePreset(id: string): void
+  renamePreset(id: string, name: string): void
+  reorderPreset(id: string, toIndex: number): void
+  /** Overwrite an existing preset with the current parameter state. */
+  updatePreset(id: string): void
+  /** Interpolate between two presets. `t` runs 0 (a) to 1 (b). */
+  morphPresets(aId: string, bId: string, t: number): void
 
   /* history */
   undo(): void
@@ -215,6 +310,7 @@ export interface EditorStoreActions {
   setInspectorW(px: number): void
   setBuildLogH(px: number): void
   setSerialMonitorH(px: number): void
+  setCodePanelH(px: number): void
   /** Replace layout wholesale (used when loading a `.dpatch`). */
   setLayout(layout: Partial<LayoutSizes>): void
 
@@ -227,6 +323,11 @@ export interface EditorStoreActions {
   setPaletteFilter(mode: PaletteFilterMode): void
   /** Push a kind onto the recent-drops list (front, deduped, cap 8). */
   noteRecentKind(kind: NodeKind): void
+
+  /** Patch-canvas grid / selection-gesture preferences. */
+  setCanvasPrefs(
+    patch: Partial<Pick<LayoutSizes, 'gridShow' | 'gridSnap' | 'gridSize' | 'marqueeSelect'>>
+  ): void
 
   /* per-node view state — collapse chevron on a Rete node */
   toggleCollapsed(id: string): void

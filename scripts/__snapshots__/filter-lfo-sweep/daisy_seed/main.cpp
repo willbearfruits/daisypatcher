@@ -39,7 +39,7 @@ void AudioCallback(AudioHandle::InputBuffer in,
 
     oscillator_osc1.SetFreq(220.f * powf(2.f, 0.f));
     oscillator_osc1.SetAmp(0.5f * 1.f);
-    float oscillator_osc1_out = oscillator_osc1.Process();
+    float oscillator_osc1_out = -oscillator_osc1.Process();
 
     float lfo_lfo1_out = lfo_lfo1.Process() * (1.f) + (0.f);
 

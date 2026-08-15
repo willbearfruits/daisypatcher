@@ -13,6 +13,9 @@ import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
 import { newPatch, openPatch, savePatch } from '@/state/patchFile'
 import { OPEN_COMMAND_PALETTE_EVENT } from '@/components/layout/CommandPalette'
+import { TOGGLE_CODE_PANEL_EVENT } from '@/components/layout/CodePanel'
+import { TOGGLE_ASSISTANT_EVENT } from '@/components/layout/AssistantPanel'
+import { canvasPastePosition } from '@/editor/ReteEditor'
 
 function isEditableTarget(el: EventTarget | null): boolean {
   if (!el || !(el instanceof HTMLElement)) return false
@@ -32,7 +35,14 @@ export function useGlobalKeybindings(): void {
       // Escape always clears selection, even from inputs (it's also the
       // universal "close/dismiss" key and doesn't interfere with typing).
       if (key === 'Escape' && !editable) {
-        useEditorStore.getState().select(null)
+        const st = useEditorStore.getState()
+        /*
+         * Escape means "get me out of here", and being inside a subpatch is
+         * the more enclosing state — so it unwinds a level first and only
+         * clears the selection once you are at the root.
+         */
+        if (st.selection.size === 0 && st.subpatchStack.length > 0) st.exitSubpatch()
+        else st.select(null)
         return
       }
 
@@ -68,6 +78,24 @@ export function useGlobalKeybindings(): void {
       if (k === 'k') {
         ev.preventDefault()
         window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT))
+        return
+      }
+
+      // Cmd/Ctrl+Shift+C — show the generated code. Shift because plain
+      // Cmd+C is copy and always will be; this is a view toggle, so it
+      // works from anywhere including a text field.
+      if (k === 'c' && ev.shiftKey) {
+        ev.preventDefault()
+        window.dispatchEvent(new CustomEvent(TOGGLE_CODE_PANEL_EVENT))
+        return
+      }
+
+      // Cmd/Ctrl+Shift+K — the assistant. K for "ask", and Shift for the
+      // same reason as the code panel: plain Cmd+K is a search binding
+      // people expect elsewhere.
+      if (k === 'k' && ev.shiftKey) {
+        ev.preventDefault()
+        window.dispatchEvent(new CustomEvent(TOGGLE_ASSISTANT_EVENT))
         return
       }
 
@@ -141,12 +169,22 @@ export function useGlobalKeybindings(): void {
       }
       if (k === 'v') {
         ev.preventDefault()
-        useEditorStore.getState().paste()
+        // Paste where the pointer is. `paste()` always accepted a position,
+        // but nothing passed one, so repeated pastes stacked at a fixed
+        // +40,+40 offset from the original into an unreadable pile.
+        useEditorStore.getState().paste(canvasPastePosition())
         return
       }
       if (k === 'a') {
         ev.preventDefault()
         useEditorStore.getState().selectAll()
+        return
+      }
+      // Cmd/Ctrl+G — collapse the selection into a subpatch. `G` for group,
+      // which is what it is called everywhere else this gesture exists.
+      if (k === 'g') {
+        ev.preventDefault()
+        useEditorStore.getState().collapseSelectionToSubpatch()
         return
       }
 

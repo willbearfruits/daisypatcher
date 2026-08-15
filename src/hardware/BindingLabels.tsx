@@ -13,6 +13,7 @@ import * as React from 'react'
 import { useEditorStore } from '@/state/store'
 import { describeBinding } from './hardwareBindingLabels'
 import type { PlacedComponent } from '@/types/hardware'
+import { roleLabel } from '@/types/hardware'
 import type { AudioGraph } from '@/types/graph'
 
 /** Shape of the minimal pin coordinate map we need. Matches PinCoord. */
@@ -89,7 +90,7 @@ export function BindingLabels({
       const y = coord.y
       const display =
         Object.keys(comp.pins).length > 1
-          ? `${pin} · ${role} → ${desc}`
+          ? `${pin} · ${roleLabel(comp.kind, role)} → ${desc}`
           : `${pin} → ${desc}`
       entries.push({
         key: `${comp.id}-${role}`,

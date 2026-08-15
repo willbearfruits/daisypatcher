@@ -17,6 +17,7 @@ export type ElementKind =
   | 'circle'
   | 'line'
   | 'pattern'
+  | 'menu'
 
 export type BindingSource = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'none'
 
@@ -84,6 +85,25 @@ export interface PatternElement extends BaseElement {
   binding: BindingSource
 }
 
+/**
+ * Live menu view.
+ *
+ * Unlike every other element, this one does not read a CV socket — a menu
+ * is a tree plus a cursor, not a number. It names the `menu` node to draw
+ * and the renderer is handed that node's tree and navigation state. Same
+ * layout code (`buildMenuScreen`) the in-node preview and the firmware
+ * emitters use, so all three agree.
+ */
+export interface MenuElement extends BaseElement {
+  kind: 'menu'
+  /** Graph node id of the menu to render. */
+  menuNodeId: string
+  width: number
+  height: number
+  /** Entry rows to show; the title line sits above them. */
+  rows: number
+}
+
 export type DisplayElement =
   | TextElement
   | ValueElement
@@ -93,6 +113,7 @@ export type DisplayElement =
   | CircleElement
   | LineElement
   | PatternElement
+  | MenuElement
 
 export const BINDING_VALUES: BindingSource[] = ['a', 'b', 'c', 'd', 'e', 'f', 'none']
 
@@ -108,7 +129,8 @@ const VALID_KINDS = new Set<ElementKind>([
   'rect',
   'circle',
   'line',
-  'pattern'
+  'pattern',
+  'menu'
 ])
 
 function isBinding(v: unknown): v is BindingSource {
@@ -239,6 +261,18 @@ export function parseElements(raw: string): DisplayElement[] {
           binding: isBinding(rec.binding) ? rec.binding : 'a'
         })
         break
+      case 'menu':
+        out.push({
+          id,
+          kind: 'menu',
+          x,
+          y,
+          menuNodeId: typeof rec.menuNodeId === 'string' ? rec.menuNodeId : '',
+          width: clampInt(rec.width, 8, 128, 128),
+          height: clampInt(rec.height, 8, 64, 64),
+          rows: clampInt(rec.rows, 1, 7, 6)
+        })
+        break
     }
   }
   return out
@@ -257,6 +291,9 @@ export function makeDefaultElement(kind: ElementKind): DisplayElement {
   switch (kind) {
     case 'text':
       return { id, kind: 'text', x: 4, y: 4, text: 'HELLO', size: 1 }
+    case 'menu':
+      // Full screen by default — a menu is normally the whole display.
+      return { id, kind: 'menu', x: 0, y: 0, menuNodeId: '', width: 128, height: 64, rows: 6 }
     case 'value':
       return {
         id,
@@ -320,6 +357,8 @@ export function describeElement(el: DisplayElement): string {
       return `Line ${el.x},${el.y}→${el.x2},${el.y2}`
     case 'pattern':
       return `Pattern ${el.cols}x${el.rows} ${el.binding.toUpperCase()}`
+    case 'menu':
+      return `Menu ${el.rows} rows${el.menuNodeId ? '' : ' (unassigned)'}`
   }
 }
 
@@ -376,5 +415,7 @@ export function elementBBox(el: DisplayElement): {
         w: el.cols * el.cellSize,
         h: el.rows * el.cellSize
       }
+    case 'menu':
+      return { x: el.x, y: el.y, w: el.width, h: el.height }
   }
 }

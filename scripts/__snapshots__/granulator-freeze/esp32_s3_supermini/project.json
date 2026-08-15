@@ -1,0 +1,126 @@
+{
+  "nodes": [
+    {
+      "id": "osc1",
+      "kind": "oscillator",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "params": {
+        "frequency": 220,
+        "amplitude": 0.5,
+        "waveform": "sine"
+      }
+    },
+    {
+      "id": "gran1",
+      "kind": "granulator",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "params": {
+        "grain_size": 80,
+        "density": 8,
+        "pitch": 0,
+        "jitter": 0.3,
+        "mix": 1
+      }
+    },
+    {
+      "id": "clk1",
+      "kind": "clock",
+      "position": {
+        "x": 300,
+        "y": 250
+      },
+      "params": {
+        "bpm": 120,
+        "pulse_width": 0.1
+      }
+    },
+    {
+      "id": "frz1",
+      "kind": "freeze",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "params": {
+        "buffer_ms": 120
+      }
+    },
+    {
+      "id": "out1",
+      "kind": "audio_output",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": {
+        "nodeId": "osc1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "gran1",
+        "socketId": "in"
+      }
+    },
+    {
+      "id": "c2",
+      "from": {
+        "nodeId": "gran1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "frz1",
+        "socketId": "in"
+      }
+    },
+    {
+      "id": "c3",
+      "from": {
+        "nodeId": "clk1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "frz1",
+        "socketId": "gate"
+      }
+    },
+    {
+      "id": "c4",
+      "from": {
+        "nodeId": "frz1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "left"
+      }
+    },
+    {
+      "id": "c5",
+      "from": {
+        "nodeId": "frz1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "right"
+      }
+    }
+  ],
+  "meta": {
+    "name": "granulator_freeze",
+    "sampleRate": 48000,
+    "blockSize": 48
+  }
+}

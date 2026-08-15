@@ -8,17 +8,41 @@ import type { AudioGraph, NodeInstance, NodeKind } from '@/types/graph'
 import type { HardwareLayout } from '@/types/hardware'
 import { emptyHardwareLayout } from '@/types/hardware'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
-import { NODE_EMITTERS, type EmitContext, type NodeEmitter } from '../nodeEmitters'
+import {
+  NODE_EMITTERS,
+  setParamOverrides,
+  setSampleInfo,
+  type EmitContext,
+  type NodeEmitter
+} from '../nodeEmitters'
 import { emitHardwareInit, emitHardwarePoll } from '../hardwareBindings'
+import {
+  dedupeMenuBlocks,
+  emitMenuParamGlobals,
+  makeOverrideAudit,
+  menuOrderingEdges,
+  menuParamOverrides,
+  overrideExprMap
+} from '../menuCodegen'
+import { analogRoleFor } from '@/types/hardware'
 import {
   buildConnectionIndex,
   nodeVar,
   safeName,
   targetKey,
+  auditOutputDecls,
   topoSort,
   validateGraph
 } from '../graphWalk'
 import type { GenerateOptions, GeneratedProject } from '../generateProject'
+import { emitSamples } from '../sampleCodegen'
+import {
+  buildPresetTable,
+  emitPresetRuntime,
+  hasPresetDriver,
+  presetParamOverrides
+} from '../presetCodegen'
+import { buildProvenance, type EmitBlock, type EmitSection } from '../provenance'
 import type { DaisyFlashMode } from '@/types/store'
 import type { TargetBackend } from './index'
 
@@ -60,8 +84,43 @@ export function generateDaisySeedProject(
 
   for (const msg of validateGraph(graph)) warn(msg)
 
-  const connIdx = buildConnectionIndex(graph.connections)
-  const { order } = topoSort(graph.nodes, graph.connections, warn)
+  /*
+   * Menu leaves drive node params with no cable, so the scheduler needs an
+   * edge it can see. `menuOrderingEdges` synthesizes one per menu -> target
+   * pair on a socket id no emitter reads; it must come AFTER validateGraph,
+   * whose socket check would otherwise flag it.
+   */
+  const connections = [...graph.connections, ...menuOrderingEdges(graph)]
+  const paramOverrides = menuParamOverrides(graph, warn)
+  /*
+   * Presets write the SAME globals menu leaves do, so they merge into one
+   * map before anything reads it. Menu entries win a collision because
+   * they carry `menuVar`/`entryIndex` that the menu emitter needs; the
+   * preset table only needs the variable name, which is identical either
+   * way.
+   */
+  const presetOverrides = presetParamOverrides(graph, options.presets ?? [], warn)
+  for (const [k, o] of presetOverrides) if (!paramOverrides.has(k)) paramOverrides.set(k, o)
+  const presetTable = buildPresetTable(graph, options.presets ?? [], paramOverrides)
+
+  /*
+   * Samples become const arrays at file scope. Emitted BEFORE the node
+   * loop because the player's `process` needs the variable name, and the
+   * arrays have to precede any use in the file anyway.
+   */
+  const sampleEmission = emitSamples(graph, options.samples ?? {}, 'daisy_seed', warn)
+  setSampleInfo(sampleEmission.byNode)
+  if (presetTable.rows.length > 0 && !hasPresetDriver(graph)) {
+    warn(
+      `${presetTable.rows.length} preset(s) will be compiled in but nothing can fire them — ` +
+        `add a Preset node and patch a trigger to it`
+    )
+  }
+  const overrideExprs = overrideExprMap(paramOverrides)
+  const reachedOverrides = makeOverrideAudit(paramOverrides, warn)
+
+  const connIdx = buildConnectionIndex(connections)
+  const { order } = topoSort(graph.nodes, connections, warn)
 
   const nodeById = new Map<string, NodeInstance>()
   for (const n of graph.nodes) nodeById.set(n.id, n)
@@ -88,7 +147,13 @@ export function generateDaisySeedProject(
     warn
   })
 
-  const declLines: string[] = []
+  const blocks: EmitBlock[] = []
+  const declLines: string[] = [
+    ...emitMenuParamGlobals(paramOverrides),
+    // Must follow the globals — the slot table takes their addresses.
+    ...emitPresetRuntime(presetTable),
+    ...sampleEmission.declLines
+  ]
   const initLines: string[] = []
   const processLines: string[] = []
   // Emitted inside main()'s while(1) — slow-peripheral servicing (OLED
@@ -123,14 +188,33 @@ export function generateDaisySeedProject(
     }
 
     const c = ctx(node)
+    // Record what this node contributed, so the code view can point at it.
+    const note = (section: EmitSection, text: string | undefined): void => {
+      if (text) blocks.push({ nodeId: node.id, kind: node.kind, section, text })
+    }
+    /*
+     * `declare` runs with overrides OFF: a param used at file scope sizes a
+     * buffer or seeds a constant and has to stay a compile-time literal.
+     * Everything after it runs inside a function, where a global is fine.
+     */
+    setParamOverrides(null)
     const d = emitter.declare(c)
     if (d) declLines.push(`// ${node.kind} ${node.id}\n${d}`)
+    note('declare', d)
+    setParamOverrides(overrideExprs)
     const initSrc = emitter.init(c)
     if (initSrc) initLines.push(initSrc)
+    note('init', initSrc)
     const p = emitter.process(c)
     if (p) processLines.push(p)
+    note('process', p)
     const l = emitter.loop?.(c)
     if (l) loopLines.push(l)
+    note('loop', l)
+    setParamOverrides(null)
+
+    reachedOverrides(node.id, `${initSrc}\n${p}`)
+    auditOutputDecls(node, p, c.outputVar, warn)
 
     if (node.kind === 'knob_in') {
       knobs.push({ node, channel: knobChannel(node, warn) })
@@ -151,11 +235,19 @@ export function generateDaisySeedProject(
   const hwPoll = emitHardwarePoll(hardware)
   if (hwOut.decls) declLines.push(`// Hardware layout\n${hwOut.decls}`)
 
-  const anyHwBoundAdc = hardware.components.some(
-    (c) =>
-      (c.kind === 'pot' && c.pins['wiper']) ||
-      (c.kind === 'cv_jack' && c.pins['signal'])
-  )
+  /*
+   * Does the layout drive the ADC itself? If so the legacy channel-based
+   * bank below must NOT be emitted — a second `hw.adc.Init()` silently
+   * overwrites the first, so the hardware-bound pin map would be replaced
+   * by the sequential 15+N one and every knob would read the wrong pin.
+   *
+   * This used to test only pot + cv_jack, so a layout whose analog inputs
+   * were sliders or ribbons emitted BOTH banks.
+   */
+  const anyHwBoundAdc = hardware.components.some((c) => {
+    const role = analogRoleFor(c.kind)
+    return role !== null && Boolean(c.pins[role])
+  })
 
   let knobInit = ''
   let knobPoll = ''
@@ -204,7 +296,8 @@ export function generateDaisySeedProject(
       Makefile: makefile,
       'project.json': projectJson
     },
-    warnings
+    warnings,
+    provenance: buildProvenance('main.cpp', mainCpp, blocks)
   }
 }
 
@@ -248,7 +341,7 @@ static constexpr size_t CODEGEN_MAX_DELAY = static_cast<size_t>(48000 * 2);
 DaisySeed hw;
 
 // --- Node declarations ---
-${args.declLines.join('\n') || '// (no nodes emitted members)'}
+${dedupeMenuBlocks(args.declLines.join('\n')) || '// (no nodes emitted members)'}
 
 void AudioCallback(AudioHandle::InputBuffer in,
                    AudioHandle::OutputBuffer out,
@@ -318,6 +411,7 @@ include $(SYSTEM_FILES_DIR)/Makefile
 export const daisySeedTarget: TargetBackend = {
   id: 'daisy_seed',
   label: 'Daisy Seed',
+  shortLabel: 'SEED',
   description: 'Electro-Smith Daisy Seed (STM32H7, libDaisy + DaisySP)',
   generate: generateDaisySeedProject,
   buildCommand: () => ({

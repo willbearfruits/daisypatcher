@@ -53,7 +53,7 @@ void oled_oled1_DrawFrame() {
     oled_oled1.Update();
 }
 // Hardware layout
-// Hardware: ADC channel values (0..1), one per placed pot / CV jack.
+// Hardware: ADC channel values (0..1), one per placed analog input.
 float hw_pot_hwpot1_val = 0.f;
 GPIO hw_button_hwbtn1_gpio;
 GPIO hw_led_hwled1_gpio;

@@ -49,7 +49,9 @@ void AudioCallback(AudioHandle::InputBuffer in,
     {
         float m = (fmaxf(0.f, fminf(1.f, lfo_lfo1_out))) + (0.f);
         if (m < 0.f) m = 0.f; if (m > 1.f) m = 1.f;
-        crossfade_xf1_out = (oscillator_osc1_out) * (1.f - m) + (noise_noise1_out) * m;
+        float _ga = cosf(m * 1.57079632679f);
+        float _gb = sinf(m * 1.57079632679f);
+        crossfade_xf1_out = (oscillator_osc1_out) * _ga + (noise_noise1_out) * _gb;
     }
 
     float mixer4_mix1_out = (crossfade_xf1_out) * (1.f) + (0.f) * (1.f) + (0.f) * (1.f) + (0.f) * (1.f);

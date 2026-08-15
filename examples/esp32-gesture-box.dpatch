@@ -1,0 +1,534 @@
+{
+  "dpatch": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "imu_in_1",
+        "kind": "imu_in",
+        "position": {
+          "x": -900,
+          "y": -120
+        },
+        "params": {
+          "bindingId": "hw_gyroscope_1",
+          "accel_range": "2",
+          "gyro_range": "250",
+          "smooth": 35,
+          "ax": 0,
+          "ay": 0,
+          "az": 1,
+          "gx": 0,
+          "gy": 0,
+          "gz": 0
+        }
+      },
+      {
+        "id": "distance_in_2",
+        "kind": "distance_in",
+        "position": {
+          "x": -900,
+          "y": 120
+        },
+        "params": {
+          "bindingId": "hw_tof_2",
+          "min_mm": 40,
+          "max_mm": 600,
+          "smooth": 45,
+          "dist": 0.5
+        }
+      },
+      {
+        "id": "range_3",
+        "kind": "range",
+        "position": {
+          "x": -660,
+          "y": -180
+        },
+        "params": {
+          "in_min": -1,
+          "in_max": 1,
+          "out_min": -1.5,
+          "out_max": 1.5,
+          "clamp": "on"
+        }
+      },
+      {
+        "id": "range_4",
+        "kind": "range",
+        "position": {
+          "x": -660,
+          "y": -60
+        },
+        "params": {
+          "in_min": -1,
+          "in_max": 1,
+          "out_min": 0.05,
+          "out_max": 0.95,
+          "clamp": "on"
+        }
+      },
+      {
+        "id": "range_5",
+        "kind": "range",
+        "position": {
+          "x": -660,
+          "y": 120
+        },
+        "params": {
+          "in_min": 0,
+          "in_max": 1,
+          "out_min": 0.05,
+          "out_max": 0.8,
+          "clamp": "on"
+        }
+      },
+      {
+        "id": "clock_6",
+        "kind": "clock",
+        "position": {
+          "x": -900,
+          "y": 320
+        },
+        "params": {
+          "bpm": 96,
+          "pulse_width": 0.05
+        }
+      },
+      {
+        "id": "random_7",
+        "kind": "random",
+        "position": {
+          "x": -660,
+          "y": 320
+        },
+        "params": {
+          "rate": 2,
+          "range": 1,
+          "smooth": 0
+        }
+      },
+      {
+        "id": "karplus_8",
+        "kind": "karplus",
+        "position": {
+          "x": -380,
+          "y": -80
+        },
+        "params": {
+          "frequency": 196,
+          "damping": 0.35,
+          "feedback": 0.99,
+          "retrigger": "manual"
+        }
+      },
+      {
+        "id": "slew_9",
+        "kind": "slew",
+        "position": {
+          "x": -380,
+          "y": 320
+        },
+        "params": {
+          "rise": 0.6,
+          "fall": 0.6
+        }
+      },
+      {
+        "id": "oscillator_10",
+        "kind": "oscillator",
+        "position": {
+          "x": -140,
+          "y": 300
+        },
+        "params": {
+          "frequency": 98,
+          "amplitude": 0.18,
+          "waveform": "triangle"
+        }
+      },
+      {
+        "id": "mixer4_11",
+        "kind": "mixer4",
+        "position": {
+          "x": 120,
+          "y": 40
+        },
+        "params": {
+          "gain1": 1,
+          "gain2": 0.5,
+          "gain3": 0,
+          "gain4": 0
+        }
+      },
+      {
+        "id": "filter_svf_12",
+        "kind": "filter_svf",
+        "position": {
+          "x": 360,
+          "y": 40
+        },
+        "params": {
+          "frequency": 2600,
+          "resonance": 0.3
+        }
+      },
+      {
+        "id": "delay_13",
+        "kind": "delay",
+        "position": {
+          "x": 600,
+          "y": 40
+        },
+        "params": {
+          "time": 0.33,
+          "feedback": 0.45,
+          "mix": 0.3
+        }
+      },
+      {
+        "id": "reverb_14",
+        "kind": "reverb",
+        "position": {
+          "x": 840,
+          "y": 40
+        },
+        "params": {
+          "size": 0.7,
+          "damp": 0.4,
+          "mix": 0.4
+        }
+      },
+      {
+        "id": "audio_output_15",
+        "kind": "audio_output",
+        "position": {
+          "x": 1080,
+          "y": 40
+        },
+        "params": {}
+      },
+      {
+        "id": "oled_16",
+        "kind": "oled",
+        "position": {
+          "x": 360,
+          "y": 320
+        },
+        "params": {
+          "bindingId": "hw_oled_ssd1306_3",
+          "elements": "[{\"id\":\"el_1148272705\",\"kind\":\"text\",\"x\":0,\"y\":0,\"text\":\"GESTURE\",\"size\":1},{\"id\":\"el_95611364\",\"kind\":\"line\",\"x\":0,\"y\":11,\"x2\":127,\"y2\":11},{\"id\":\"el_1067093934\",\"kind\":\"text\",\"x\":0,\"y\":16,\"text\":\"TILT\",\"size\":1},{\"id\":\"el_970602441\",\"kind\":\"meter\",\"x\":34,\"y\":16,\"width\":92,\"height\":8,\"binding\":\"a\"},{\"id\":\"el_837957497\",\"kind\":\"text\",\"x\":0,\"y\":30,\"text\":\"DAMP\",\"size\":1},{\"id\":\"el_2081653166\",\"kind\":\"meter\",\"x\":34,\"y\":30,\"width\":92,\"height\":8,\"binding\":\"b\"},{\"id\":\"el_632996165\",\"kind\":\"text\",\"x\":0,\"y\":44,\"text\":\"HAND\",\"size\":1},{\"id\":\"el_768087088\",\"kind\":\"meter\",\"x\":34,\"y\":44,\"width\":92,\"height\":8,\"binding\":\"c\"},{\"id\":\"el_1051039035\",\"kind\":\"scope\",\"x\":0,\"y\":56,\"width\":128,\"height\":8,\"binding\":\"d\"}]"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": {
+          "nodeId": "imu_in_1",
+          "socketId": "ax"
+        },
+        "to": {
+          "nodeId": "range_3",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c2",
+        "from": {
+          "nodeId": "imu_in_1",
+          "socketId": "ay"
+        },
+        "to": {
+          "nodeId": "range_4",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c3",
+        "from": {
+          "nodeId": "distance_in_2",
+          "socketId": "dist"
+        },
+        "to": {
+          "nodeId": "range_5",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c4",
+        "from": {
+          "nodeId": "clock_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "random_7",
+          "socketId": "clock"
+        }
+      },
+      {
+        "id": "c5",
+        "from": {
+          "nodeId": "clock_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "karplus_8",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c6",
+        "from": {
+          "nodeId": "range_3",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "karplus_8",
+          "socketId": "cv_pitch"
+        }
+      },
+      {
+        "id": "c7",
+        "from": {
+          "nodeId": "range_4",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "karplus_8",
+          "socketId": "cv_damp"
+        }
+      },
+      {
+        "id": "c8",
+        "from": {
+          "nodeId": "random_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "slew_9",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c9",
+        "from": {
+          "nodeId": "slew_9",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oscillator_10",
+          "socketId": "pitch_cv"
+        }
+      },
+      {
+        "id": "c10",
+        "from": {
+          "nodeId": "karplus_8",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_11",
+          "socketId": "in1"
+        }
+      },
+      {
+        "id": "c11",
+        "from": {
+          "nodeId": "oscillator_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "mixer4_11",
+          "socketId": "in2"
+        }
+      },
+      {
+        "id": "c12",
+        "from": {
+          "nodeId": "mixer4_11",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_12",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c13",
+        "from": {
+          "nodeId": "filter_svf_12",
+          "socketId": "lp"
+        },
+        "to": {
+          "nodeId": "delay_13",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c14",
+        "from": {
+          "nodeId": "range_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "delay_13",
+          "socketId": "cv_mix"
+        }
+      },
+      {
+        "id": "c15",
+        "from": {
+          "nodeId": "delay_13",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "reverb_14",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c16",
+        "from": {
+          "nodeId": "reverb_14",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_15",
+          "socketId": "left"
+        }
+      },
+      {
+        "id": "c17",
+        "from": {
+          "nodeId": "reverb_14",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_15",
+          "socketId": "right"
+        }
+      },
+      {
+        "id": "c18",
+        "from": {
+          "nodeId": "imu_in_1",
+          "socketId": "ax"
+        },
+        "to": {
+          "nodeId": "oled_16",
+          "socketId": "a"
+        }
+      },
+      {
+        "id": "c19",
+        "from": {
+          "nodeId": "imu_in_1",
+          "socketId": "ay"
+        },
+        "to": {
+          "nodeId": "oled_16",
+          "socketId": "b"
+        }
+      },
+      {
+        "id": "c20",
+        "from": {
+          "nodeId": "distance_in_2",
+          "socketId": "dist"
+        },
+        "to": {
+          "nodeId": "oled_16",
+          "socketId": "c"
+        }
+      },
+      {
+        "id": "c21",
+        "from": {
+          "nodeId": "random_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oled_16",
+          "socketId": "d"
+        }
+      }
+    ],
+    "meta": {
+      "name": "esp32-gesture-box",
+      "sampleRate": 48000,
+      "blockSize": 48
+    }
+  },
+  "hardware": {
+    "board": "esp32_s3_devkitc",
+    "components": [
+      {
+        "id": "hw_gyroscope_1",
+        "kind": "gyroscope",
+        "label": "Motion",
+        "position": {
+          "x": 140,
+          "y": 480
+        },
+        "pins": {
+          "sda": "GPIO0",
+          "scl": "GPIO1",
+          "int": "GPIO2"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_tof_2",
+        "kind": "tof",
+        "label": "Ranger",
+        "position": {
+          "x": 260,
+          "y": 480
+        },
+        "pins": {
+          "sda": "GPIO0",
+          "scl": "GPIO1",
+          "xshut": "GPIO3"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_oled_ssd1306_3",
+        "kind": "oled_ssd1306",
+        "label": "Display",
+        "position": {
+          "x": 380,
+          "y": 480
+        },
+        "pins": {
+          "sda": "GPIO0",
+          "scl": "GPIO1"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pcm5102a_4",
+        "kind": "pcm5102a",
+        "label": "Line out",
+        "position": {
+          "x": 200,
+          "y": 640
+        },
+        "pins": {
+          "sck": "GPIO4",
+          "ws": "GPIO5",
+          "sd_out": "GPIO6"
+        },
+        "config": {
+          "jumper": "i2s"
+        }
+      }
+    ],
+    "meta": {
+      "name": "esp32-gesture-box"
+    }
+  },
+  "layout": {
+    "daisyFlashMode": "qspi"
+  }
+}

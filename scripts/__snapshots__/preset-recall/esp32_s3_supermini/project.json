@@ -1,0 +1,114 @@
+{
+  "nodes": [
+    {
+      "id": "osc1",
+      "kind": "oscillator",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "params": {
+        "frequency": 220,
+        "amplitude": 0.4,
+        "waveform": "sawtooth"
+      }
+    },
+    {
+      "id": "flt1",
+      "kind": "filter_svf",
+      "position": {
+        "x": 220,
+        "y": 0
+      },
+      "params": {
+        "frequency": 900,
+        "resonance": 0.25
+      }
+    },
+    {
+      "id": "clk1",
+      "kind": "clock",
+      "position": {
+        "x": 0,
+        "y": 180
+      },
+      "params": {
+        "bpm": 96
+      }
+    },
+    {
+      "id": "pre1",
+      "kind": "preset_recall",
+      "position": {
+        "x": 220,
+        "y": 180
+      },
+      "params": {
+        "mode": "recall",
+        "slot": 1,
+        "morph_a": 0,
+        "morph_b": 2
+      }
+    },
+    {
+      "id": "out1",
+      "kind": "audio_output",
+      "position": {
+        "x": 460,
+        "y": 0
+      },
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": {
+        "nodeId": "osc1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "flt1",
+        "socketId": "in"
+      }
+    },
+    {
+      "id": "c2",
+      "from": {
+        "nodeId": "flt1",
+        "socketId": "lp"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "left"
+      }
+    },
+    {
+      "id": "c3",
+      "from": {
+        "nodeId": "flt1",
+        "socketId": "lp"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "right"
+      }
+    },
+    {
+      "id": "c4",
+      "from": {
+        "nodeId": "clk1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "pre1",
+        "socketId": "trigger"
+      }
+    }
+  ],
+  "meta": {
+    "name": "preset-recall",
+    "sampleRate": 48000,
+    "blockSize": 48
+  }
+}

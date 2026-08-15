@@ -21,7 +21,7 @@ import {
   ClassicPreset,
   type GetSchemes
 } from 'rete'
-import { AreaPlugin, AreaExtensions } from 'rete-area-plugin'
+import { AreaPlugin, AreaExtensions, Drag } from 'rete-area-plugin'
 import {
   ConnectionPlugin,
   ClassicFlow,
@@ -43,7 +43,11 @@ import { CustomSocket } from './CustomSocket'
 import { CustomConnection, type SignalConnectionData } from './CustomConnection'
 import { VisualNode } from './VisualNode'
 import { OledNode } from './OledNode'
+import { MenuNode } from './MenuNode'
+import { EncoderNode } from './EncoderNode'
+import { CodeNode } from './CodeNode'
 import { diffGraph } from './sync'
+import { CANVAS_CONTEXT_MENU_EVENT, type ContextMenuDetail, type ContextTarget } from './CanvasContextMenu'
 
 /** Node kinds whose Rete body is rendered by `VisualNode` instead of `CustomNode`. */
 const VISUAL_KINDS: Set<NodeKind> = new Set<NodeKind>(['scope', 'vu', 'spectrum_scope'])
@@ -145,6 +149,34 @@ function clientToCanvas(
   }
 }
 
+/**
+ * Is this pointer event on empty canvas rather than a node or a cable?
+ *
+ * Nodes and connections stop propagation before the area sees the event in
+ * most paths, but not all of them — the SVG cable layer in particular
+ * bubbles — so the check is explicit: the target has to BE one of the
+ * background elements, not merely be contained by one.
+ */
+function isBackgroundTarget(target: EventTarget | null, container: HTMLElement, holder: HTMLElement): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return target === container || target === holder || target.classList.contains('dp-rete-root')
+}
+
+/** Last pointer position over the canvas, in canvas space. Drives paste-here. */
+let lastCanvasPointer: { x: number; y: number } | null = null
+
+/**
+ * Where a paste with no explicit position should land.
+ *
+ * `paste()` accepts a position but the keyboard binding had nothing to give
+ * it, so every paste landed at a fixed +40,+40 from the original — which
+ * stacks into an unreadable pile the third time you press it. The canvas
+ * records the pointer as it moves and the binding reads it here.
+ */
+export function canvasPastePosition(): { x: number; y: number } | undefined {
+  return lastCanvasPointer ?? undefined
+}
+
 /* ---------- component ---------- */
 
 export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function ReteEditor(
@@ -167,6 +199,26 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
    * an unusual event ordering occurs.
    */
   const dragOpenRef = useRef(false)
+
+  /**
+   * The node the user actually grabbed for the current drag.
+   *
+   * Rete moves only the picked node. To drag a whole selection we mirror
+   * the leader's per-event delta onto the other selected nodes — but the
+   * `area.translate()` calls that does emit their OWN `nodetranslated`
+   * events, so only the leader is allowed to fan out. Comparing against
+   * this ref is what stops that from recursing.
+   */
+  const dragLeaderRef = useRef<string | null>(null)
+
+  /**
+   * Did the pick land on a node that was already selected, with no modifier?
+   * If so the selection is held for the duration of the gesture and only
+   * collapsed on release, and only if the node never actually moved.
+   */
+  const pickWasInSelectionRef = useRef(false)
+  /** True once a drag has produced any movement at all. */
+  const dragMovedRef = useRef(false)
 
   /** Rete's selector / selectable handles — used to drive two-way sync. */
   const selectorRef = useRef<ReturnType<typeof AreaExtensions.selector> | null>(null)
@@ -280,6 +332,15 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
             if (payload.kind === 'oled') {
               return OledNode as unknown as React.ComponentType<unknown>
             }
+            if (payload.kind === 'menu') {
+              return MenuNode as unknown as React.ComponentType<unknown>
+            }
+            if (payload.kind === 'encoder_in') {
+              return EncoderNode as unknown as React.ComponentType<unknown>
+            }
+            if (payload.kind === 'code') {
+              return CodeNode as unknown as React.ComponentType<unknown>
+            }
             if (VISUAL_KINDS.has(payload.kind)) {
               return VisualNode as unknown as React.ComponentType<unknown>
             }
@@ -325,6 +386,245 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
     const resizeObserver = new ResizeObserver(() => emitTransform())
     resizeObserver.observe(container)
 
+    /* ----- background grid ----- */
+    /*
+     * Drawn in CSS from three custom properties rather than as canvas
+     * elements: the grid then costs one repaint on pan instead of N DOM
+     * nodes, and it can never end up in front of a cable. The offsets are
+     * the area transform reduced modulo the pitch, so the pattern scrolls
+     * with the content without the background box ever growing.
+     */
+    const applyGridVars = (): void => {
+      const { gridShow, gridSize } = useEditorStore.getState().layout
+      container.toggleAttribute('data-dp-grid', gridShow)
+      if (!gridShow) return
+      const t = area.area.transform
+      const step = gridSize * t.k
+      container.style.setProperty('--dp-grid-step', `${step}px`)
+      container.style.setProperty('--dp-grid-x', `${t.x % step}px`)
+      container.style.setProperty('--dp-grid-y', `${t.y % step}px`)
+    }
+    applyGridVars()
+
+    /* ----- pan / marquee gesture split ----- */
+    /*
+     * Rete's default is left-drag-to-pan, which leaves no gesture for
+     * rubber-band selection — the thing you reach for constantly once a
+     * patch is past a handful of nodes. So left-drag on empty canvas draws a
+     * selection rectangle and panning moves to middle-drag or space-drag,
+     * both of which are the standard second gesture in every editor that
+     * makes the same trade. `marqueeSelect` puts it back for anyone who
+     * prefers the old behaviour.
+     */
+    let spaceHeld = false
+    const onSpaceDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') spaceHeld = true
+    }
+    const onSpaceUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') spaceHeld = false
+    }
+    // `blur` catches the case where the window loses focus mid-hold and the
+    // keyup is delivered to someone else, which would otherwise leave the
+    // canvas permanently in pan mode.
+    const onWindowBlur = () => {
+      spaceHeld = false
+    }
+    window.addEventListener('keydown', onSpaceDown)
+    window.addEventListener('keyup', onSpaceUp)
+    window.addEventListener('blur', onWindowBlur)
+
+    area.area.setDragHandler(
+      new Drag({
+        down: (e) => {
+          // Middle button and space-drag always pan.
+          if (e.button === 1 || spaceHeld) return true
+          if (e.button !== 0) return false
+          if (!useEditorStore.getState().layout.marqueeSelect) return true
+          // Left-drag on background belongs to the marquee below.
+          return !isBackgroundTarget(e.target, container, area.area.content.holder)
+        },
+        move: () => true
+      })
+    )
+
+    /* ----- marquee ----- */
+    const marquee = document.createElement('div')
+    marquee.className = 'dp-marquee'
+    marquee.hidden = true
+    container.appendChild(marquee)
+
+    let marqueeStart: { x: number; y: number; clientX: number; clientY: number } | null = null
+    let marqueeMode: 'replace' | 'add' | 'toggle' = 'replace'
+    let marqueeBase: string[] = []
+    let marqueeFrame = 0
+
+    /** Node bounds in canvas space, read from the live DOM once per drag. */
+    const nodeBounds = (): { id: string; x: number; y: number; w: number; h: number }[] => {
+      const out: { id: string; x: number; y: number; w: number; h: number }[] = []
+      for (const [id, view] of area.nodeViews) {
+        const el = view.element
+        // offsetWidth is unscaled layout size, which is what we want: the
+        // node's extent in canvas units is independent of zoom.
+        out.push({
+          id,
+          x: view.position.x,
+          y: view.position.y,
+          w: el.offsetWidth,
+          h: el.offsetHeight
+        })
+      }
+      return out
+    }
+
+    const applyMarquee = (clientX: number, clientY: number): void => {
+      if (!marqueeStart) return
+      const rect = container.getBoundingClientRect()
+      const x0 = Math.min(marqueeStart.clientX, clientX) - rect.left
+      const y0 = Math.min(marqueeStart.clientY, clientY) - rect.top
+      const x1 = Math.max(marqueeStart.clientX, clientX) - rect.left
+      const y1 = Math.max(marqueeStart.clientY, clientY) - rect.top
+      marquee.style.left = `${x0}px`
+      marquee.style.top = `${y0}px`
+      marquee.style.width = `${x1 - x0}px`
+      marquee.style.height = `${y1 - y0}px`
+      marquee.hidden = false
+
+      const a = marqueeStart
+      const b = clientToCanvas(container, area.area.transform, clientX, clientY)
+      const lo = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) }
+      const hi = { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) }
+
+      // Intersection, not containment: catching a node by clipping its
+      // corner is the behaviour every editor has, and requiring full
+      // enclosure makes selecting a row of wide nodes near-impossible.
+      const hits = nodeBounds()
+        .filter((n) => n.x < hi.x && n.x + n.w > lo.x && n.y < hi.y && n.y + n.h > lo.y)
+        .map((n) => n.id)
+
+      /*
+       * Resolve to a FINAL set and publish once. Additive and toggle both
+       * work from the selection as it was when the drag began, so sweeping
+       * back over a node undoes it rather than flickering it on and off
+       * frame by frame — and doing the arithmetic here rather than as two
+       * `select()` calls means the store publishes one selection per frame
+       * instead of two, so nothing ever renders the intermediate state.
+       */
+      let next: string[]
+      if (marqueeMode === 'replace') {
+        next = hits
+      } else if (marqueeMode === 'add') {
+        next = [...new Set([...marqueeBase, ...hits])]
+      } else {
+        const base = new Set(marqueeBase)
+        for (const id of hits) {
+          if (base.has(id)) base.delete(id)
+          else base.add(id)
+        }
+        next = [...base]
+      }
+      useEditorStore.getState().select(next, 'replace')
+    }
+
+    const onMarqueeMove = (e: PointerEvent): void => {
+      if (!marqueeStart) return
+      e.preventDefault()
+      if (marqueeFrame) cancelAnimationFrame(marqueeFrame)
+      const { clientX, clientY } = e
+      marqueeFrame = requestAnimationFrame(() => {
+        marqueeFrame = 0
+        applyMarquee(clientX, clientY)
+      })
+    }
+
+    const endMarquee = (): void => {
+      if (marqueeFrame) {
+        cancelAnimationFrame(marqueeFrame)
+        marqueeFrame = 0
+      }
+      marqueeStart = null
+      marqueeBase = []
+      marquee.hidden = true
+      window.removeEventListener('pointermove', onMarqueeMove)
+      window.removeEventListener('pointerup', endMarquee)
+      window.removeEventListener('pointercancel', endMarquee)
+    }
+
+    const onContainerPointerDown = (e: PointerEvent): void => {
+      if (e.button !== 0 || spaceHeld) return
+      if (!useEditorStore.getState().layout.marqueeSelect) return
+      if (!isBackgroundTarget(e.target, container, area.area.content.holder)) return
+
+      marqueeMode = e.shiftKey ? 'add' : e.metaKey || e.ctrlKey ? 'toggle' : 'replace'
+      marqueeBase = Array.from(useEditorStore.getState().selection)
+      const world = clientToCanvas(container, area.area.transform, e.clientX, e.clientY)
+      marqueeStart = { ...world, clientX: e.clientX, clientY: e.clientY }
+      // A plain click clears; the existing `pointerdown` pipe would do this
+      // too, but it runs for pan drags as well and we want the clear to be
+      // this gesture's own.
+      if (marqueeMode === 'replace') useEditorStore.getState().select(null)
+      window.addEventListener('pointermove', onMarqueeMove)
+      window.addEventListener('pointerup', endMarquee)
+      window.addEventListener('pointercancel', endMarquee)
+    }
+    container.addEventListener('pointerdown', onContainerPointerDown)
+
+    /* ----- pointer tracking for paste-here ----- */
+    const onPointerTrack = (e: PointerEvent): void => {
+      lastCanvasPointer = clientToCanvas(container, area.area.transform, e.clientX, e.clientY)
+    }
+    container.addEventListener('pointermove', onPointerTrack)
+
+    /* ----- right-click ----- */
+    const onContextMenu = (e: MouseEvent): void => {
+      e.preventDefault()
+      const target = e.target as HTMLElement | null
+      let detailTarget: ContextTarget = { kind: 'canvas' }
+
+      // Walk up for a node or connection element. Rete stamps neither, so
+      // we match against the views it owns — cheap at these counts and it
+      // survives any change to the renderers' markup.
+      if (target) {
+        for (const [id, view] of area.nodeViews) {
+          if (view.element.contains(target)) {
+            detailTarget = { kind: 'node', id }
+            break
+          }
+        }
+        if (detailTarget.kind === 'canvas') {
+          for (const [id, view] of area.connectionViews) {
+            if (view.element.contains(target)) {
+              detailTarget = { kind: 'connection', id }
+              break
+            }
+          }
+        }
+      }
+
+      /*
+       * Normalise the selection BEFORE opening the menu, not while building
+       * it: the menu's item list is computed during render, and mutating the
+       * store from there is how you get "cannot update a component while
+       * rendering a different component". Right-clicking a node outside the
+       * current selection selects it; right-clicking one inside leaves the
+       * multi-selection alone so the menu can act on all of it.
+       */
+      if (detailTarget.kind === 'node' && !useEditorStore.getState().selection.has(detailTarget.id)) {
+        useEditorStore.getState().select(detailTarget.id, 'replace')
+      }
+
+      window.dispatchEvent(
+        new CustomEvent<ContextMenuDetail>(CANVAS_CONTEXT_MENU_EVENT, {
+          detail: {
+            x: e.clientX,
+            y: e.clientY,
+            target: detailTarget,
+            world: clientToCanvas(container, area.area.transform, e.clientX, e.clientY)
+          }
+        })
+      )
+    }
+    container.addEventListener('contextmenu', onContextMenu)
+
     /* ----- Rete -> store wiring ----- */
 
     // Track node translations. Also open/close the store transaction on
@@ -334,11 +634,58 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
     area.addPipe((ctx) => {
       if (syncingRef.current) return ctx
 
+      /*
+       * Snap. Rewriting `nodetranslate` (the cancellable event, before the
+       * move is applied) rather than correcting afterwards means the node is
+       * never drawn off-grid for a frame, and the store only ever sees
+       * snapped coordinates — so a saved patch is snapped too.
+       */
+      if (ctx.type === 'nodetranslate') {
+        const { gridSnap, gridSize } = useEditorStore.getState().layout
+        if (gridSnap && gridSize > 0) {
+          const { position } = ctx.data
+          return {
+            ...ctx,
+            data: {
+              ...ctx.data,
+              position: {
+                x: Math.round(position.x / gridSize) * gridSize,
+                y: Math.round(position.y / gridSize) * gridSize
+              }
+            }
+          }
+        }
+      }
+
       if (ctx.type === 'nodetranslated') {
-        const { id, position } = ctx.data
-        useEditorStore
-          .getState()
-          .moveNode(id, { x: position.x, y: position.y })
+        const { id, position, previous } = ctx.data
+        const store = useEditorStore.getState()
+        if (position.x !== previous.x || position.y !== previous.y) {
+          dragMovedRef.current = true
+        }
+        store.moveNode(id, { x: position.x, y: position.y })
+
+        // Followers just record their own move (see dragLeaderRef).
+        if (id === dragLeaderRef.current) {
+          const sel = store.selection
+          if (sel.size > 1 && sel.has(id)) {
+            const dx = position.x - previous.x
+            const dy = position.y - previous.y
+            if (dx !== 0 || dy !== 0) {
+              for (const otherId of sel) {
+                if (otherId === id) continue
+                const n = store.graph.nodes.find((x) => x.id === otherId)
+                if (!n) continue
+                // area.translate is the single source of truth for on-screen
+                // position; its echoed nodetranslated writes the store.
+                void area.translate(otherId, {
+                  x: n.position.x + dx,
+                  y: n.position.y + dy
+                })
+              }
+            }
+          }
+        }
       }
 
       if (ctx.type === 'nodepicked') {
@@ -347,13 +694,30 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
         if (selectionApplyingRef.current) return ctx
         const id = ctx.data.id
         const accumulate = accumulatorRef.current?.active() ?? false
-        useEditorStore
-          .getState()
-          .select(id, accumulate ? 'toggle' : 'replace')
+        const store = useEditorStore.getState()
+
+        /*
+         * Grabbing a node that is ALREADY selected keeps the selection.
+         *
+         * Replacing it unconditionally is what made marquee selection look
+         * broken: select six nodes, drag one, and the plain `'replace'`
+         * collapsed the set to that one before the first move event — so
+         * the multi-drag fan-out below saw a selection of one and moved a
+         * single node. Every editor behaves the way this now does: dragging
+         * a member of a selection moves the whole selection, and a click
+         * with no drag collapses to the one you clicked (handled on
+         * `nodedragged`, since only then do we know it was a click).
+         */
+        if (accumulate) store.select(id, 'toggle')
+        else if (!store.selection.has(id)) store.select(id, 'replace')
+
+        pickWasInSelectionRef.current = !accumulate && store.selection.has(id)
+        dragMovedRef.current = false
         // Open a transaction — any subsequent `nodetranslated` events
         // belong to this drag and should coalesce into one undo step.
         useEditorStore.getState().beginTransaction()
         dragOpenRef.current = true
+        dragLeaderRef.current = id
       }
 
       if (ctx.type === 'nodedragged') {
@@ -361,24 +725,29 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
           useEditorStore.getState().endTransaction()
           dragOpenRef.current = false
         }
+        // A click, not a drag: NOW collapse to the node that was clicked.
+        // Deferring it to here is what lets the same gesture mean both
+        // "move this whole selection" and "select just this one".
+        if (pickWasInSelectionRef.current && !dragMovedRef.current && dragLeaderRef.current) {
+          useEditorStore.getState().select(dragLeaderRef.current, 'replace')
+        }
+        pickWasInSelectionRef.current = false
+        dragLeaderRef.current = null
       }
 
       if (ctx.type === 'translated' || ctx.type === 'zoomed') {
         emitTransform()
+        applyGridVars()
       }
 
       if (ctx.type === 'pointerdown') {
-        // Click on empty canvas (no node / connection under the pointer).
-        // We detect this by checking whether the target is the container
-        // itself or its immediate content holder — both are "background".
-        const target = ctx.data.event.target as HTMLElement | null
-        const isBackground =
-          !!target &&
-          (target === container ||
-            target === area.area.content.holder ||
-            target.classList?.contains('dp-rete-root'))
-        if (isBackground) {
-          useEditorStore.getState().select(null)
+        // Click on empty canvas clears the selection — but only when the
+        // marquee is NOT the one handling this gesture, or the clear would
+        // fight the shift-drag additive path above.
+        if (!useEditorStore.getState().layout.marqueeSelect || spaceHeld) {
+          if (isBackgroundTarget(ctx.data.event.target, container, area.area.content.holder)) {
+            useEditorStore.getState().select(null)
+          }
         }
       }
 
@@ -418,13 +787,7 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
               // Ensure the Rete scene reflects the latest store state (which
               // now includes the committed connection under its canonical id).
               if (committed) {
-                void applyStoreToRete(
-                  useEditorStore.getState().graph,
-                  editor,
-                  area,
-                  syncingRef,
-                  lastGraphRef
-                )
+                scheduleApply(useEditorStore.getState().graph, true)
               }
             })
         })
@@ -442,14 +805,75 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
       return ctx
     })
 
+    /*
+     * Every store -> Rete apply goes through one queue.
+     *
+     * `applyStoreToRete` is async and was fired with `void` from three
+     * places, so two could interleave: both would diff against the same
+     * stale `lastGraphRef`, and — worse — the first one's `finally` would
+     * clear `syncingRef` while the second was still mutating, letting the
+     * editor's own events (noderemoved, connectionremoved) fall through to
+     * the store as if the USER had made them. Opening a patch is exactly
+     * the case that fires several graph changes back to back.
+     */
+    let applyQueue: Promise<void> = Promise.resolve()
+    const scheduleApply = (graph: AudioGraph, remeasure = false): void => {
+      applyQueue = applyQueue
+        .then(() => applyStoreToRete(graph, editor, area, syncingRef, lastGraphRef))
+        .then(() => (remeasure ? remeasureSockets() : undefined))
+        .catch((err) => {
+          // A failed apply must not poison the queue, or the canvas stops
+          // tracking the store for the rest of the session.
+          console.error('[ReteEditor] failed to apply graph', err)
+          syncingRef.current = false
+        })
+    }
+
+    /**
+     * Re-render every node so Rete recomputes its socket positions.
+     *
+     * Cables are drawn from positions Rete measures off the socket DOM once,
+     * when the socket renders. Any measurement taken while the canvas was
+     * not laid out is wrong (or never taken at all), and nothing retries it
+     * — the cable then hangs at a stale endpoint and ignores the node it is
+     * attached to. Forcing a re-render is the supported way to ask for a
+     * fresh measurement.
+     *
+     * Called on the two occasions a measurement could have been taken
+     * badly: a bulk load, and returning to the Patch tab.
+     */
+    const remeasureSockets = async (): Promise<void> => {
+      for (const id of [...area.nodeViews.keys()]) {
+        await area.update('node', id)
+      }
+    }
+
     container.tabIndex = 0
 
     /* ----- initial paint + subscription ----- */
-    void applyStoreToRete(useEditorStore.getState().graph, editor, area, syncingRef, lastGraphRef)
+    scheduleApply(useEditorStore.getState().graph)
 
     const unsubscribe = useEditorStore.subscribe((s, prev) => {
       if (s.graph !== prev.graph) {
-        void applyStoreToRete(s.graph, editor, area, syncingRef, lastGraphRef)
+        /*
+         * Treat a wholesale change of node identity as a load rather than
+         * an edit, and remeasure after it. Adding one node from the palette
+         * does not need it; opening a file replaces every node at once and
+         * is exactly when a stale measurement slips through.
+         */
+        const ids = new Set(prev.graph.nodes.map((n) => n.id))
+        const bulk = s.graph.nodes.filter((n) => !ids.has(n.id)).length > 1
+        scheduleApply(s.graph, bulk)
+      }
+      // Returning to the Patch tab: anything measured while it was hidden
+      // is suspect, so measure again now that it is laid out.
+      if (s.view === 'patch' && prev.view !== 'patch') {
+        applyQueue = applyQueue.then(() => remeasureSockets()).catch(() => undefined)
+      }
+      // Grid pitch / visibility is a layout preference, so it changes
+      // outside the transform pipe and needs its own trigger.
+      if (s.layout !== prev.layout) {
+        applyGridVars()
       }
       // Sync store selection into Rete's visual selector. Guarded by
       // `selectionApplyingRef` so the nodepicked events that `select()`
@@ -521,6 +945,15 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
       unsubscribe()
       resizeObserver.disconnect()
       clearDragHighlight()
+      endMarquee()
+      marquee.remove()
+      container.removeEventListener('pointerdown', onContainerPointerDown)
+      container.removeEventListener('pointermove', onPointerTrack)
+      container.removeEventListener('contextmenu', onContextMenu)
+      window.removeEventListener('keydown', onSpaceDown)
+      window.removeEventListener('keyup', onSpaceUp)
+      window.removeEventListener('blur', onWindowBlur)
+      lastCanvasPointer = null
       transformListenersRef.current.clear()
       accumulatorRef.current?.destroy()
       area.destroy()

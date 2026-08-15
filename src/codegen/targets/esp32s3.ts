@@ -10,21 +10,41 @@
  */
 import type { AudioGraph, NodeInstance, NodeKind } from '@/types/graph'
 import type { HardwareLayout, PlacedComponent } from '@/types/hardware'
-import { emptyHardwareLayout } from '@/types/hardware'
+import { emptyHardwareLayout, analogRoleFor } from '@/types/hardware'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
 import type { EmitContext, NodeEmitter } from '../nodeEmitters'
-import { ESP32_NODE_EMITTERS } from '../nodeEmittersEsp32'
+import { ESP32_NODE_EMITTERS, setParamOverridesEsp32, setSampleInfoEsp32 } from '../nodeEmittersEsp32'
+import {
+  dedupeMenuBlocks,
+  emitMenuParamGlobals,
+  makeOverrideAudit,
+  menuOrderingEdges,
+  menuParamOverrides,
+  overrideExprMap
+} from '../menuCodegen'
 import {
   buildConnectionIndex,
   nodeVar,
   safeName,
   targetKey,
+  auditOutputDecls,
   topoSort,
   validateGraph
 } from '../graphWalk'
 import { esp32AdcChannelOf } from '@/hardware/esp32s3Pinout'
-import type { GeneratedProject } from '../generateProject'
+import type { GenerateOptions, GeneratedProject } from '../generateProject'
+import { emitSamples } from '../sampleCodegen'
+import {
+  buildPresetTable,
+  emitPresetRuntime,
+  hasPresetDriver,
+  presetParamOverrides
+} from '../presetCodegen'
+import { buildProvenance, type EmitBlock, type EmitSection } from '../provenance'
 import type { TargetBackend } from './index'
+import type { Esp32Profile } from './esp32Profiles'
+import { ESP32_PROFILES } from './esp32Profiles'
+import { supportLevel } from '@/nodes/targetSupport'
 
 /** Parse `"GPIO12"` -> 12, falling back to a guarded default. */
 function gpioNum(pin: string | undefined, fallback: number): number {
@@ -42,13 +62,20 @@ interface HwState {
   gates: { varName: string; gpio: number; label: string }[]
   leds: { varName: string; gpio: number; label: string }[]
   switches: { varName: string; p1: number; p2: number; label: string }[]
-  // I2S codec binding if any
+  /**
+   * I2S peripheral binding, if any. `sdIn` and `mclk` are optional because
+   * not every bound device has them: a PCM5102A or MAX98357A is an
+   * output-only sink with no data-return line, and the MAX98357A has no
+   * MCLK pin at all (it recovers its clock from BCLK).
+   */
   i2sCodec: {
     sck: number
     ws: number
-    sdIn: number
+    sdIn?: number
     sdOut: number
-    mclk: number
+    mclk?: number
+    /** False for output-only sinks — used to warn on an impossible audio_in. */
+    canInput: boolean
   } | null
   // OLED (i2c) if any
   oled: { sda: number; scl: number; address: string } | null
@@ -56,7 +83,8 @@ interface HwState {
   bindings: Map<string, PlacedComponent>
 }
 
-function walkHardware(hardware: HardwareLayout): HwState {
+function walkHardware(hardware: HardwareLayout, profile: Esp32Profile): HwState {
+  const dflt = profile.defaults
   const st: HwState = {
     pots: [],
     buttons: [],
@@ -70,17 +98,26 @@ function walkHardware(hardware: HardwareLayout): HwState {
   for (const c of hardware.components) {
     st.bindings.set(c.id, c)
     const base = `hw_${c.kind}_${c.id.replace(/[^A-Za-z0-9_]/g, '_')}`
+
+    /*
+     * Analog inputs first, as a family. `st.pots` is really "things read
+     * with analogRead()" — pots, sliders, ribbons, LDRs, mics, piezos and
+     * CV jacks all qualify. Handling them by table rather than by two
+     * hardcoded cases is what stops a placed Ribbon from vanishing
+     * between the hardware view and the firmware.
+     */
+    const analogRole = analogRoleFor(c.kind)
+    if (analogRole) {
+      const isBuzzer =
+        c.kind === 'piezo' && String(c.config['direction'] ?? 'input') !== 'input'
+      const pin = c.pins[analogRole]
+      if (pin && !isBuzzer) {
+        st.pots.push({ varName: `${base}_val`, gpio: gpioNum(pin, 1), label: c.label })
+      }
+      continue
+    }
+
     switch (c.kind) {
-      case 'pot': {
-        const pin = c.pins['wiper']
-        if (pin) st.pots.push({ varName: `${base}_val`, gpio: gpioNum(pin, 1), label: c.label })
-        break
-      }
-      case 'cv_jack': {
-        const pin = c.pins['signal']
-        if (pin) st.pots.push({ varName: `${base}_val`, gpio: gpioNum(pin, 1), label: c.label })
-        break
-      }
       case 'button': {
         const pin = c.pins['io']
         if (pin) st.buttons.push({ varName: `${base}_val`, gpio: gpioNum(pin, 0), label: c.label })
@@ -93,7 +130,7 @@ function walkHardware(hardware: HardwareLayout): HwState {
       }
       case 'led': {
         const pin = c.pins['anode']
-        if (pin) st.leds.push({ varName: `${base}_val`, gpio: gpioNum(pin, 21), label: c.label })
+        if (pin) st.leds.push({ varName: `${base}_val`, gpio: gpioNum(pin, dflt.led), label: c.label })
         break
       }
       case 'switch_3way': {
@@ -105,21 +142,45 @@ function walkHardware(hardware: HardwareLayout): HwState {
         break
       }
       case 'i2s_codec': {
+        if (!dflt.i2s) break
         st.i2sCodec = {
-          sck:   gpioNum(c.pins['sck'], 36),
-          ws:    gpioNum(c.pins['ws'], 37),
-          // sd_in falls back to 39 (not 35): 35 is the sd_out default and
-          // a single GPIO can't be both TX data and RX data in full-duplex.
-          sdIn:  gpioNum(c.pins['sd_in'], 39),
-          sdOut: gpioNum(c.pins['sd_out'], 35),
-          mclk:  gpioNum(c.pins['mclk'], 38)
+          sck:   gpioNum(c.pins['sck'], dflt.i2s.sck),
+          ws:    gpioNum(c.pins['ws'], dflt.i2s.ws),
+          sdIn:  gpioNum(c.pins['sd_in'], dflt.i2s.sdIn),
+          sdOut: gpioNum(c.pins['sd_out'], dflt.i2s.sdOut),
+          mclk:  gpioNum(c.pins['mclk'], dflt.i2s.mclk),
+          canInput: true
+        }
+        break
+      }
+      /*
+       * PCM5102A (line out) and MAX98357A (class-D amp) are both TX-only
+       * I2S sinks: three wires in, audio out, no data return. They share
+       * the codec slot because from the ESP32's side they are the same
+       * peripheral setup — the difference is what's on the other end.
+       *
+       * `sdIn` is left undefined so a graph with an `audio_in` node can be
+       * warned about instead of silently reading a pin nothing drives, and
+       * the MAX98357A has no MCLK pin at all (it recovers clock from BCLK).
+       */
+      case 'pcm5102a':
+      case 'max98357a': {
+        if (!dflt.i2s) break
+        st.i2sCodec = {
+          sck:   gpioNum(c.pins['sck'], dflt.i2s.sck),
+          ws:    gpioNum(c.pins['ws'], dflt.i2s.ws),
+          sdOut: gpioNum(c.pins['sd_out'], dflt.i2s.sdOut),
+          mclk:  c.kind === 'pcm5102a' && c.pins['mclk']
+            ? gpioNum(c.pins['mclk'], dflt.i2s.mclk)
+            : undefined,
+          canInput: false
         }
         break
       }
       case 'oled_ssd1306': {
         st.oled = {
-          sda: gpioNum(c.pins['sda'], 8),
-          scl: gpioNum(c.pins['scl'], 9),
+          sda: gpioNum(c.pins['sda'], dflt.oled.sda),
+          scl: gpioNum(c.pins['scl'], dflt.oled.scl),
           address: String(c.config['address'] ?? '0x3C')
         }
         break
@@ -129,10 +190,16 @@ function walkHardware(hardware: HardwareLayout): HwState {
   return st
 }
 
-export function generateEsp32S3Project(
+/**
+ * One generator for every Espressif board — the profile carries whatever
+ * differs (pio board name, PSRAM, USB stack, safe GPIO fallbacks).
+ */
+export function generateEsp32Project(
+  profile: Esp32Profile,
   graph: AudioGraph,
-  hardware: HardwareLayout = emptyHardwareLayout('esp32_s3_devkitc'),
-  projectName?: string
+  hardware: HardwareLayout = emptyHardwareLayout(profile.boardId),
+  projectName?: string,
+  options: GenerateOptions = {}
 ): GeneratedProject {
   const name = safeName(projectName ?? graph.meta.name ?? 'DaisypatcherPatch')
   const warnings: string[] = []
@@ -140,13 +207,48 @@ export function generateEsp32S3Project(
 
   for (const msg of validateGraph(graph)) warn(msg)
 
-  const connIdx = buildConnectionIndex(graph.connections)
-  const { order } = topoSort(graph.nodes, graph.connections, warn)
+  /*
+   * Menu leaves drive node params with no cable, so the scheduler needs an
+   * edge it can see. `menuOrderingEdges` synthesizes one per menu -> target
+   * pair on a socket id no emitter reads; it must come AFTER validateGraph,
+   * whose socket check would otherwise flag it.
+   */
+  const connections = [...graph.connections, ...menuOrderingEdges(graph)]
+  const paramOverrides = menuParamOverrides(graph, warn)
+  /*
+   * Presets write the SAME globals menu leaves do, so they merge into one
+   * map before anything reads it. Menu entries win a collision because
+   * they carry `menuVar`/`entryIndex` that the menu emitter needs; the
+   * preset table only needs the variable name, which is identical either
+   * way.
+   */
+  const presetOverrides = presetParamOverrides(graph, options.presets ?? [], warn)
+  for (const [k, o] of presetOverrides) if (!paramOverrides.has(k)) paramOverrides.set(k, o)
+  const presetTable = buildPresetTable(graph, options.presets ?? [], paramOverrides)
+
+  /*
+   * Samples become const arrays at file scope. Emitted BEFORE the node
+   * loop because the player's `process` needs the variable name, and the
+   * arrays have to precede any use in the file anyway.
+   */
+  const sampleEmission = emitSamples(graph, options.samples ?? {}, profile.boardId, warn)
+  setSampleInfoEsp32(sampleEmission.byNode)
+  if (presetTable.rows.length > 0 && !hasPresetDriver(graph)) {
+    warn(
+      `${presetTable.rows.length} preset(s) will be compiled in but nothing can fire them — ` +
+        `add a Preset node and patch a trigger to it`
+    )
+  }
+  const overrideExprs = overrideExprMap(paramOverrides)
+  const reachedOverrides = makeOverrideAudit(paramOverrides, warn)
+
+  const connIdx = buildConnectionIndex(connections)
+  const { order } = topoSort(graph.nodes, connections, warn)
 
   const nodeById = new Map<string, NodeInstance>()
   for (const n of graph.nodes) nodeById.set(n.id, n)
 
-  const hw = walkHardware(hardware)
+  const hw = walkHardware(hardware, profile)
 
   const ctx = (node: NodeInstance): EmitContext => ({
     node,
@@ -170,7 +272,20 @@ export function generateEsp32S3Project(
     warn
   })
 
-  const declLines: string[] = []
+  const blocks: EmitBlock[] = []
+  const declLines: string[] = [
+    ...emitMenuParamGlobals(paramOverrides),
+    // Must follow the globals — the slot table takes their addresses.
+    ...emitPresetRuntime(presetTable),
+    ...sampleEmission.declLines
+  ]
+  /*
+   * Emitted at the top of Arduino's loop(), before render_block(). That is
+   * this target's equivalent of the Daisy's while(1): a place for blocking
+   * peripheral traffic that must never run inside the audio path. An I2C
+   * sensor read is ~400 us and an audio block is 1 ms.
+   */
+  const nodeLoopLines: string[] = []
   const initLines: string[] = []
   const processLines: string[] = []
 
@@ -186,6 +301,40 @@ export function generateEsp32S3Project(
     const node = nodeById.get(id)
     if (!node) continue
     let emitter: NodeEmitter | undefined = ESP32_NODE_EMITTERS[node.kind]
+    /*
+     * Board-capability gate.
+     *
+     * `supportLevel` drives the palette's dots and filter, but the palette
+     * only governs what a user can DROP — it does nothing for a patch that
+     * was saved on one board and opened on another, or re-targeted. Without
+     * this check a granulator on a C3 still emits its EXT_RAM_ATTR buffer
+     * (no PSRAM to put it in) and the MIDI kinds still emit <USBMIDI.h>
+     * (no TinyUSB device stack on RISC-V). Both compile fine and then fail
+     * at link time — as a raw PlatformIO error, which is the worst possible
+     * place for the user to meet it.
+     *
+     * Substituting a passthrough keeps the rest of the patch working and
+     * puts the explanation in the build log where it belongs.
+     */
+    if (supportLevel(node.kind, profile.boardId) === 'unsupported') {
+      const why = `not available on ${profile.label}`
+      warn(`${node.kind}: ${why} — emitted as passthrough`)
+      const def = NODE_DEFINITIONS[node.kind]
+      emitter = {
+        declare: () => '',
+        init: () => '',
+        process: (c) => {
+          if (!def) return ''
+          const inSock = def.inputs[0]?.id
+          const src = inSock ? c.inputExpr(c.node.id, inSock, '0.f') : '0.f'
+          const lines = [`    // ${c.node.kind}: ${why}`]
+          for (const out of def.outputs) {
+            lines.push(`    float ${c.outputVar(c.node.id, out.id)} = ${src};`)
+          }
+          return lines.join('\n') + '\n'
+        }
+      }
+    }
     if (!emitter) {
       warn(`no ESP32 emitter for ${node.kind}; passthrough stub`)
       emitter = {
@@ -207,12 +356,33 @@ export function generateEsp32S3Project(
     }
 
     const c = ctx(node)
+    // Record what this node contributed, so the code view can point at it.
+    const note = (section: EmitSection, text: string | undefined): void => {
+      if (text) blocks.push({ nodeId: node.id, kind: node.kind, section, text })
+    }
+    /*
+     * `declare` runs with overrides OFF: a param used at file scope sizes a
+     * buffer or seeds a constant and has to stay a compile-time literal.
+     * Everything after it runs inside a function, where a global is fine.
+     */
+    setParamOverridesEsp32(null)
     const d = emitter.declare(c)
     if (d) declLines.push(`// ${node.kind} ${node.id}\n${d}`)
+    note('declare', d)
+    setParamOverridesEsp32(overrideExprs)
     const initSrc = emitter.init(c)
     if (initSrc) initLines.push(initSrc)
+    note('init', initSrc)
     const p = emitter.process(c)
     if (p) processLines.push(p)
+    note('process', p)
+    const lp = emitter.loop?.(c)
+    if (lp) nodeLoopLines.push(lp)
+    note('loop', lp)
+    setParamOverridesEsp32(null)
+
+    reachedOverrides(node.id, `${initSrc}\n${p}`)
+    auditOutputDecls(node, p, c.outputVar, warn)
   }
 
   let leftExpr = '0.f'
@@ -254,7 +424,7 @@ export function generateEsp32S3Project(
     const comp = hw.bindings.get(bid)
     if (!comp || comp.kind !== 'led') continue
     const pin = comp.pins['anode']
-    const g = gpioNum(pin, 21)
+    const g = gpioNum(pin, profile.defaults.led)
     const varBase = `${nodeVar(n.id, 'led')}_val`
     pollLines.push(`    digitalWrite(${g}, (${varBase} > 0.5f) ? HIGH : LOW);`)
   }
@@ -267,6 +437,11 @@ export function generateEsp32S3Project(
   if (hasAudioIn) {
     if (!hw.i2sCodec) {
       warn('audio_in: no I2S codec component bound; RX uses default data-in pin GPIO39 (BCLK/WS shared with the output bus)')
+    } else if (!hw.i2sCodec.canInput) {
+      // A PCM5102A / MAX98357A physically cannot return audio. Without this
+      // the generated project would configure RX on a fallback pin that
+      // nothing drives, and the patch would run on silence with no clue why.
+      warn('audio_in: the bound I2S device is output-only (PCM5102A / MAX98357A have no data-out line) — add a codec with an input, or remove the audio_in node')
     } else if (hw.i2sCodec.sdIn === hw.i2sCodec.sdOut) {
       warn(`audio_in: I2S codec sd_in and sd_out are both bound to GPIO${hw.i2sCodec.sdIn} — bind sd_in to its own pin`)
     }
@@ -274,6 +449,7 @@ export function generateEsp32S3Project(
 
   const main = buildMainCpp({
     name,
+    profile,
     projectDisplayName: graph.meta.name,
     blockSize: graph.meta.blockSize,
     sampleRate: graph.meta.sampleRate,
@@ -285,6 +461,7 @@ export function generateEsp32S3Project(
     rightExpr,
     hw,
     pollLines,
+    nodeLoopLines,
     hasAudioIn,
     warnings
   })
@@ -294,11 +471,12 @@ export function generateEsp32S3Project(
   const graphFeatures = {
     hasOled: graph.nodes.some((n) => n.kind === 'oled') || !!hw.oled,
     hasGranulator: graph.nodes.some((n) => n.kind === 'granulator'),
+    hasTof: graph.nodes.some((n) => n.kind === 'distance_in'),
     hasMidi: graph.nodes.some((n) =>
       n.kind === 'midi_in_note' || n.kind === 'midi_in_cc' || n.kind === 'midi_out_note'
     )
   }
-  const platformioIni = buildPlatformioIni(hw, graphFeatures)
+  const platformioIni = buildPlatformioIni(hw, graphFeatures, profile)
   const projectJson = JSON.stringify(graph, null, 2)
 
   return {
@@ -308,38 +486,50 @@ export function generateEsp32S3Project(
       'src/main.cpp': main,
       'project.json': projectJson
     },
-    warnings
+    warnings,
+    provenance: buildProvenance('src/main.cpp', main, blocks)
   }
 }
 
 function buildPlatformioIni(
   hw: HwState,
-  features: { hasOled: boolean; hasGranulator: boolean; hasMidi: boolean }
+  features: { hasOled: boolean; hasGranulator: boolean; hasMidi: boolean; hasTof: boolean },
+  profile: Esp32Profile
 ): string {
   const libs: string[] = []
   if (hw.oled || features.hasOled) {
     libs.push('adafruit/Adafruit SSD1306 @ ^2.5.13')
     libs.push('adafruit/Adafruit GFX Library @ ^1.11.9')
   }
+  // The VL53L0X init is a vendor tuning sequence, not a handful of register
+  // writes — see the distance_in emitter. This is the one sensor that pulls
+  // in a dependency instead of being written out.
+  if (features.hasTof) libs.push('pololu/VL53L0X @ ^1.3.1')
   const libDeps = libs.length
     ? `lib_deps =\n    ${libs.join('\n    ')}\n`
     : ''
   // Granulator's 4-second capture buffer (~770 KB at 48 kHz fp32) doesn't fit
   // in DRAM; we place it in external PSRAM via EXT_RAM_ATTR. Enable the octal
-  // PSRAM mapping on the DevKitC so malloc/BSS in PSRAM is available.
-  const psramBlock = features.hasGranulator
+  // PSRAM mapping so malloc/BSS in PSRAM is available. Gated on the profile:
+  // emitting this for a board without PSRAM produces a config that looks
+  // right and then fails to link.
+  const psramBlock = features.hasGranulator && profile.hasPsram
     ? `board_build.arduino.memory_type = qio_opi\nboard_build.flash_mode = qio\nboard_upload.flash_size = 8MB\nboard_build.partitions = default_8MB.csv\n`
     : ''
   // USB MIDI needs the USB CDC / MODE flags already present; no extra libs
   // since USBMIDI ships in the Arduino-ESP32 core.
-  const midiNote = features.hasMidi ? '; USB MIDI: uses <USBMIDI.h> from arduino-esp32 core\n' : ''
-  return `[env:esp32-s3-devkitc-1]
+  const midiNote = features.hasMidi && profile.hasTinyUsbMidi
+    ? '; USB MIDI: uses <USBMIDI.h> from arduino-esp32 core\n'
+    : ''
+  const buildFlags = profile.usbCdcOnBoot
+    ? 'build_flags = -DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1\n'
+    : ''
+  return `[env:${profile.pioBoard}]
 platform = espressif32
-board = esp32-s3-devkitc-1
+board = ${profile.pioBoard}
 framework = arduino
 monitor_speed = 115200
-build_flags = -DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1
-${psramBlock}${midiNote}${libDeps}`
+${buildFlags}${psramBlock}${midiNote}${libDeps}`
 }
 
 function buildMainCpp(args: {
@@ -354,7 +544,10 @@ function buildMainCpp(args: {
   leftExpr: string
   rightExpr: string
   hw: HwState
+  profile: Esp32Profile
   pollLines: string[]
+  /** Node `loop` hooks — run once per block, outside the audio render. */
+  nodeLoopLines: string[]
   /** Graph contains an `audio_in` node — emit the full-duplex RX path. */
   hasAudioIn: boolean
   warnings: string[]
@@ -368,9 +561,13 @@ function buildMainCpp(args: {
 
   // I2S pin config — either the bound codec's pins or sensible defaults.
   const codec = args.hw.i2sCodec
-  const pinBclk = codec?.sck ?? 36
-  const pinLrck = codec?.ws ?? 37
-  const pinDout = codec?.sdOut ?? 35
+  // Fallbacks come from the board profile, not literals: GPIO 35-39 are
+  // flash pins or absent on a C3, so guessing them there would emit a
+  // project that compiles and then drives nothing.
+  const i2sDflt = args.profile.defaults.i2s
+  const pinBclk = codec?.sck ?? i2sDflt?.sck ?? 0
+  const pinLrck = codec?.ws ?? i2sDflt?.ws ?? 0
+  const pinDout = codec?.sdOut ?? i2sDflt?.sdOut ?? 0
   const pinMclk = codec?.mclk
 
   // Full-duplex RX (real line-in) — only emitted when the graph reads it.
@@ -378,7 +575,7 @@ function buildMainCpp(args: {
   // BCLK/WS; RX only needs its own data-in GPIO. Default GPIO39 sits next
   // to the I2S cluster on the right header and is otherwise unclaimed.
   const duplex = args.hasAudioIn
-  const pinDin = codec?.sdIn ?? 39
+  const pinDin = codec?.sdIn ?? i2sDflt?.sdIn ?? 0
   const inBufDecl = duplex ? `\nint16_t audio_in_buffer[${block} * 2];` : ''
   // Mirror of the output path's float→int conversion (out * 32767 clamped):
   // int16 → float via * (1/32767) so a full-scale loopback round-trips to
@@ -443,7 +640,7 @@ function buildMainCpp(args: {
     ? `    // MCLK: GPIO${pinMclk} is routed by I2S driver when configured.\n`
     : ''
 
-  return `// Auto-generated by Daisypatcher (ESP32-S3 target)
+  return `// Auto-generated by Daisypatcher (${args.profile.label} target)
 // Patch: ${args.projectDisplayName}
 // Target: ${args.name}
 // DO NOT EDIT — regenerate from the .dpatch file
@@ -456,10 +653,25 @@ ${warningsBlock}
 static const int SAMPLE_RATE = ${sr};
 static const int BLOCK = ${block};
 static const i2s_port_t I2S_PORT = I2S_NUM_0;
+
+/*
+ * DaisySP's SoftLimit/SoftClip, transliterated.
+ *
+ * ESP32 builds do not link DaisySP, so any emitter that needs to match a
+ * DaisySP-shaped curve has to carry its own copy. Kept here rather than
+ * inside one emitter's output because more than one node saturates, and
+ * three private copies of the same polynomial is how the two targets
+ * drifted apart in the first place.
+ */
+static inline float dp_soft_clip(float x) {
+    if (x < -3.f) return -1.f;
+    if (x > 3.f) return 1.f;
+    return x * (27.f + x * x) / (27.f + 9.f * x * x);
+}
 int16_t audio_out_buffer[${block} * 2];${inBufDecl}
 
 // --- Node declarations ---
-${args.declLines.join('\n') || '// (no nodes emitted members)'}
+${dedupeMenuBlocks(args.declLines.join('\n')) || '// (no nodes emitted members)'}
 
 // --- Hardware state ---
 ${args.hwDecls.join('\n') || '// (no hardware components placed)'}
@@ -515,6 +727,9 @@ void loop() {
     // --- Poll hardware (ADC + GPIO) ---
 ${hwPollLines.join('\n') || '    // (no hardware inputs)'}
 
+    // --- Slow peripherals (I2C sensors etc). NEVER inside render_block(). ---
+${args.nodeLoopLines.join('\n') || '    // (none)'}
+
     // --- Copy bound hardware values into per-node state ---
 ${args.pollLines.join('\n') || '    // (no bindings)'}
 
@@ -526,25 +741,52 @@ ${i2sReadBlock}    // --- Render one audio block + push to I2S ---
 `
 }
 
-export const esp32S3Target: TargetBackend = {
-  id: 'esp32_s3',
-  label: 'ESP32-S3',
-  description: 'Espressif ESP32-S3 DevKitC-1 (Arduino / PlatformIO)',
-  generate: generateEsp32S3Project,
-  buildCommand: () => ({
-    bin: 'pio',
-    args: ['run'],
-    env: {}
-  }),
-  toolchainCheck: () => [
-    { name: 'PlatformIO', command: 'pio', required: true, installHint: 'pip install platformio' },
-    { name: 'Python 3', command: 'python3', required: true, installHint: 'install python3 (platform package manager)' }
-  ],
-  binaryArtifact: () => '.pio/build/esp32-s3-devkitc-1/firmware.bin',
-  flashCommand: () => ({
-    // PlatformIO handles port auto-detect + DTR/RTS bootloader entry.
-    bin: 'pio',
-    args: ['run', '--target', 'upload']
-  }),
-  artifactExtension: 'bin'
+/**
+ * Build a TargetBackend for any Espressif board.
+ *
+ * The build/flash/toolchain half is genuinely identical across all of
+ * them — `pio run` and `pio run --target upload` are MCU-agnostic, and
+ * PlatformIO resolves the Xtensa-vs-RISC-V toolchain from `board =`
+ * alone. Only `generate` and the artifact path vary, and both derive from
+ * the profile.
+ */
+export function makeEsp32Target(profile: Esp32Profile): TargetBackend {
+  return {
+    id: profile.boardId,
+    label: profile.label,
+    shortLabel: profile.shortLabel,
+    description: profile.description,
+    generate: (graph, hardware, projectName, options) =>
+      generateEsp32Project(profile, graph, hardware, projectName, options),
+    buildCommand: () => ({
+      bin: 'pio',
+      args: ['run'],
+      env: {}
+    }),
+    toolchainCheck: () => [
+      { name: 'PlatformIO', command: 'pio', required: true, installHint: 'pip install platformio' },
+      { name: 'Python 3', command: 'python3', required: true, installHint: 'install python3 (platform package manager)' }
+    ],
+    binaryArtifact: () => `.pio/build/${profile.pioBoard}/firmware.bin`,
+    flashCommand: () => ({
+      // PlatformIO handles port auto-detect + DTR/RTS bootloader entry.
+      bin: 'pio',
+      args: ['run', '--target', 'upload']
+    }),
+    artifactExtension: 'bin'
+  }
+}
+
+export const esp32S3Target = makeEsp32Target(ESP32_PROFILES.esp32_s3_devkitc)
+export const esp32C3SuperMiniTarget = makeEsp32Target(ESP32_PROFILES.esp32_c3_supermini)
+export const esp32S3SuperMiniTarget = makeEsp32Target(ESP32_PROFILES.esp32_s3_supermini)
+
+/** @deprecated Kept for callers that predate the multi-board factory. */
+export function generateEsp32S3Project(
+  graph: AudioGraph,
+  hardware?: HardwareLayout,
+  projectName?: string,
+  options: GenerateOptions = {}
+): GeneratedProject {
+  return generateEsp32Project(ESP32_PROFILES.esp32_s3_devkitc, graph, hardware, projectName, options)
 }

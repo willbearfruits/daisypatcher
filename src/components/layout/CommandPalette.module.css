@@ -192,6 +192,32 @@
   letter-spacing: 0.12em;
 }
 
+/* Keycap for a command's shortcut — the palette is where you look one up. */
+.rowKey {
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/*
+ * Unavailable commands stay listed rather than being filtered out: "Flash
+ * device" missing entirely reads as "this app cannot flash", whereas a
+ * dimmed row reads as "not right now", which is the truth.
+ */
+.rowDisabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rowDisabled.rowActive {
+  background: transparent;
+}
+
 .supportDot {
   width: 6px;
   height: 6px;

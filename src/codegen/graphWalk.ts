@@ -106,6 +106,97 @@ export function topoSort(
   return { order, cycleNodes }
 }
 
+/**
+ * Names declared at the OUTERMOST level of an emitted block.
+ *
+ * Depth matters and is the entire point. The bug this exists to catch is a
+ * declaration that is present but nested:
+ *
+ *     {                       // scope opened for local-name isolation
+ *         float node_out;     // dies here
+ *         ...
+ *     }
+ *     // node_out is gone; every downstream node fails to compile
+ *
+ * A flat "does the name appear in a declaration anywhere" search calls that
+ * correct, which is exactly the blind spot that let it ship. So we track
+ * brace depth as we scan and only accept declarations at depth zero.
+ *
+ * Line-based rather than character-based because every declaration these
+ * emitters produce is a single line; a declaration split across lines would
+ * be missed, and being missed means a false "not declared" warning, which
+ * is the safe direction to be wrong in.
+ */
+function declaredAtBlockScope(src: string): Set<string> {
+  const out = new Set<string>()
+  // A declaration cannot span a `;` or a brace, so the character class is
+  // what keeps one statement from bleeding into the next.
+  const DECL = /\b(?:float|double|int|bool|uint\d+_t|int\d+_t)\b([^;{}]*);/g
+  let depth = 0
+
+  for (const line of src.split('\n')) {
+    if (depth === 0) {
+      DECL.lastIndex = 0
+      for (const m of line.matchAll(DECL)) {
+        for (const part of m[1].split(',')) {
+          const name = part.trim().split(/[\s=[(]/)[0]?.replace(/^[*&]+/, '')
+          if (name) out.add(name)
+        }
+      }
+    }
+    for (const ch of line) {
+      if (ch === '{') depth++
+      else if (ch === '}') depth = Math.max(0, depth - 1)
+    }
+  }
+  return out
+}
+
+/**
+ * Every output socket a node's process block assigns must also DECLARE its
+ * variable at that block's top level.
+ *
+ * Thirteen ESP32 emitters once wrapped their body in braces for local-name
+ * isolation and left the output declared inside them, so the variable died
+ * at the closing brace and every downstream node failed to compile. The
+ * snapshot tests never noticed — the emitted text was stable, it was just
+ * wrong — and the compile harness misses it too whenever the offending
+ * socket is a node's *secondary* output, because the minimal test graph only
+ * ever wires the first one.
+ *
+ * So this is the always-on version: it runs on every generate and reports
+ * into the file's warning header. Shared by both backends because the bug
+ * class is shared by both emitter tables.
+ *
+ * Declarations are parsed rather than pattern-matched, because the real
+ * emitters use the multi-declarator form (`float left, right;`) as often as
+ * the single one, and a naive `float\\s+<name>` check calls every one of
+ * those a bug.
+ */
+export function auditOutputDecls(
+  node: NodeInstance,
+  emitted: string,
+  outputVar: (nodeId: string, socketId: string) => string,
+  warn: (msg: string) => void
+): void {
+  const outputs = NODE_DEFINITIONS[node.kind]?.outputs ?? []
+  if (outputs.length === 0 || !emitted) return
+
+  const declared = declaredAtBlockScope(emitted)
+
+  for (const sock of outputs) {
+    const name = outputVar(node.id, sock.id)
+    // Only complain about outputs the emitter actually produces; plenty of
+    // nodes legitimately leave a socket unwritten.
+    if (!emitted.includes(name)) continue
+    if (declared.has(name)) continue
+    warn(
+      `${node.kind} ${node.id}: output "${sock.id}" is assigned but never declared ` +
+        `at block scope — check for a stray brace around the emitter body`
+    )
+  }
+}
+
 export function validateGraph(graph: AudioGraph): string[] {
   const warnings: string[] = []
   const seen = new Set<string>()

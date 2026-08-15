@@ -1,0 +1,291 @@
+{
+  "dpatch": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "oscillator_1",
+        "kind": "oscillator",
+        "position": {
+          "x": -720,
+          "y": 0
+        },
+        "params": {
+          "frequency": 110,
+          "amplitude": 0.7,
+          "waveform": "triangle"
+        }
+      },
+      {
+        "id": "code_2",
+        "kind": "code",
+        "position": {
+          "x": -440,
+          "y": -60
+        },
+        "params": {
+          "source": "// Wavefolder — reflect at +/-1, three times.\n// p1 = drive, p2 = output level\nfloat x = a * p1;\nif (x > 1) { x = 2 - x; }\nif (x < -1) { x = -2 - x; }\nif (x > 1) { x = 2 - x; }\nif (x < -1) { x = -2 - x; }\nif (x > 1) { x = 2 - x; }\nif (x < -1) { x = -2 - x; }\nout = x * p2;",
+          "p1": 3.2,
+          "p2": 0.6,
+          "p3": 0,
+          "p4": 0
+        }
+      },
+      {
+        "id": "code_3",
+        "kind": "code",
+        "position": {
+          "x": -180,
+          "y": -60
+        },
+        "params": {
+          "source": "// Bitcrush + downsample.\n// p1 = bit depth, p2 = hold length in samples\nstate float held = 0;\nstate float count = 0;\n\ncount = count + 1;\nif (count >= p2) {\n  count = 0;\n  float steps = pow(2, p1);\n  held = round(a * steps) / steps;\n}\nout = held;",
+          "p1": 6,
+          "p2": 8,
+          "p3": 0,
+          "p4": 0
+        }
+      },
+      {
+        "id": "filter_svf_4",
+        "kind": "filter_svf",
+        "position": {
+          "x": 80,
+          "y": -60
+        },
+        "params": {
+          "frequency": 3200,
+          "resonance": 0.2
+        }
+      },
+      {
+        "id": "reverb_5",
+        "kind": "reverb",
+        "position": {
+          "x": 340,
+          "y": -60
+        },
+        "params": {
+          "size": 0.5,
+          "damp": 0.5,
+          "mix": 0.25
+        }
+      },
+      {
+        "id": "audio_output_6",
+        "kind": "audio_output",
+        "position": {
+          "x": 600,
+          "y": -60
+        },
+        "params": {}
+      },
+      {
+        "id": "knob_in_7",
+        "kind": "knob_in",
+        "position": {
+          "x": -720,
+          "y": 220
+        },
+        "params": {
+          "bindingId": "hw_pot_1",
+          "channel": "1",
+          "value": 0.35,
+          "min": 1,
+          "max": 8
+        }
+      },
+      {
+        "id": "knob_in_8",
+        "kind": "knob_in",
+        "position": {
+          "x": -720,
+          "y": 320
+        },
+        "params": {
+          "bindingId": "hw_pot_2",
+          "channel": "2",
+          "value": 0.6,
+          "min": 0.1,
+          "max": 1
+        }
+      },
+      {
+        "id": "knob_in_9",
+        "kind": "knob_in",
+        "position": {
+          "x": -720,
+          "y": 420
+        },
+        "params": {
+          "bindingId": "hw_pot_3",
+          "channel": "3",
+          "value": 0.45,
+          "min": 1,
+          "max": 12
+        }
+      },
+      {
+        "id": "knob_in_10",
+        "kind": "knob_in",
+        "position": {
+          "x": -720,
+          "y": 520
+        },
+        "params": {
+          "bindingId": "hw_pot_4",
+          "channel": "4",
+          "value": 0.5,
+          "min": 200,
+          "max": 9000
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": {
+          "nodeId": "oscillator_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "code_2",
+          "socketId": "a"
+        }
+      },
+      {
+        "id": "c2",
+        "from": {
+          "nodeId": "code_2",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "code_3",
+          "socketId": "a"
+        }
+      },
+      {
+        "id": "c3",
+        "from": {
+          "nodeId": "code_3",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_4",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c4",
+        "from": {
+          "nodeId": "filter_svf_4",
+          "socketId": "lp"
+        },
+        "to": {
+          "nodeId": "reverb_5",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c5",
+        "from": {
+          "nodeId": "reverb_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_6",
+          "socketId": "left"
+        }
+      },
+      {
+        "id": "c6",
+        "from": {
+          "nodeId": "reverb_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_6",
+          "socketId": "right"
+        }
+      },
+      {
+        "id": "c7",
+        "from": {
+          "nodeId": "knob_in_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_4",
+          "socketId": "cv_cutoff"
+        }
+      }
+    ],
+    "meta": {
+      "name": "daisy-code-node",
+      "sampleRate": 48000,
+      "blockSize": 48
+    }
+  },
+  "hardware": {
+    "board": "daisy_seed",
+    "components": [
+      {
+        "id": "hw_pot_1",
+        "kind": "pot",
+        "label": "Drive",
+        "position": {
+          "x": 120,
+          "y": 600
+        },
+        "pins": {
+          "wiper": "D15"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_2",
+        "kind": "pot",
+        "label": "Fold",
+        "position": {
+          "x": 220,
+          "y": 600
+        },
+        "pins": {
+          "wiper": "D16"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_3",
+        "kind": "pot",
+        "label": "Bits",
+        "position": {
+          "x": 320,
+          "y": 600
+        },
+        "pins": {
+          "wiper": "D17"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_4",
+        "kind": "pot",
+        "label": "Tone",
+        "position": {
+          "x": 420,
+          "y": 600
+        },
+        "pins": {
+          "wiper": "D18"
+        },
+        "config": {}
+      }
+    ],
+    "meta": {
+      "name": "daisy-code-node"
+    }
+  },
+  "layout": {
+    "daisyFlashMode": "qspi"
+  }
+}

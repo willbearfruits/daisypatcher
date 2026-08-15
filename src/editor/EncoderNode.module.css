@@ -1,0 +1,189 @@
+/* Encoder node body. Tokens only. */
+
+.node {
+  width: 210px;
+  background: var(--dp-node-bg);
+  border: 1px solid var(--dp-node-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  font-family: var(--dp-font-sans);
+  user-select: none;
+  overflow: hidden;
+}
+
+.selected {
+  border-color: var(--dp-node-selected-ring);
+  box-shadow: var(--dp-shadow-glow);
+}
+
+.collapsed {
+  width: 150px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2) var(--dp-space-3);
+  background: var(--dp-node-header-bg);
+  color: var(--dp-node-header-text);
+  cursor: grab;
+}
+
+.title {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-3);
+  padding: var(--dp-space-3);
+}
+
+.dialRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-3);
+}
+
+.dial {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.dialFace {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--dp-surface-sunken);
+  border: 2px solid var(--dp-border-strong);
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.dial:hover .dialFace {
+  border-color: var(--dp-accent);
+}
+
+/* Indicator line, rotated to the current position. */
+.dialMark {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.dialMark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 5px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--dp-accent);
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.value {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-md);
+  color: var(--dp-text);
+}
+
+.hint {
+  font-family: var(--dp-font-mono);
+  font-size: 9px;
+  color: var(--dp-text-dim);
+  letter-spacing: 0.08em;
+}
+
+.controls {
+  display: flex;
+  gap: var(--dp-space-2);
+  align-items: stretch;
+}
+
+.turnBtn,
+.pressBtn {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  cursor: pointer;
+  padding: 6px 0;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease),
+    background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.turnBtn {
+  flex: 0 0 40px;
+  font-size: var(--dp-fs-md);
+}
+
+.pressBtn {
+  flex: 1 1 auto;
+  letter-spacing: 0.14em;
+  font-size: var(--dp-fs-xs);
+}
+
+.turnBtn:hover,
+.pressBtn:hover {
+  color: var(--dp-text);
+  border-color: var(--dp-border-strong);
+}
+
+.pressBtnDown {
+  color: var(--dp-bg);
+  background: var(--dp-accent);
+  border-color: var(--dp-accent);
+}
+
+.sockets {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--dp-space-1);
+  border-top: 1px solid var(--dp-border);
+  padding-top: var(--dp-space-2);
+}
+
+.socketRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+}
+
+.socketLabel {
+  font-family: var(--dp-font-mono);
+  font-size: 9px;
+  color: var(--dp-text-dim);
+}
+
+.collapsedSockets {
+  position: relative;
+  height: 0;
+}
+
+.collapsedOut {
+  position: absolute;
+  right: -8px;
+}

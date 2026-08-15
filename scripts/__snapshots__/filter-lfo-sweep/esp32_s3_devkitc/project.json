@@ -1,0 +1,103 @@
+{
+  "nodes": [
+    {
+      "id": "osc1",
+      "kind": "oscillator",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "params": {
+        "frequency": 220,
+        "amplitude": 0.5,
+        "waveform": "sawtooth"
+      }
+    },
+    {
+      "id": "lfo1",
+      "kind": "lfo",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "params": {
+        "frequency": 1,
+        "depth": 1,
+        "offset": 0,
+        "waveform": "sine"
+      }
+    },
+    {
+      "id": "svf1",
+      "kind": "filter_svf",
+      "position": {
+        "x": 300,
+        "y": 0
+      },
+      "params": {
+        "frequency": 1000,
+        "resonance": 0.2
+      }
+    },
+    {
+      "id": "out1",
+      "kind": "audio_output",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": {
+        "nodeId": "osc1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "svf1",
+        "socketId": "in"
+      }
+    },
+    {
+      "id": "c2",
+      "from": {
+        "nodeId": "lfo1",
+        "socketId": "out"
+      },
+      "to": {
+        "nodeId": "svf1",
+        "socketId": "cv_cutoff"
+      }
+    },
+    {
+      "id": "c3",
+      "from": {
+        "nodeId": "svf1",
+        "socketId": "lp"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "left"
+      }
+    },
+    {
+      "id": "c4",
+      "from": {
+        "nodeId": "svf1",
+        "socketId": "lp"
+      },
+      "to": {
+        "nodeId": "out1",
+        "socketId": "right"
+      }
+    }
+  ],
+  "meta": {
+    "name": "filter_lfo_sweep",
+    "sampleRate": 48000,
+    "blockSize": 48
+  }
+}

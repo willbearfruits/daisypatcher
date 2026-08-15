@@ -9,12 +9,42 @@
   inset: 0;
   overflow: hidden;
   background: var(--dp-bg);
+  color: var(--dp-text);
+  font-family: var(--dp-font-sans);
+  /* Fallbacks; the editor overwrites these from the area transform. */
+  --dp-grid-step: 20px;
+  --dp-grid-x: 0px;
+  --dp-grid-y: 0px;
+}
+
+/*
+ * The grid tracks pan and zoom because its step and phase come from the
+ * area transform, written as custom properties on every translate/zoom.
+ * A fixed background-size (which is what this used to be) drifts away from
+ * the nodes the moment you pan, which makes it decorative rather than
+ * something you can line anything up against.
+ */
+.dp-rete-root[data-dp-grid] {
   background-image:
     linear-gradient(var(--dp-bg-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--dp-bg-grid) 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: var(--dp-text);
-  font-family: var(--dp-font-sans);
+  background-size: var(--dp-grid-step) var(--dp-grid-step);
+  background-position: var(--dp-grid-x) var(--dp-grid-y);
+}
+
+/*
+ * Rubber-band selection rectangle. Positioned in container pixels by the
+ * editor. The `!important` is not decoration: the rule below forces every
+ * direct child of the canvas transparent to defeat Rete's inline styles,
+ * and this element is one of those children.
+ */
+.dp-rete-root > div.dp-marquee {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+  border: 1px solid var(--dp-accent);
+  border-radius: var(--dp-radius-xs);
+  background: var(--dp-accent-muted) !important;
 }
 
 .dp-rete-root::after {

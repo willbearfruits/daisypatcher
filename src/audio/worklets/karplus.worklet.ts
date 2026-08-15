@@ -21,7 +21,7 @@ type Retrigger = 'manual' | '1s' | '500ms' | '250ms'
 class KarplusProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors(): AudioParamDescriptor[] {
     return [
-      { name: 'frequency', defaultValue: 220, minValue: 20, maxValue: 2000, automationRate: 'k-rate' },
+      { name: 'frequency', defaultValue: 220, minValue: 50, maxValue: 2000, automationRate: 'k-rate' },
       { name: 'damping', defaultValue: 0.5, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
       { name: 'feedback', defaultValue: 0.99, minValue: 0.9, maxValue: 0.999, automationRate: 'k-rate' }
     ]
@@ -105,7 +105,11 @@ class KarplusProcessor extends AudioWorkletProcessor {
       let freq = sidebarFreq
       if (pitchCv) {
         freq = pitchCv[i]
-        if (freq < 20) freq = 20
+        // 50 Hz floor: DaisySP's String has a 1024-sample delay line and
+        // cannot render below ~47 Hz at 48 kHz. Matching the limit here
+        // keeps the app from playing a note the device answers with
+        // silence.
+        if (freq < 50) freq = 50
         else if (freq > 2000) freq = 2000
       }
       let feedback = sidebarFeedback

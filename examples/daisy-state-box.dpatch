@@ -1,0 +1,527 @@
+{
+  "dpatch": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "button_1",
+        "kind": "button",
+        "position": {
+          "x": -900,
+          "y": 160
+        },
+        "params": {
+          "bindingId": "hw_button_1",
+          "mode": "momentary",
+          "value": 0
+        }
+      },
+      {
+        "id": "timer_2",
+        "kind": "timer",
+        "position": {
+          "x": -700,
+          "y": 160
+        },
+        "params": {
+          "time": 25,
+          "mode": "gateoff",
+          "retrigger": "restart"
+        }
+      },
+      {
+        "id": "edge_3",
+        "kind": "edge",
+        "position": {
+          "x": -520,
+          "y": 160
+        },
+        "params": {
+          "mode": "rising"
+        }
+      },
+      {
+        "id": "timer_4",
+        "kind": "timer",
+        "position": {
+          "x": -700,
+          "y": 300
+        },
+        "params": {
+          "time": 1000,
+          "mode": "delay",
+          "retrigger": "restart"
+        }
+      },
+      {
+        "id": "state_machine_5",
+        "kind": "state_machine",
+        "position": {
+          "x": -320,
+          "y": 200
+        },
+        "params": {
+          "states": 4,
+          "mode": "wrap"
+        }
+      },
+      {
+        "id": "clock_6",
+        "kind": "clock",
+        "position": {
+          "x": -900,
+          "y": -420
+        },
+        "params": {
+          "bpm": 110,
+          "pulse_width": 0.1
+        }
+      },
+      {
+        "id": "oscillator_7",
+        "kind": "oscillator",
+        "position": {
+          "x": -320,
+          "y": -520
+        },
+        "params": {
+          "frequency": 110,
+          "amplitude": 0.5,
+          "waveform": "sawtooth"
+        }
+      },
+      {
+        "id": "karplus_8",
+        "kind": "karplus",
+        "position": {
+          "x": -320,
+          "y": -380
+        },
+        "params": {
+          "frequency": 220,
+          "damping": 0.4,
+          "feedback": 0.99,
+          "retrigger": "manual"
+        }
+      },
+      {
+        "id": "drum_kick_9",
+        "kind": "drum_kick",
+        "position": {
+          "x": -320,
+          "y": -240
+        },
+        "params": {
+          "tune": 55,
+          "decay": 0.5,
+          "punch": 0.6,
+          "sweep": 0.6
+        }
+      },
+      {
+        "id": "fm2_10",
+        "kind": "fm2",
+        "position": {
+          "x": -320,
+          "y": -100
+        },
+        "params": {
+          "frequency": 220,
+          "mod_ratio": 2.5,
+          "mod_index": 4,
+          "carrier_amp": 0.5
+        }
+      },
+      {
+        "id": "select_11",
+        "kind": "select",
+        "position": {
+          "x": -60,
+          "y": -300
+        },
+        "params": {
+          "index": 0,
+          "mode": "switch"
+        }
+      },
+      {
+        "id": "knob_in_12",
+        "kind": "knob_in",
+        "position": {
+          "x": -900,
+          "y": -180
+        },
+        "params": {
+          "bindingId": "hw_pot_2",
+          "channel": "1",
+          "value": 0.5,
+          "min": 0,
+          "max": 1
+        }
+      },
+      {
+        "id": "knob_in_13",
+        "kind": "knob_in",
+        "position": {
+          "x": -900,
+          "y": -40
+        },
+        "params": {
+          "bindingId": "hw_pot_3",
+          "channel": "1",
+          "value": 0.5,
+          "min": 0,
+          "max": 1
+        }
+      },
+      {
+        "id": "scale_14",
+        "kind": "scale",
+        "position": {
+          "x": -700,
+          "y": -180
+        },
+        "params": {
+          "scale": 5800,
+          "offset": 200
+        }
+      },
+      {
+        "id": "filter_svf_15",
+        "kind": "filter_svf",
+        "position": {
+          "x": 160,
+          "y": -300
+        },
+        "params": {
+          "frequency": 2000,
+          "resonance": 0.25
+        }
+      },
+      {
+        "id": "reverb_16",
+        "kind": "reverb",
+        "position": {
+          "x": 380,
+          "y": -300
+        },
+        "params": {
+          "size": 0.6,
+          "damp": 0.4,
+          "mix": 0.25
+        }
+      },
+      {
+        "id": "audio_output_17",
+        "kind": "audio_output",
+        "position": {
+          "x": 620,
+          "y": -300
+        },
+        "params": {}
+      },
+      {
+        "id": "led_18",
+        "kind": "led",
+        "position": {
+          "x": -60,
+          "y": 200
+        },
+        "params": {
+          "bindingId": "hw_led_4",
+          "threshold": 0.5,
+          "mode": "gate"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": {
+          "nodeId": "button_1",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "timer_2",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c2",
+        "from": {
+          "nodeId": "timer_2",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "edge_3",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c3",
+        "from": {
+          "nodeId": "edge_3",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "state_machine_5",
+          "socketId": "next"
+        }
+      },
+      {
+        "id": "c4",
+        "from": {
+          "nodeId": "timer_2",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "timer_4",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c5",
+        "from": {
+          "nodeId": "timer_4",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "state_machine_5",
+          "socketId": "reset"
+        }
+      },
+      {
+        "id": "c6",
+        "from": {
+          "nodeId": "clock_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "karplus_8",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c7",
+        "from": {
+          "nodeId": "clock_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "drum_kick_9",
+          "socketId": "trigger"
+        }
+      },
+      {
+        "id": "c8",
+        "from": {
+          "nodeId": "oscillator_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "select_11",
+          "socketId": "in0"
+        }
+      },
+      {
+        "id": "c9",
+        "from": {
+          "nodeId": "karplus_8",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "select_11",
+          "socketId": "in1"
+        }
+      },
+      {
+        "id": "c10",
+        "from": {
+          "nodeId": "drum_kick_9",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "select_11",
+          "socketId": "in2"
+        }
+      },
+      {
+        "id": "c11",
+        "from": {
+          "nodeId": "fm2_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "select_11",
+          "socketId": "in3"
+        }
+      },
+      {
+        "id": "c12",
+        "from": {
+          "nodeId": "state_machine_5",
+          "socketId": "state"
+        },
+        "to": {
+          "nodeId": "select_11",
+          "socketId": "sel"
+        }
+      },
+      {
+        "id": "c13",
+        "from": {
+          "nodeId": "knob_in_12",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "scale_14",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c14",
+        "from": {
+          "nodeId": "scale_14",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_15",
+          "socketId": "cv_cutoff"
+        }
+      },
+      {
+        "id": "c15",
+        "from": {
+          "nodeId": "select_11",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_15",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c16",
+        "from": {
+          "nodeId": "filter_svf_15",
+          "socketId": "lp"
+        },
+        "to": {
+          "nodeId": "reverb_16",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c17",
+        "from": {
+          "nodeId": "knob_in_13",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "reverb_16",
+          "socketId": "cv_mix"
+        }
+      },
+      {
+        "id": "c18",
+        "from": {
+          "nodeId": "reverb_16",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_17",
+          "socketId": "left"
+        }
+      },
+      {
+        "id": "c19",
+        "from": {
+          "nodeId": "reverb_16",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_17",
+          "socketId": "right"
+        }
+      },
+      {
+        "id": "c20",
+        "from": {
+          "nodeId": "state_machine_5",
+          "socketId": "state"
+        },
+        "to": {
+          "nodeId": "led_18",
+          "socketId": "in"
+        }
+      }
+    ],
+    "meta": {
+      "name": "daisy-state-box",
+      "sampleRate": 48000,
+      "blockSize": 48
+    }
+  },
+  "hardware": {
+    "board": "daisy_seed",
+    "components": [
+      {
+        "id": "hw_button_1",
+        "kind": "button",
+        "label": "MODE",
+        "position": {
+          "x": 40,
+          "y": 250
+        },
+        "pins": {
+          "io": "D0"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_2",
+        "kind": "pot",
+        "label": "TONE",
+        "position": {
+          "x": 40,
+          "y": 60
+        },
+        "pins": {
+          "wiper": "D15"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_3",
+        "kind": "pot",
+        "label": "SPACE",
+        "position": {
+          "x": 130,
+          "y": 60
+        },
+        "pins": {
+          "wiper": "D16"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_led_4",
+        "kind": "led",
+        "label": "MODE",
+        "position": {
+          "x": 130,
+          "y": 250
+        },
+        "pins": {
+          "anode": "D1"
+        },
+        "config": {}
+      }
+    ],
+    "meta": {
+      "name": "daisy-state-box"
+    }
+  },
+  "layout": {
+    "daisyFlashMode": "qspi"
+  }
+}

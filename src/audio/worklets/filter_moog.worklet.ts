@@ -1,13 +1,24 @@
 /// <reference path="./worklet.d.ts" />
 
 /**
- * Moog-style 4-pole ladder lowpass (Stilson/Smith flavor).
- * Four cascaded 1-pole LP stages with negative feedback from stage 4 into the
- * input, scaled by resonance*4. Tanh is applied to the feedback for character
- * and implicit saturation — prevents the ladder from blowing up at high res.
+ * Moog 4-pole ladder lowpass — a port of DaisySP's `MoogLadder`
+ * (Huovilainen's thermal-voltage model, via Csound).
  *
- * Cutoff prewarp: f = 2 * sin(PI * fc / sr), clamped to sr*0.45.
- * CV at input index 1 is per-sample octave scaling; bypassed if no cable.
+ * This used to be a Stilson/Smith ladder: four one-pole stages with
+ * `tanh(s4) * res * 4` fed back. Same family, different filter — the
+ * device runs the nonlinearity INSIDE each stage, scaled by a thermal
+ * voltage of 25 uV, and oversamples 2x per sample. `npm run test:audio`
+ * put the two 36.5% apart on level, and resonance behaviour diverged
+ * faster than that: the whole point of a ladder is what it does near
+ * self-oscillation, which is exactly where two ladders disagree most.
+ *
+ * The coefficient block is recomputed only when cutoff or resonance
+ * changes, as in the original — `oldFreq`/`oldRes` are not an
+ * optimisation carried over for its own sake, they change the output,
+ * because `tune` and `acr` lag by a sample when the knob moves.
+ *
+ * Cutoff CV: `cv_cutoff` (index 2) replaces the sidebar value; the legacy
+ * `freq_cv` (index 1) still applies octave scaling on top.
  *
  * Registered as `'dp-filter-moog'`.
  */
@@ -20,10 +31,31 @@ class FilterMoogProcessor extends AudioWorkletProcessor {
     ]
   }
 
-  private s1 = 0
-  private s2 = 0
-  private s3 = 0
-  private s4 = 0
+  /** `delay_[6]` and `tanhstg_[3]` from the original. */
+  private readonly delay = new Float64Array(6)
+  private readonly tanhstg = new Float64Array(3)
+  private oldFreq = 0
+  private oldRes = -1
+  private oldAcr = 0
+  private oldTune = 0
+
+  /**
+   * `MoogLadder::my_tanh` — piecewise, not `Math.tanh`.
+   *
+   * Below 0.5 it is the identity, above 4 it saturates to +/-1. Those
+   * shortcuts are audible, not just fast: the linear region is what keeps
+   * the ladder's small-signal gain exactly 1.
+   */
+  private myTanh(x: number): number {
+    let sign = 1
+    if (x < 0) {
+      sign = -1
+      x = -x
+    }
+    if (x >= 4) return sign
+    if (x < 0.5) return x * sign
+    return sign * Math.tanh(x)
+  }
 
   constructor(options?: AudioWorkletNodeOptions) {
     super(options)
@@ -55,70 +87,71 @@ class FilterMoogProcessor extends AudioWorkletProcessor {
     const resIsA = resArr.length > 1
 
     const maxFreq = sampleRate * 0.45
+    const THERMAL = 0.000025
 
-    let fCoeff = 0
-    let kCoeff = 0
-    const perSample = hasCv || freqIsA || resIsA || !!cutoffCv || !!resCv
-    if (!perSample) {
-      let freq = freqArr[0]
-      if (freq < 20) freq = 20
-      else if (freq > maxFreq) freq = maxFreq
-      fCoeff = 2 * Math.sin((Math.PI * freq) / sampleRate)
-      if (fCoeff > 1) fCoeff = 1
-      let r = resArr[0]
-      if (r < 0) r = 0
-      else if (r > 1) r = 1
-      kCoeff = r * 4
-    }
-
-    let s1 = this.s1
-    let s2 = this.s2
-    let s3 = this.s3
-    let s4 = this.s4
+    const delay = this.delay
+    const tanhstg = this.tanhstg
+    const stg = [0, 0, 0, 0]
 
     const n = outCh.length
     for (let i = 0; i < n; i++) {
-      const x = inCh ? inCh[i] : 0
+      let x = inCh ? inCh[i] : 0
 
-      let f = fCoeff
-      let k = kCoeff
-      if (perSample) {
-        // cv_cutoff replaces sidebar directly; freq_cv still applies as
-        // octave-scaling on top (legacy behavior).
-        let freq = cutoffCv ? cutoffCv[i] : (freqIsA ? freqArr[i] : freqArr[0])
-        if (hasCv) freq = freq * Math.pow(2, freqCv![i])
-        if (freq < 20) freq = 20
-        else if (freq > maxFreq) freq = maxFreq
-        f = 2 * Math.sin((Math.PI * freq) / sampleRate)
-        if (f > 1) f = 1
-        let r = resCv ? resCv[i] : (resIsA ? resArr[i] : resArr[0])
-        if (r < 0) r = 0
-        else if (r > 1) r = 1
-        k = r * 4
+      // cv_cutoff replaces sidebar directly; freq_cv still applies as
+      // octave-scaling on top (legacy behavior).
+      let freq = cutoffCv ? cutoffCv[i] : freqIsA ? freqArr[i] : freqArr[0]
+      if (hasCv) freq = freq * Math.pow(2, freqCv![i])
+      if (freq < 20) freq = 20
+      else if (freq > maxFreq) freq = maxFreq
+      let res = resCv ? resCv[i] : resIsA ? resArr[i] : resArr[0]
+      if (res < 0) res = 0
+
+      let acr: number
+      let tune: number
+      if (this.oldFreq !== freq || this.oldRes !== res) {
+        const fc = freq / sampleRate
+        const f = 0.5 * fc
+        const fc2 = fc * fc
+        const fc3 = fc2 * fc2
+        const fcr = 1.873 * fc3 + 0.4955 * fc2 - 0.649 * fc + 0.9988
+        acr = -3.9364 * fc2 + 1.8409 * fc + 0.9968
+        tune = (1 - Math.exp(-(2 * Math.PI * f * fcr))) / THERMAL
+        this.oldFreq = freq
+        this.oldRes = res
+        this.oldAcr = acr
+        this.oldTune = tune
+      } else {
+        res = this.oldRes
+        acr = this.oldAcr
+        tune = this.oldTune
       }
 
-      // Feedback from 4th stage, soft-clipped via tanh for stability/character.
-      const fb = Math.tanh(s4) * k
-      const input = x - fb
+      const res4 = 4 * res * acr
 
-      s1 = s1 + f * (input - s1)
-      s2 = s2 + f * (s1 - s2)
-      s3 = s3 + f * (s2 - s3)
-      s4 = s4 + f * (s3 - s4)
+      // 2x oversampled, as in the original.
+      for (let j = 0; j < 2; j++) {
+        x -= res4 * delay[5]
+        delay[0] = stg[0] = delay[0] + tune * (this.myTanh(x * THERMAL) - tanhstg[0])
+        for (let k = 1; k < 4; k++) {
+          x = stg[k - 1]
+          tanhstg[k - 1] = this.myTanh(x * THERMAL)
+          stg[k] =
+            delay[k] +
+            tune * (tanhstg[k - 1] - (k !== 3 ? tanhstg[k] : this.myTanh(delay[k] * THERMAL)))
+          delay[k] = stg[k]
+        }
+        delay[5] = (stg[3] + delay[4]) * 0.5
+        delay[4] = stg[3]
+      }
 
-      // NaN / runaway guards.
-      if (!isFinite(s1) || s1 > 100 || s1 < -100) s1 = 0
-      if (!isFinite(s2) || s2 > 100 || s2 < -100) s2 = 0
-      if (!isFinite(s3) || s3 > 100 || s3 < -100) s3 = 0
-      if (!isFinite(s4) || s4 > 100 || s4 < -100) s4 = 0
-
-      outCh[i] = s4
+      let y = delay[5]
+      if (!isFinite(y) || y > 100 || y < -100) {
+        y = 0
+        delay.fill(0)
+        tanhstg.fill(0)
+      }
+      outCh[i] = y
     }
-
-    this.s1 = s1
-    this.s2 = s2
-    this.s3 = s3
-    this.s4 = s4
 
     for (let c = 1; c < output.length; c++) output[c].set(outCh)
     return true

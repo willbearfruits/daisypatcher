@@ -1,0 +1,177 @@
+.root {
+  position: absolute;
+  right: var(--dp-space-3);
+  bottom: calc(var(--dp-statusbar-h) + var(--dp-space-3));
+  width: 360px;
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-3);
+  background: var(--dp-surface-elevated);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  z-index: var(--dp-z-overlay);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+}
+
+.title {
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.08em;
+  color: var(--dp-text-dim);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.iconBtn,
+.btn,
+.primary {
+  font: inherit;
+  font-size: var(--dp-fs-xs);
+  padding: 3px var(--dp-space-2);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text);
+  cursor: pointer;
+  transition: border-color var(--dp-motion-fast) var(--dp-ease),
+    color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.primary {
+  border-color: var(--dp-accent);
+  color: var(--dp-accent);
+}
+
+.iconBtn:hover,
+.btn:hover,
+.primary:hover:not(:disabled) {
+  border-color: var(--dp-accent);
+  color: var(--dp-accent);
+}
+
+.primary:disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  background: var(--dp-surface-sunken);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fieldLabel {
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+}
+
+.select,
+.input,
+.input2 {
+  font: inherit;
+  font-size: var(--dp-fs-sm);
+  width: 100%;
+  padding: 4px var(--dp-space-2);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text);
+}
+
+.input2 {
+  font-family: var(--dp-font-mono);
+  resize: vertical;
+  line-height: var(--dp-lh);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+}
+
+.hint {
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  line-height: 1.4;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--dp-fs-xs);
+  line-height: 1.45;
+  color: var(--dp-text-dim);
+}
+
+/* Errors are pre-formatted: they carry model output and validation lists
+   whose line breaks are the readable part. */
+.error {
+  margin: 0;
+  padding: var(--dp-space-2);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.45;
+  color: var(--dp-danger);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.proposal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  background: var(--dp-surface-sunken);
+}
+
+.summary {
+  margin: 0;
+  font-size: var(--dp-fs-sm);
+  line-height: 1.45;
+  color: var(--dp-text);
+}
+
+.list,
+.warnList {
+  margin: 0;
+  padding-left: var(--dp-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.4;
+  color: var(--dp-text-muted);
+}
+
+.warnList {
+  color: var(--dp-warning);
+}

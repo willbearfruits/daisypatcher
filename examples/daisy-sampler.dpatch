@@ -1,0 +1,483 @@
+{
+  "dpatch": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "audio_in_1",
+        "kind": "audio_in",
+        "position": {
+          "x": -700,
+          "y": 0
+        },
+        "params": {}
+      },
+      {
+        "id": "gate_in_2",
+        "kind": "gate_in",
+        "position": {
+          "x": -700,
+          "y": 160
+        },
+        "params": {
+          "bindingId": "hw_gate_jack_5",
+          "channel": "1",
+          "value": 0
+        }
+      },
+      {
+        "id": "freeze_3",
+        "kind": "freeze",
+        "position": {
+          "x": -460,
+          "y": 40
+        },
+        "params": {
+          "buffer_ms": 2000
+        }
+      },
+      {
+        "id": "granulator_4",
+        "kind": "granulator",
+        "position": {
+          "x": -200,
+          "y": 40
+        },
+        "params": {
+          "grain_size": 120,
+          "density": 12,
+          "pitch": 0,
+          "jitter": 0.4,
+          "mix": 1
+        }
+      },
+      {
+        "id": "knob_in_5",
+        "kind": "knob_in",
+        "position": {
+          "x": -700,
+          "y": 300
+        },
+        "params": {
+          "bindingId": "hw_pot_1",
+          "channel": "1",
+          "value": 0.4,
+          "min": 20,
+          "max": 200
+        }
+      },
+      {
+        "id": "knob_in_6",
+        "kind": "knob_in",
+        "position": {
+          "x": -700,
+          "y": 420
+        },
+        "params": {
+          "bindingId": "hw_pot_2",
+          "channel": "2",
+          "value": 0.35,
+          "min": 1,
+          "max": 28
+        }
+      },
+      {
+        "id": "knob_in_7",
+        "kind": "knob_in",
+        "position": {
+          "x": -700,
+          "y": 540
+        },
+        "params": {
+          "bindingId": "hw_pot_3",
+          "channel": "3",
+          "value": 0.5,
+          "min": -12,
+          "max": 12
+        }
+      },
+      {
+        "id": "knob_in_8",
+        "kind": "knob_in",
+        "position": {
+          "x": -700,
+          "y": 660
+        },
+        "params": {
+          "bindingId": "hw_pot_4",
+          "channel": "4",
+          "value": 0.6,
+          "min": 120,
+          "max": 9000
+        }
+      },
+      {
+        "id": "filter_svf_9",
+        "kind": "filter_svf",
+        "position": {
+          "x": 60,
+          "y": 40
+        },
+        "params": {
+          "frequency": 2200,
+          "resonance": 0.25
+        }
+      },
+      {
+        "id": "reverb_10",
+        "kind": "reverb",
+        "position": {
+          "x": 320,
+          "y": 40
+        },
+        "params": {
+          "size": 0.6,
+          "damp": 0.4,
+          "mix": 0.35
+        }
+      },
+      {
+        "id": "audio_output_11",
+        "kind": "audio_output",
+        "position": {
+          "x": 600,
+          "y": 40
+        },
+        "params": {}
+      },
+      {
+        "id": "envelope_follower_12",
+        "kind": "envelope_follower",
+        "position": {
+          "x": 320,
+          "y": 220
+        },
+        "params": {
+          "attack": 0.01,
+          "release": 0.1
+        }
+      },
+      {
+        "id": "led_13",
+        "kind": "led",
+        "position": {
+          "x": 600,
+          "y": 220
+        },
+        "params": {
+          "bindingId": "hw_led_6",
+          "threshold": 0.5,
+          "mode": "pwm"
+        }
+      },
+      {
+        "id": "oled_14",
+        "kind": "oled",
+        "position": {
+          "x": 60,
+          "y": 300
+        },
+        "params": {
+          "bindingId": "hw_oled_ssd1306_7",
+          "elements": "[{\"id\":\"el_1433862048\",\"kind\":\"text\",\"x\":0,\"y\":0,\"text\":\"SAMPLER\",\"size\":1},{\"id\":\"el_126013596\",\"kind\":\"value\",\"x\":0,\"y\":14,\"binding\":\"a\",\"decimals\":0,\"unit\":\"ms\"},{\"id\":\"el_2083421856\",\"kind\":\"value\",\"x\":64,\"y\":14,\"binding\":\"b\",\"decimals\":1,\"unit\":\"/s\"},{\"id\":\"el_593145635\",\"kind\":\"value\",\"x\":0,\"y\":26,\"binding\":\"c\",\"decimals\":1,\"unit\":\"st\"},{\"id\":\"el_1695254287\",\"kind\":\"meter\",\"x\":0,\"y\":40,\"width\":128,\"height\":10,\"binding\":\"d\"},{\"id\":\"el_95611364\",\"kind\":\"line\",\"x\":0,\"y\":11,\"x2\":127,\"y2\":11}]"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": {
+          "nodeId": "audio_in_1",
+          "socketId": "left"
+        },
+        "to": {
+          "nodeId": "freeze_3",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c2",
+        "from": {
+          "nodeId": "gate_in_2",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "freeze_3",
+          "socketId": "gate"
+        }
+      },
+      {
+        "id": "c3",
+        "from": {
+          "nodeId": "freeze_3",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "granulator_4",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c4",
+        "from": {
+          "nodeId": "knob_in_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "granulator_4",
+          "socketId": "cv_grain_size"
+        }
+      },
+      {
+        "id": "c5",
+        "from": {
+          "nodeId": "knob_in_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "granulator_4",
+          "socketId": "cv_density"
+        }
+      },
+      {
+        "id": "c6",
+        "from": {
+          "nodeId": "knob_in_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "granulator_4",
+          "socketId": "cv_pitch"
+        }
+      },
+      {
+        "id": "c7",
+        "from": {
+          "nodeId": "granulator_4",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_9",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c8",
+        "from": {
+          "nodeId": "knob_in_8",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "filter_svf_9",
+          "socketId": "cv_cutoff"
+        }
+      },
+      {
+        "id": "c9",
+        "from": {
+          "nodeId": "filter_svf_9",
+          "socketId": "lp"
+        },
+        "to": {
+          "nodeId": "reverb_10",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c10",
+        "from": {
+          "nodeId": "reverb_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_11",
+          "socketId": "left"
+        }
+      },
+      {
+        "id": "c11",
+        "from": {
+          "nodeId": "reverb_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "audio_output_11",
+          "socketId": "right"
+        }
+      },
+      {
+        "id": "c12",
+        "from": {
+          "nodeId": "reverb_10",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "envelope_follower_12",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c13",
+        "from": {
+          "nodeId": "envelope_follower_12",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "led_13",
+          "socketId": "in"
+        }
+      },
+      {
+        "id": "c14",
+        "from": {
+          "nodeId": "knob_in_5",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oled_14",
+          "socketId": "a"
+        }
+      },
+      {
+        "id": "c15",
+        "from": {
+          "nodeId": "knob_in_6",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oled_14",
+          "socketId": "b"
+        }
+      },
+      {
+        "id": "c16",
+        "from": {
+          "nodeId": "knob_in_7",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oled_14",
+          "socketId": "c"
+        }
+      },
+      {
+        "id": "c17",
+        "from": {
+          "nodeId": "envelope_follower_12",
+          "socketId": "out"
+        },
+        "to": {
+          "nodeId": "oled_14",
+          "socketId": "d"
+        }
+      }
+    ],
+    "meta": {
+      "name": "daisy-sampler",
+      "sampleRate": 48000,
+      "blockSize": 48
+    }
+  },
+  "hardware": {
+    "board": "daisy_seed",
+    "components": [
+      {
+        "id": "hw_pot_1",
+        "kind": "pot",
+        "label": "Grain",
+        "position": {
+          "x": 120,
+          "y": 620
+        },
+        "pins": {
+          "wiper": "D15"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_2",
+        "kind": "pot",
+        "label": "Density",
+        "position": {
+          "x": 220,
+          "y": 620
+        },
+        "pins": {
+          "wiper": "D16"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_3",
+        "kind": "pot",
+        "label": "Pitch",
+        "position": {
+          "x": 320,
+          "y": 620
+        },
+        "pins": {
+          "wiper": "D17"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_pot_4",
+        "kind": "pot",
+        "label": "Cutoff",
+        "position": {
+          "x": 420,
+          "y": 620
+        },
+        "pins": {
+          "wiper": "D18"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_gate_jack_5",
+        "kind": "gate_jack",
+        "label": "Capture",
+        "position": {
+          "x": 120,
+          "y": 740
+        },
+        "pins": {
+          "io": "D0"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_led_6",
+        "kind": "led",
+        "label": "Level",
+        "position": {
+          "x": 520,
+          "y": 620
+        },
+        "pins": {
+          "anode": "D1"
+        },
+        "config": {}
+      },
+      {
+        "id": "hw_oled_ssd1306_7",
+        "kind": "oled_ssd1306",
+        "label": "Display",
+        "position": {
+          "x": 260,
+          "y": 460
+        },
+        "pins": {
+          "sda": "D3",
+          "scl": "D11"
+        },
+        "config": {}
+      }
+    ],
+    "meta": {
+      "name": "daisy-sampler"
+    }
+  },
+  "layout": {
+    "daisyFlashMode": "qspi"
+  }
+}

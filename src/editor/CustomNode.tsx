@@ -118,7 +118,19 @@ export function useHeaderDoubleClick(nodeId: string): (ev: React.MouseEvent) => 
       const target = ev.target as HTMLElement | null
       if (target && target.closest('button, input, select, textarea')) return
       ev.stopPropagation()
-      useEditorStore.getState().toggleCollapsed(nodeId)
+      /*
+       * On a subpatch or a poly, double-click means GO IN. Collapsing the box that
+       * represents a whole level would be the less useful of the two
+       * meanings, and entering is the gesture people already expect from
+       * every other nested editor.
+       */
+      const st = useEditorStore.getState()
+      const node = st.graph.nodes.find((n) => n.id === nodeId)
+      if (node?.kind === 'subpatch' || node?.kind === 'poly') {
+        st.enterSubpatch(nodeId)
+        return
+      }
+      st.toggleCollapsed(nodeId)
     },
     [nodeId]
   )

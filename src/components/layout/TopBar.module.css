@@ -113,6 +113,20 @@
 }
 
 /*
+ * Target segments sit in the same centre column as the view switcher, and
+ * that column is `auto` — so with four boards the group grew wide enough
+ * to run into the filename and theme picker at ~1400px. Tighter tracking
+ * and padding buy the room back without shrinking the view tabs, which
+ * are the more frequently used control.
+ */
+.targetSeg {
+  padding-left: 6px;
+  padding-right: 6px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/*
  * Flash-mode segmented control — leading "FLASH" tag anchors the trio
  * so it doesn't read as just "INT/QSPI/SRAM" in isolation.
  */

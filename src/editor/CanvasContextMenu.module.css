@@ -1,0 +1,99 @@
+/*
+ * Right-click menu. Positioned in viewport coordinates by the component,
+ * so it floats above both the canvas and the shell rails.
+ */
+
+.menu {
+  position: fixed;
+  z-index: var(--dp-z-modal);
+  display: flex;
+  flex-direction: column;
+  padding: var(--dp-space-1);
+  background: var(--dp-surface-elevated);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  font-family: var(--dp-font-sans);
+  animation: menuIn var(--dp-motion-fast) var(--dp-ease-out);
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  width: 100%;
+  padding: 6px var(--dp-space-2);
+  background: none;
+  border: 0;
+  border-radius: var(--dp-radius-sm);
+  color: var(--dp-text);
+  font: inherit;
+  font-size: var(--dp-fs-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dp-motion-fast) var(--dp-ease);
+}
+
+.item:hover:not(:disabled) {
+  background: var(--dp-surface-sunken);
+}
+
+.item:focus-visible {
+  outline: 1px solid var(--dp-accent);
+  outline-offset: -1px;
+}
+
+.item:disabled {
+  color: var(--dp-text-dim);
+  cursor: default;
+}
+
+.danger:hover:not(:disabled) {
+  color: var(--dp-danger);
+}
+
+/* Fixed gutter so labels line up whether or not a row is checkable. */
+.check {
+  flex: 0 0 12px;
+  display: grid;
+  place-items: center;
+  color: var(--dp-accent);
+}
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hint {
+  flex: 0 0 auto;
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text-dim);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  padding: 1px 4px;
+}
+
+.sep {
+  height: 1px;
+  margin: var(--dp-space-1) 4px;
+  background: var(--dp-border);
+}

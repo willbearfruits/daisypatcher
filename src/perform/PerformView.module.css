@@ -123,3 +123,60 @@
   background: color-mix(in srgb, var(--dp-accent) 16%, transparent);
   border-color: var(--dp-accent);
 }
+
+/*
+ * Preset dock — floats over the faceplate rather than taking a column, so
+ * the enclosure keeps the full width it needs to be read at a distance.
+ */
+.presetDock {
+  position: absolute;
+  top: var(--dp-space-3);
+  left: var(--dp-space-3);
+  z-index: 5;
+  width: 220px;
+  max-height: 40%;
+  overflow: auto;
+  background: color-mix(in srgb, var(--dp-surface-elevated) 92%, transparent);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  backdrop-filter: blur(6px);
+}
+
+/* Arrange-mode key hints. */
+.arrangeHint {
+  position: absolute;
+  bottom: var(--dp-space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-3);
+  padding: 6px var(--dp-space-3);
+  background: color-mix(in srgb, var(--dp-surface-elevated) 92%, transparent);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-sm);
+  backdrop-filter: blur(6px);
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text-dim);
+  white-space: nowrap;
+}
+
+.arrangeHint b {
+  color: var(--dp-accent);
+  font-weight: 500;
+}
+
+.arrangeReset {
+  font: inherit;
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.arrangeReset:hover { color: var(--dp-danger); border-color: var(--dp-border-strong); }

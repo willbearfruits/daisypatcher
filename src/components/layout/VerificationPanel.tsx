@@ -148,7 +148,7 @@ export function VerificationPanel({ open, onClose, onRetest }: VerificationPanel
           <div className={styles.title}>
             <span className={styles.titleKicker}>VERIFIED</span>
             <span className={styles.titleCounts}>
-              {summary.pass} / {summary.total} tested on {target === 'esp32_s3' ? 'esp32_s3' : 'daisy_seed'}
+              {summary.pass} / {summary.total} tested on {target}
               {' · '}
               <span className={styles.countFail}>{summary.fail} failing</span>
               {' · '}

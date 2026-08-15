@@ -92,14 +92,17 @@ int main(void) {
     (void)sr;
 
     drum_kick_kick1.Init(sr);
+    drum_kick_kick1.SetAccent(1.f);
     drum_kick_kick1.SetFreq(60.f);
     drum_kick_kick1.SetDecay(0.35f);
     drum_kick_kick1.SetAttackFmAmount(0.5f);
     drum_snare_snare1.Init(sr);
+    drum_snare_snare1.SetAccent(1.f);
     drum_snare_snare1.SetFreq(200.f);
     drum_snare_snare1.SetDecay(0.2f);
     drum_snare_snare1.SetSnappy(0.5f);
     drum_hat_hat1.Init(sr);
+    drum_hat_hat1.SetAccent(1.f);
     drum_hat_hat1.SetDecay(0.08f);
     drum_hat_hat1.SetTone(0.7f);
 

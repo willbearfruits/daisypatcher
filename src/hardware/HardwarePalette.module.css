@@ -51,6 +51,22 @@
   transform: translateY(1px);
 }
 
+/* Kind not available on the active target — visible, but not placeable. */
+.cardUnsupported {
+  opacity: 0.42;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.cardUnsupported:hover {
+  border-color: var(--dp-border);
+  background: var(--dp-surface-sunken);
+}
+
+.cardUnsupported:active {
+  transform: none;
+}
+
 .cardIcon {
   width: 28px;
   height: 28px;

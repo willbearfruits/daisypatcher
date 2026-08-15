@@ -1,0 +1,164 @@
+/* Code node body. Tokens only — see CLAUDE.md. */
+
+.node {
+  width: 380px;
+  background: var(--dp-node-bg);
+  border: 1px solid var(--dp-node-border);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  font-family: var(--dp-font-sans);
+  user-select: none;
+  overflow: hidden;
+}
+
+.selected {
+  border-color: var(--dp-node-selected-ring);
+  box-shadow: var(--dp-shadow-glow);
+}
+
+.collapsed { width: 170px; }
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2) var(--dp-space-3);
+  background: var(--dp-node-header-bg);
+  color: var(--dp-node-header-text);
+  cursor: grab;
+}
+
+.title {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.spacer { flex: 1 1 auto; }
+
+.stat {
+  font-family: var(--dp-font-mono);
+  font-size: 9px;
+  color: var(--dp-text-dim);
+}
+
+/* Collapsed nodes still have to say "this one does not compile". */
+.errDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-danger);
+  box-shadow: 0 0 4px var(--dp-danger);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-2);
+}
+
+.editorRow { display: flex; }
+
+.editor {
+  width: 100%;
+  resize: vertical;
+  min-height: 140px;
+  padding: var(--dp-space-2);
+  background: var(--dp-surface-terminal);
+  color: var(--dp-text);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.5;
+  tab-size: 2;
+  user-select: text;
+  white-space: pre;
+  overflow: auto;
+}
+
+.editor:focus {
+  outline: none;
+  border-color: var(--dp-accent);
+}
+
+.editorErr { border-color: var(--dp-danger); }
+
+.status {
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-success);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusErr { color: var(--dp-danger); }
+
+.help {
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text-dim);
+}
+
+.helpHead {
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  color: var(--dp-text-muted);
+}
+
+.helpBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--dp-space-2) 0 0 0;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.helpBody p { margin: 0; }
+.helpBody b { color: var(--dp-text-muted); font-weight: 500; }
+.fnList { color: var(--dp-signal-cv); word-break: break-word; }
+.helpNote { color: var(--dp-text-dim); font-style: italic; }
+
+.sockets {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--dp-space-3);
+  border-top: 1px solid var(--dp-border);
+  padding-top: var(--dp-space-2);
+}
+
+.socketCol,
+.socketColRight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-1);
+}
+
+.socketColRight { align-items: flex-end; }
+
+.socketRow {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+}
+
+.socketLabel {
+  font-family: var(--dp-font-mono);
+  font-size: 9px;
+  color: var(--dp-text-dim);
+}
+
+/* An output the body never assigns emits silence; say so rather than
+   letting someone patch it and wonder. */
+.socketUnused {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.collapsedSockets { position: relative; height: 0; }
+.collapsedIn { position: absolute; left: -8px; }
+.collapsedOut { position: absolute; right: -8px; }

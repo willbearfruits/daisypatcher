@@ -27,6 +27,7 @@
  */
 
 import type { BoardPin, HardwareLayout, PlacedComponent, SeedPin } from '@/types/hardware'
+import { analogRoleFor } from '@/types/hardware'
 import { adcChannelOf, PIN_CAPS } from '@/hardware/daisySeedPinout'
 
 /** Lookup a bound (component, pin) pair for a given node's role. */
@@ -71,21 +72,25 @@ export function emitHardwareInit(layout: HardwareLayout): {
   // registered in a single Init call).
   const adcTargets: { comp: PlacedComponent; pin: SeedPin; role: string }[] = []
   for (const c of layout.components) {
-    if (c.kind === 'pot') {
-      const pin = c.pins['wiper']
+    /*
+     * Every analog-input kind, not just pot + cv_jack. Sliders, ribbons,
+     * LDRs, mics and piezos are the same electrical thing — one ADC pin —
+     * and were previously placeable, pinnable, and then completely absent
+     * from the generated firmware.
+     */
+    const analogRole = analogRoleFor(c.kind)
+    if (analogRole) {
+      // A piezo wired as a buzzer is an output, not a source to sample.
+      if (c.kind === 'piezo' && String(c.config['direction'] ?? 'input') !== 'input') continue
+      const pin = c.pins[analogRole]
       if (pin && isSeedPin(pin) && PIN_CAPS[pin]?.adc) {
-        adcTargets.push({ comp: c, pin, role: 'wiper' })
-      }
-    } else if (c.kind === 'cv_jack') {
-      const pin = c.pins['signal']
-      if (pin && isSeedPin(pin) && PIN_CAPS[pin]?.adc) {
-        adcTargets.push({ comp: c, pin, role: 'signal' })
+        adcTargets.push({ comp: c, pin, role: analogRole })
       }
     }
   }
 
   if (adcTargets.length > 0) {
-    declLines.push('// Hardware: ADC channel values (0..1), one per placed pot / CV jack.')
+    declLines.push('// Hardware: ADC channel values (0..1), one per placed analog input.')
     for (const t of adcTargets) {
       declLines.push(`float ${hwVar(t.comp)}_val = 0.f;`)
     }
@@ -120,6 +125,37 @@ export function emitHardwareInit(layout: HardwareLayout): {
         `    // --- ${c.kind}: ${c.label} ---\n` +
         `    ${hwVar(c)}_gpio.Init(hw.GetPin(${seedPinToDPin(pin)}), GPIO::Mode::INPUT, GPIO::Pull::PULLUP);`
       )
+    } else if (c.kind === 'encoder') {
+      /*
+       * libDaisy's Encoder owns its three pins and its own debouncing, so
+       * we hand it the pins rather than declaring bare GPIOs. Debounce()
+       * must be called at a steady rate from the main loop — see
+       * emitHardwarePoll — or Increment()/RisingEdge() miss events.
+       */
+      const a = c.pins['a']
+      const b = c.pins['b']
+      const sw = c.pins['sw']
+      if (a && isSeedPin(a) && b && isSeedPin(b)) {
+        declLines.push(`Encoder ${hwVar(c)}_enc;`)
+        /*
+         * Detents accumulate here rather than being read straight off
+         * Increment(). Debounce() latches the increment and Increment()
+         * keeps returning that latched value until the next Debounce — but
+         * the node emitter runs once per audio SAMPLE, so reading it there
+         * counted a single click up to blockSize times. The main loop adds
+         * into this counter and the audio side drains it, which is correct
+         * whichever of the two runs more often.
+         */
+        declLines.push(`volatile int32_t ${hwVar(c)}_enc_pending = 0;`)
+        // The click pin is optional on the hardware; libDaisy still wants a
+        // Pin, so reuse A when unwired. The switch simply never fires.
+        const clickPin = sw && isSeedPin(sw) ? sw : a
+        initLines.push(
+          `    // --- encoder: ${c.label} ---\n` +
+          `    ${hwVar(c)}_enc.Init(hw.GetPin(${seedPinToDPin(a)}), ` +
+          `hw.GetPin(${seedPinToDPin(b)}), hw.GetPin(${seedPinToDPin(clickPin)}));`
+        )
+      }
     } else if (c.kind === 'switch_3way') {
       const p1 = c.pins['pos1']
       const p2 = c.pins['pos2']
@@ -218,6 +254,27 @@ export function valueExprForBinding(
 }
 
 /**
+ * Value expression for a node bound to any analog-input component.
+ *
+ * Callers used to pass a hardcoded role — `'wiper'` in the knob_in
+ * emitter — which is right for a pot, fader or ribbon but wrong for an
+ * LDR, mic, piezo or CV jack, whose analog pin sits on `signal`. The
+ * binding then failed to resolve and the node silently fell back to its
+ * sidebar value, so the sensor was wired up and still read nothing.
+ */
+export function valueExprForAnalogBinding(
+  bindingId: string | undefined,
+  hardware: HardwareLayout
+): string | null {
+  if (!bindingId) return null
+  const comp = hardware.components.find((c) => c.id === bindingId)
+  if (!comp) return null
+  const role = analogRoleFor(comp.kind)
+  if (!role) return null
+  return valueExprForBinding(bindingId, role, hardware)
+}
+
+/**
  * Poll lines for ADC reads — emitted inside main()'s `while(1)` so the
  * ADC values stay fresh. Returns one assignment per placed pot/CV.
  */
@@ -225,14 +282,30 @@ export function emitHardwarePoll(layout: HardwareLayout): string {
   const lines: string[] = []
   let idx = 0
   for (const c of layout.components) {
-    let pin: BoardPin | undefined
-    if (c.kind === 'pot') pin = c.pins['wiper']
-    else if (c.kind === 'cv_jack') pin = c.pins['signal']
+    // Must mirror the ADC bank in `emitHardwareInit` exactly — same kinds,
+    // same order — since `idx` indexes into that bank.
+    const analogRole = analogRoleFor(c.kind)
+    if (!analogRole) continue
+    if (c.kind === 'piezo' && String(c.config['direction'] ?? 'input') !== 'input') continue
+    const pin: BoardPin | undefined = c.pins[analogRole]
     if (!pin || !isSeedPin(pin)) continue
     const chan = adcChannelOf(pin)
     if (chan < 0) continue
     lines.push(`        ${hwVar(c)}_val = hw.adc.GetFloat(${idx});`)
     idx++
+  }
+  /*
+   * Encoders must be debounced at a steady rate from the same loop; the
+   * class latches Increment()/RisingEdge() state on each call, so skipping
+   * it means the node never sees a detent.
+   */
+  for (const c of layout.components) {
+    if (c.kind !== 'encoder') continue
+    const a = c.pins['a']
+    const b = c.pins['b']
+    if (!a || !isSeedPin(a) || !b || !isSeedPin(b)) continue
+    lines.push(`        ${hwVar(c)}_enc.Debounce();`)
+    lines.push(`        ${hwVar(c)}_enc_pending += ${hwVar(c)}_enc.Increment();`)
   }
   return lines.join('\n')
 }

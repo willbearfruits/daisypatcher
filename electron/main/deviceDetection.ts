@@ -24,8 +24,18 @@
 import { execFile } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import { listSerialPorts, type SerialPortInfo } from './serialService'
+import type { BoardId } from '../../shared/boards'
 
-export type DetectedBoard = 'daisy_seed' | 'esp32_s3'
+/**
+ * What autodetect can actually resolve.
+ *
+ * An S3 DevKitC, an S3 SuperMini and a C3 SuperMini all enumerate as USB
+ * 303a:1001, so the FAMILY is the finest distinction the descriptors
+ * support. `esp32_s3_devkitc` here means "some ESP32" — the renderer
+ * treats it as a family hint and never force-switches the user between
+ * two boards of the same family.
+ */
+export type DetectedBoard = BoardId
 
 export interface DetectionResult {
   /** Daisy sitting in the STM32 DFU bootloader (0483:df11). */
@@ -157,7 +167,7 @@ export async function detectAllBoards(): Promise<DetectionResult> {
   } else if (daisyPresent) {
     detectedBoard = 'daisy_seed'
   } else if (esp32Present) {
-    detectedBoard = 'esp32_s3'
+    detectedBoard = 'esp32_s3_devkitc'
   } else {
     detectedBoard = null
   }

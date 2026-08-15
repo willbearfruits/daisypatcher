@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCompileStore } from '@/state/compileState'
 import { useEditorStore } from '@/state/store'
-import { getTarget } from '@/codegen/targets'
+import { getTarget, isEsp32Target } from '@/codegen/targets'
 import styles from './SdkInstallModal.module.css'
 
 export function SdkInstallModal() {
@@ -31,7 +31,7 @@ export function SdkInstallModal() {
   const installSdk = useCompileStore((s) => s.installSdk)
   const installEsp32Toolchain = useCompileStore((s) => s.installEsp32Toolchain)
   const target = useEditorStore((s) => s.target)
-  const isEsp32 = target === 'esp32_s3'
+  const isEsp32 = isEsp32Target(target)
 
   const [dismissed, setDismissed] = useState(false)
 
@@ -113,7 +113,7 @@ export function SdkInstallModal() {
 
         {isEsp32 ? (
           <ul className={styles.issues}>
-            {getTarget('esp32_s3').toolchainCheck().map((c, i) => (
+            {getTarget(target).toolchainCheck().map((c, i) => (
               <li key={i}>
                 <span className={styles.issueDot} aria-hidden />
                 <span>

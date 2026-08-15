@@ -209,6 +209,10 @@ export function esp32PinsForRole(role: string, kind: string): string[] {
         if (r === 'xshut') return cap.gpio
         return !!cap.i2c
       case 'i2s_codec':
+      // PCM5102A and MAX98357A are output-only I2S sinks; same bus roles,
+      // minus sd_in and (for the amp) mclk.
+      case 'pcm5102a':
+      case 'max98357a':
         if (r === 'sck')   return cap.i2s === 'sck'  || cap.gpio
         if (r === 'ws')    return cap.i2s === 'ws'   || cap.gpio
         if (r === 'mclk')  return cap.i2s === 'mclk' || cap.gpio

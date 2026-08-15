@@ -1,0 +1,168 @@
+/*
+ * Generated-code panel. Bottom-docked so the graph stays visible above it —
+ * the point of the provenance highlight is that you can see both at once.
+ */
+
+.panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--dp-statusbar-h);
+  background: var(--dp-surface-terminal);
+  border-top: 1px solid var(--dp-border);
+  box-shadow: var(--dp-shadow-md);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--dp-z-chrome, 10);
+  min-height: 0;
+}
+
+.head {
+  flex: 0 0 auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-3);
+  padding: 0 var(--dp-space-3);
+  background: var(--dp-surface);
+  border-bottom: 1px solid var(--dp-border);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-muted);
+}
+
+.title {
+  letter-spacing: 0.16em;
+  color: var(--dp-text);
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  font: inherit;
+  color: var(--dp-text-dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--dp-radius-xs);
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dp-motion-fast) var(--dp-ease);
+}
+.tab:hover { color: var(--dp-text); }
+
+.tabActive {
+  color: var(--dp-accent);
+  border-color: var(--dp-border-strong);
+  background: var(--dp-surface-sunken);
+}
+
+.meta { color: var(--dp-text-dim); white-space: nowrap; }
+.spacer { flex: 1 1 auto; }
+
+.notice {
+  color: var(--dp-success);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40ch;
+}
+
+.btn {
+  font: inherit;
+  color: var(--dp-text-muted);
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-xs);
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--dp-motion-fast) var(--dp-ease),
+    border-color var(--dp-motion-fast) var(--dp-ease);
+}
+.btn:hover:not(:disabled) { color: var(--dp-text); border-color: var(--dp-border-strong); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--dp-surface-terminal);
+}
+
+.pre {
+  margin: 0;
+  padding: var(--dp-space-2) 0;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.55;
+  tab-size: 4;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dp-space-3);
+  padding: 0 var(--dp-space-3);
+  cursor: default;
+  white-space: pre;
+}
+
+.line:hover { background: color-mix(in srgb, var(--dp-accent) 7%, transparent); }
+
+/*
+ * The selected node's lines. A left rule rather than a flat wash: at this
+ * font size a background tint alone reads as "slightly different" instead
+ * of "this block", and the rule survives being scrolled half off-screen.
+ */
+.lineHit {
+  background: color-mix(in srgb, var(--dp-accent) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--dp-accent);
+}
+
+.gutter {
+  flex: 0 0 auto;
+  min-width: 3.5ch;
+  text-align: right;
+  color: var(--dp-text-dim);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.code { flex: 1 1 auto; min-width: 0; }
+
+.foot {
+  flex: 0 0 auto;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--dp-space-3);
+  border-top: 1px solid var(--dp-border);
+  background: var(--dp-surface);
+  font-family: var(--dp-font-mono);
+  font-size: 10px;
+  color: var(--dp-text-dim);
+  letter-spacing: 0.04em;
+}
+
+/* ---- token colours ---- */
+/*
+ * Reuses the signal palette rather than inventing a code theme, so the
+ * panel belongs to whichever skin is active instead of fighting it.
+ */
+.plain   { color: var(--dp-text); }
+.comment { color: var(--dp-text-dim); font-style: italic; }
+.string  { color: var(--dp-signal-audio); }
+.number  { color: var(--dp-signal-cv); }
+.keyword { color: var(--dp-accent); }
+.type    { color: var(--dp-signal-gate); }
+.preproc { color: var(--dp-text-muted); }
+.punct   { color: var(--dp-text-muted); }

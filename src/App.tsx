@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react'
+import { stepMenus, setMenuEngine } from '@/state/menuRuntime'
 import { ThemeProvider } from '@/theme'
 import {
   TopBar,
@@ -20,7 +21,9 @@ import {
   StatusBar,
   ResizeHandle
 } from '@/components/layout'
-import { useEditorStore } from '@/state/store'
+import { useEditorStore, rootGraphOf } from '@/state/store'
+import { useSampleStore } from '@/state/sampleStore'
+import { flattenGraph } from '@/state/subpatch'
 import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
 import { useVerificationStore } from '@/state/verificationStore'
@@ -30,6 +33,7 @@ import { useVerificationStore } from '@/state/verificationStore'
 import '@/state/updateState'
 import { ReteEditor, type ReteEditorHandle } from '@/editor/ReteEditor'
 import { SignalLegend } from '@/editor/SignalLegend'
+import { SubpatchBar } from '@/editor/SubpatchBar'
 import { Minimap } from '@/editor/Minimap'
 import { createAudioEngine } from '@/audio'
 import { AudioEngineProvider } from '@/audio/AudioEngineContext'
@@ -38,6 +42,9 @@ import { BuildLogPanel } from '@/components/layout/BuildLogPanel'
 import { SerialMonitorPanel } from '@/components/layout/SerialMonitorPanel'
 import { SdkInstallModal } from '@/components/layout/SdkInstallModal'
 import { CommandPalette } from '@/components/layout/CommandPalette'
+import { CanvasContextMenu } from '@/editor/CanvasContextMenu'
+import { AssistantPanel } from '@/components/layout/AssistantPanel'
+import { CodePanel } from '@/components/layout/CodePanel'
 import { ConfirmHost } from '@/components/layout/ConfirmDialog'
 import type { NodeKind } from '@/types/graph'
 import { HardwarePalette } from '@/hardware/HardwarePalette'
@@ -78,10 +85,16 @@ export default function App() {
       }
     })
 
-    // Seed engine with current graph; keep it synced on every graph change.
-    engine.setGraph(store.getState().graph)
+    /*
+     * The engine plays the ROOT patch, flattened — not whichever level you
+     * happen to be editing. Editing inside a subpatch must not silence the
+     * rest of the instrument, and the engine has no concept of nesting by
+     * design (see state/subpatch.ts).
+     */
+    const publish = (): void => engine.setGraph(flattenGraph(rootGraphOf(store.getState())))
+    publish()
     const unsubGraph = store.subscribe((s, prev) => {
-      if (s.graph !== prev.graph) engine.setGraph(s.graph)
+      if (s.graph !== prev.graph || s.subpatchStack !== prev.subpatchStack) publish()
     })
 
     // Transport.
@@ -138,22 +151,83 @@ export default function App() {
     // mode (boot+reset) is interactive — a 3s gap made the app feel slow
     // to notice the board had come up. 1s keeps the CPU cost bounded
     // (dfu-util -l is ~50–200 ms on Linux/macOS) and the feedback tight.
+    /*
+     * Menu tick. Encoder gestures are control-rate, and the machine runs on
+     * the main thread (worklets cannot import — see menu.worklet.ts), so it
+     * needs a steady pulse to sample the encoder and settle long-press /
+     * double-click timing. 30 ms is well inside a human double-click window
+     * and costs nothing when no menu node exists — `stepMenus` returns
+     * immediately on an empty list.
+     */
+    const menuId = window.setInterval(() => {
+      stepMenus(null, performance.now())
+    }, 30)
+
     const id = window.setInterval(() => {
       void useCompileStore.getState().detectDevice()
       void useCompileStore.getState().detectBoards()
       void useSerialStore.getState().refreshPorts()
     }, 1000)
-    return () => window.clearInterval(id)
+    return () => {
+      window.clearInterval(id)
+      window.clearInterval(menuId)
+    }
   }, [])
+
+  // Hand the engine to the menu runtime so leaf edits reach the CV outs
+  // even when driven from a button handler that has no engine reference.
+  useEffect(() => {
+    setMenuEngine(engine)
+    return () => setMenuEngine(null)
+  }, [engine])
+
+  /*
+   * A `preset_recall` node fires from inside the audio graph, where there
+   * is no store. The engine forwards its requests here, and here is where
+   * they become store transactions — so a preset triggered by a patched
+   * gate behaves exactly like one clicked in the Preset bar, undo entry
+   * and all.
+   *
+   * Slots are indices into the preset list, because that is what a CV can
+   * address. A slot past the end is ignored rather than clamped: silently
+   * loading the last preset when you asked for the ninth of eight is worse
+   * than doing nothing.
+   */
+  // Where the engine reads sample PCM from. Same wiring reason as the
+  // preset handler: the engine cannot import a store that imports it back.
+  useEffect(() => {
+    engine.setSampleReader((id) => useSampleStore.getState().getPcm(id))
+    void useSampleStore.getState().refresh()
+    return () => engine.setSampleReader(null)
+  }, [engine])
+
+  useEffect(() => {
+    engine.setPresetHandler((req) => {
+      const st = useEditorStore.getState()
+      const presets = st.presets
+      if (req.action === 'apply') {
+        const p = presets[req.slot]
+        if (p) st.recallPreset(p.id)
+        return
+      }
+      const a = presets[req.a]
+      const b = presets[req.b]
+      if (a && b && a.id !== b.id) st.morphPresets(a.id, b.id, req.t)
+    })
+    return () => engine.setPresetHandler(null)
+  }, [engine])
 
   return (
     <ThemeProvider>
       <AudioEngineProvider engine={engine}>
         <MainShell reteRef={reteRef} />
+        <CodePanel />
+        <AssistantPanel />
         <BuildLogPanel />
         <SerialMonitorPanel />
         <SdkInstallModal />
         <CommandPalette />
+        <CanvasContextMenu />
         <ConfirmHost />
       </AudioEngineProvider>
     </ThemeProvider>
@@ -229,14 +303,38 @@ function MainShell({ reteRef }: { reteRef: React.RefObject<ReteEditorHandle | nu
           />
         )}
         <main className="dp-canvas-shell">
-          {/* Patch canvas — stays mounted so Rete.js state persists. */}
-          <div style={{ position: 'absolute', inset: 0, display: isPatch ? 'block' : 'none' }}>
+          {/*
+            Patch canvas — stays mounted so Rete.js state persists.
+
+            Hidden with `visibility`, NOT `display: none`, and that is
+            load-bearing. Rete computes a socket's position by walking
+            `offsetParent` up to the node element, and it waits for that
+            chain to exist by spinning on `setTimeout(0)` until
+            `offsetParent` is non-null. `display: none` makes it null
+            forever, so any node whose sockets first render while the
+            Hardware or Perform tab is open never gets a socket position at
+            all — and its cables draw once at a stale endpoint and then sit
+            there, unmoved by dragging the node. `visibility: hidden` keeps
+            the element laid out and `offsetParent` populated, which costs
+            nothing here (the canvas is already absolutely positioned) and
+            removes the failure entirely.
+          */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              visibility: isPatch ? 'visible' : 'hidden',
+              pointerEvents: isPatch ? 'auto' : 'none'
+            }}
+            aria-hidden={!isPatch}
+          >
             <CanvasShell
               onDropNode={(kind, clientX, clientY) =>
                 reteRef.current?.onDropNode(kind, clientX, clientY)
               }
             >
               <ReteEditor ref={reteRef} />
+              <SubpatchBar />
               <Minimap reteRef={reteRef} />
               <SignalLegend />
             </CanvasShell>

@@ -18,8 +18,10 @@
 
 import { create } from 'zustand'
 import { generateProject } from '@/codegen/generateProject'
+import { useSampleStore } from '@/state/sampleStore'
+import type { SampleBank } from '@/codegen/sampleCodegen'
 import { useEditorStore } from '@/state/store'
-import { getTarget } from '@/codegen/targets'
+import { getTarget, isEsp32Target } from '@/codegen/targets'
 import { emptyHardwareLayout, type HardwareLayout } from '@/types/hardware'
 import type { AudioGraph } from '@/types/graph'
 import type { BoardTarget, DaisyFlashMode } from '@/types/store'
@@ -303,6 +305,32 @@ function pushCapped(list: LogLine[], line: LogLine): LogLine[] {
   return next
 }
 
+
+/**
+ * PCM for every sample the graph references, read from the library.
+ *
+ * Only what this patch uses — a build should not pull the whole library
+ * into memory to compile a patch with one kick in it. Missing ids are
+ * simply absent; `emitSamples` warns about them with the node name, which
+ * is more useful than a failure here without one.
+ */
+async function sampleBankFor(graph: AudioGraph): Promise<SampleBank> {
+  const ids = new Set<string>()
+  for (const n of graph.nodes) {
+    if (n.kind !== 'sample_player') continue
+    const id = typeof n.params.sampleId === 'string' ? n.params.sampleId : ''
+    if (id) ids.add(id)
+  }
+  if (ids.size === 0) return {}
+  const store = useSampleStore.getState()
+  const bank: SampleBank = {}
+  for (const id of ids) {
+    const pcm = await store.getPcm(id)
+    if (pcm) bank[id] = pcm
+  }
+  return bank
+}
+
 export const useCompileStore = create<CompileState & CompileActions>((set, get) => {
   /* ---------- log helpers ---------- */
 
@@ -562,7 +590,7 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
       // is done via the flash bridge's `sdk.status()` channel which
       // returns the Daisy toolchain flags; we reuse the generic `gcc`
       // shape and just ignore its DaisySP-specific fields.
-      if (target === 'esp32_s3') {
+      if (isEsp32Target(target)) {
         if (!sdk) {
           set({
             sdkReady: false,
@@ -578,7 +606,7 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
           // target detection (see electron/main/sdk.ts). If the bridge
           // doesn't yet know about targets, fall back: mark ready and
           // let the build surface the real error.
-          const checks = getTarget('esp32_s3').toolchainCheck()
+          const checks = getTarget(target).toolchainCheck()
           const issues = status.issues.filter((i) =>
             i.toLowerCase().includes('platformio') || i.toLowerCase().includes('pio')
           )
@@ -706,6 +734,9 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
       // even spawning make.
       const graph = useEditorStore.getState().graph
       const hardware = useEditorStore.getState().hardware
+      // Presets are store state, not graph state — see presetCodegen.ts.
+      const presets = useEditorStore.getState().presets
+      const samples = await sampleBankFor(graph)
       const target = useEditorStore.getState().target
       const daisyFlashMode = useEditorStore.getState().daisyFlashMode
 
@@ -722,7 +753,7 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
 
       let project: { projectName: string; files: Record<string, string>; warnings: string[] }
       try {
-        project = generateProject(graph, hardware, undefined, target, { daisyFlashMode })
+        project = generateProject(graph, hardware, undefined, target, { daisyFlashMode, presets, samples })
       } catch (err) {
         append({
           stream: 'error',
@@ -804,9 +835,11 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
 
       const activeTarget = target ?? useEditorStore.getState().target
       const daisyFlashMode = useEditorStore.getState().daisyFlashMode
+      const presets = useEditorStore.getState().presets
+      const samples = await sampleBankFor(graph)
       const hw =
         hardware ??
-        emptyHardwareLayout(activeTarget === 'esp32_s3' ? 'esp32_s3_devkitc' : 'daisy_seed')
+        emptyHardwareLayout(activeTarget)
 
       set({ building: true, lastBuildSuccess: null })
       append({
@@ -817,7 +850,7 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
 
       let project: { projectName: string; files: Record<string, string>; warnings: string[] }
       try {
-        project = generateProject(graph, hw, undefined, activeTarget, { daisyFlashMode })
+        project = generateProject(graph, hw, undefined, activeTarget, { daisyFlashMode, presets, samples })
       } catch (err) {
         append({
           stream: 'error',
@@ -913,7 +946,7 @@ export const useCompileStore = create<CompileState & CompileActions>((set, get) 
         }))
         const deviceDetails: DeviceDetail[] = [...dfuDevices, ...serialDevices]
 
-        if (target === 'esp32_s3') {
+        if (isEsp32Target(target)) {
           const ports = res.esp32Ports ?? []
           const first = ports[0]
           set({

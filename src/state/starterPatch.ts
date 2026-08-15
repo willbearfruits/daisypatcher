@@ -94,7 +94,7 @@ export function buildStarterGraph(): AudioGraph {
  */
 export function loadStarterPatch(store: Store = useEditorStore): void {
   const s = store.getState()
-  const snapshot: HistorySnapshot = { graph: s.graph, hardware: s.hardware }
+  const snapshot: HistorySnapshot = { graph: s.graph, hardware: s.hardware, presets: s.presets }
   const past = [...s.history.past, snapshot]
   store.setState({
     graph: buildStarterGraph(),

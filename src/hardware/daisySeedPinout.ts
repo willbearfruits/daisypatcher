@@ -400,7 +400,16 @@ export function pinsForRole(
         if (r === 'int')   return cap.gpio
         if (r === 'xshut') return cap.gpio
         return !!cap.i2c
+      /*
+       * pcm5102a / max98357a are ESP32-only kinds (the Seed has an onboard
+       * AK4556), but a `.dpatch` authored on an ESP32 target can still be
+       * opened while the Seed is selected. Offer the real SAI-capable pins
+       * rather than falling through to "every GPIO", so the inspector
+       * dropdown stays honest instead of listing nonsense.
+       */
       case 'i2s_codec':
+      case 'pcm5102a':
+      case 'max98357a':
         if (r === 'sck')   return cap.i2s === 'sck'
         if (r === 'ws')    return cap.i2s === 'ws'
         if (r === 'mclk')  return cap.i2s === 'mclk'

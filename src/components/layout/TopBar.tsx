@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '@/theme'
 import { THEMES } from '@/theme'
 import { useEditorStore } from '@/state/store'
+import { TARGETS, getTarget, isEsp32Target } from '@/codegen/targets'
 import { useCompileStore } from '@/state/compileState'
 import { newPatch, openPatch, savePatch } from '@/state/patchFile'
 import type { DaisyFlashMode } from '@/types/store'
@@ -383,9 +384,7 @@ function FlashButton() {
               ? 'Click to arm, then tap RESET \u2014 flashes the moment the bootloader appears'
               : 'Click to arm \u2014 connect the Seed and tap RESET; flashes when DFU appears'
             : 'No ESP32 serial port detected \u2014 check cable/driver'
-          : target === 'esp32_s3'
-            ? 'Flash binary to ESP32-S3'
-            : 'Flash binary to Daisy Seed'
+          : `Flash binary to ${getTarget(target).label}`
 
   const glowClass =
     glowing && lastFlashSuccess === true
@@ -497,13 +496,21 @@ function TargetSwitcher() {
     void detectDevice()
   }
 
-  // Dot logic: null when no useful signal, 'match' (green) when detect
-  // agrees, 'mismatch' (amber) when detect disagrees but the user has
-  // locked the target (so we're nudging, not overriding).
+  /*
+   * Dot logic: null when no useful signal, 'match' (green) when detect
+   * agrees, 'mismatch' (amber) when detect disagrees but the user has
+   * locked the target (so we're nudging, not overriding).
+   *
+   * Compared by FAMILY, not by exact id. An S3 DevKitC, an S3 SuperMini
+   * and a C3 SuperMini all enumerate as USB 303a:1001, so detection can
+   * only ever tell us "an ESP32 is plugged in". Comparing exact ids would
+   * light the amber mismatch dot permanently for two of the three boards
+   * and offer to "switch" the user to a board we can't actually identify.
+   */
   const dotState: 'match' | 'mismatch' | null =
     detectedBoard === null
       ? null
-      : detectedBoard === target
+      : isEsp32Target(detectedBoard) === isEsp32Target(target)
         ? 'match'
         : targetLockedByUser
           ? 'mismatch'
@@ -537,26 +544,24 @@ function TargetSwitcher() {
 
   return (
     <div className={styles.viewSwitch} role="tablist" aria-label="Target">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={target === 'daisy_seed'}
-        className={`${styles.viewSeg} ${target === 'daisy_seed' ? styles.viewSegActive : ''}`}
-        onClick={() => choose('daisy_seed')}
-        title="Daisy Seed (STM32H7)"
-      >
-        SEED
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={target === 'esp32_s3'}
-        className={`${styles.viewSeg} ${target === 'esp32_s3' ? styles.viewSegActive : ''}`}
-        onClick={() => choose('esp32_s3')}
-        title="ESP32-S3 DevKitC-1 (Arduino / PlatformIO)"
-      >
-        ESP32
-      </button>
+      {/*
+        Driven off the TARGETS registry rather than hand-written buttons —
+        adding a board should not require touching the TopBar. Each backend
+        already carries the label and description this needs.
+      */}
+      {Object.values(TARGETS).map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={target === t.id}
+          className={`${styles.viewSeg} ${styles.targetSeg} ${target === t.id ? styles.viewSegActive : ''}`}
+          onClick={() => choose(t.id)}
+          title={t.description}
+        >
+          {t.shortLabel}
+        </button>
+      ))}
       {dotState !== null ? (
         <button
           type="button"

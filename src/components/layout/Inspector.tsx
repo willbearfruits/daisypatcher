@@ -12,7 +12,9 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useEditorStore, hardwareKindForNodeKind } from '@/state/store'
+import { useEditorStore, hardwareKindsForNodeKind } from '@/state/store'
+import { SamplePicker } from './SamplePicker'
+import { PresetBar } from './PresetBar'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
 import type { ParamDef } from '@/nodes/definitions'
 import type { NodeInstance, NodeKind } from '@/types/graph'
@@ -86,6 +88,7 @@ export function Inspector() {
   if (selectionSize > 1) {
     return (
       <div className={styles.root}>
+        <PresetBar />
         <div className={styles.empty}>
           <span className={styles.emptyTitle}>{selectionSize} nodes selected</span>
           <span className={styles.emptyHint}>(params hidden in multi-select)</span>
@@ -97,6 +100,7 @@ export function Inspector() {
   if (!selectedId || !node) {
     return (
       <div className={styles.root}>
+        <PresetBar />
         <div className={styles.empty}>
           <span className={styles.emptyTitle}>no selection</span>
           <span className={styles.emptyHint}>(select a node)</span>
@@ -120,6 +124,7 @@ export function Inspector() {
 
   return (
     <div className={styles.root}>
+      <PresetBar />
       <div className={styles.header}>
         <div className={styles.headerRow}>
           <span className={styles.headerLabel}>{def.label}</span>
@@ -174,6 +179,13 @@ function ParamControl({
   // which used to display "(unbound)" even for a correctly auto-linked node.
   if (param.id === 'bindingId') {
     return <BindingControl node={node} param={param} />
+  }
+
+  // Same escape hatch, same reason: the sample library is runtime state, so
+  // the declared enum carries one placeholder option and the real picker
+  // lives in its own component.
+  if (param.id === 'sampleId') {
+    return <SamplePicker node={node} />
   }
 
   if (param.kind === 'number') {
@@ -395,9 +407,11 @@ function BindingControl({ node, param }: { node: NodeInstance; param: ParamDef }
   const components = useEditorStore((s) => s.hardware.components)
   const board = useEditorStore((s) => s.hardware.board)
 
-  const hwKind = hardwareKindForNodeKind(node.kind)
   const value = String(node.params[param.id] ?? '')
-  const compatible = hwKind ? components.filter((c) => c.kind === hwKind) : []
+  // Every kind this node can read, not just its canonical one — a knob_in
+  // binds equally to a pot, fader, ribbon, LDR, mic, piezo or CV jack.
+  const compatibleKinds = hardwareKindsForNodeKind(node.kind)
+  const compatible = components.filter((c) => compatibleKinds.includes(c.kind))
   const bound = compatible.find((c) => c.id === value) ?? null
   const pinout = getBoardPinout(board)
 

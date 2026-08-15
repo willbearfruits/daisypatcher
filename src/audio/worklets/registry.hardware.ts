@@ -21,6 +21,26 @@ export const HARDWARE_REGISTRY: Partial<Record<NodeKind, WorkletEntry>> = {
     processorName: 'dp-switch-3way',
     moduleUrl: new URL('./switch_3way.worklet.js', import.meta.url)
   },
+  encoder_in: {
+    processorName: 'dp-encoder-in',
+    moduleUrl: new URL('./encoder_in.worklet.js', import.meta.url)
+  },
+  menu: {
+    processorName: 'dp-menu',
+    moduleUrl: new URL('./menu.worklet.js', import.meta.url)
+  },
+  imu_in: {
+    processorName: 'dp-imu-in',
+    moduleUrl: new URL('./imu_in.worklet.js', import.meta.url)
+  },
+  compass_in: {
+    processorName: 'dp-compass-in',
+    moduleUrl: new URL('./compass_in.worklet.js', import.meta.url)
+  },
+  distance_in: {
+    processorName: 'dp-distance-in',
+    moduleUrl: new URL('./distance_in.worklet.js', import.meta.url)
+  },
   i2s_in: {
     processorName: 'dp-i2s-in',
     moduleUrl: new URL('./i2s_in.worklet.js', import.meta.url)
@@ -41,6 +61,10 @@ export const HARDWARE_REGISTRY: Partial<Record<NodeKind, WorkletEntry>> = {
     processorName: 'dp-midi-out-note',
     moduleUrl: new URL('./midi_out_note.worklet.js', import.meta.url)
   },
+  code: {
+    processorName: 'dp-code',
+    moduleUrl: new URL('./code.worklet.js', import.meta.url)
+  },
   expression: {
     processorName: 'dp-expression',
     moduleUrl: new URL('./expression.worklet.js', import.meta.url)
@@ -48,5 +72,9 @@ export const HARDWARE_REGISTRY: Partial<Record<NodeKind, WorkletEntry>> = {
   print: {
     processorName: 'dp-print',
     moduleUrl: new URL('./print.worklet.js', import.meta.url)
+  },
+  preset_recall: {
+    processorName: 'dp-preset-recall',
+    moduleUrl: new URL('./preset_recall.worklet.js', import.meta.url)
   }
 }
