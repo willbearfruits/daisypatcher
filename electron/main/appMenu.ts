@@ -60,6 +60,7 @@ export type AppCommand =
   | 'preferences'
   | 'shortcuts'
   | 'about'
+  | 'guide'
 
 const isMac = process.platform === 'darwin'
 
@@ -275,15 +276,33 @@ export function buildAppMenu(): Menu {
   template.push({
     label: '&Help',
     submenu: [
+      { label: 'Daisypatcher Guide', accelerator: 'F1', click: onClick('guide') },
       { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: onClick('shortcuts') },
+      { label: 'Example Patches…', click: onClick('examples') },
       { type: 'separator' },
+      /*
+       * Web references, labelled as such — "(web)" so no one expects them
+       * to work offline or wonders why the app went to the browser. All
+       * three verified live; libDaisy is the Seed's hardware library,
+       * DaisySP is the DSP library most Daisy nodes are one module of, and
+       * the wiki is where pinouts and the bootloader live.
+       */
       {
-        label: 'Daisy Seed Documentation',
+        label: 'libDaisy Documentation (web)',
         click: () => void openExternalSafe('https://electro-smith.github.io/libDaisy/')
       },
       {
-        label: 'DaisySP Reference',
+        label: 'DaisySP Reference (web)',
         click: () => void openExternalSafe('https://electro-smith.github.io/DaisySP/')
+      },
+      {
+        label: 'Daisy Wiki — pinouts && bootloader (web)',
+        click: () => void openExternalSafe('https://github.com/electro-smith/DaisyWiki/wiki')
+      },
+      { type: 'separator' },
+      {
+        label: 'Report an Issue (web)',
+        click: () => void openExternalSafe('https://github.com/willbearfruits/daisypatcher/issues/new')
       },
       { type: 'separator' },
       ...(isMac ? [] : ([{ label: 'About Daisypatcher', click: onClick('about') }] as MenuItemConstructorOptions[]))

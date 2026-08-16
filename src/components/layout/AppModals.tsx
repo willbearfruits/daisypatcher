@@ -17,15 +17,17 @@
  * that changes in one place cannot silently stay stale in the other.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore } from '@/state/store'
 import { useTheme } from '@/theme/ThemeProvider'
 import { THEMES } from '@/theme/themes'
 import { openPatchFromPath } from '@/state/patchFile'
 import { requestConfirm } from './ConfirmDialog'
+import { extractHeadings, renderMarkdown } from './markdown'
+import GUIDE_MD from '../../../docs/USER_GUIDE.md?raw'
 import styles from './AppModals.module.css'
 
-export type AppModalKind = 'preferences' | 'shortcuts' | 'about' | 'examples'
+export type AppModalKind = 'preferences' | 'shortcuts' | 'about' | 'examples' | 'guide'
 export const OPEN_APP_MODAL_EVENT = 'dp:open-app-modal'
 
 export function openAppModal(kind: AppModalKind): void {
@@ -113,7 +115,7 @@ export function AppModals() {
   return (
     <div className={styles.scrim} onMouseDown={close} role="presentation">
       <div
-        className={styles.sheet}
+        className={`${styles.sheet} ${kind === 'guide' ? styles.sheetWide : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={kind}
@@ -127,7 +129,9 @@ export function AppModals() {
                 ? 'KEYBOARD SHORTCUTS'
                 : kind === 'examples'
                   ? 'EXAMPLE PATCHES'
-                  : 'ABOUT'}
+                  : kind === 'guide'
+                    ? 'GUIDE'
+                    : 'ABOUT'}
           </span>
           <span className={styles.spacer} />
           <button type="button" className={styles.close} onClick={close} aria-label="Close">
@@ -139,6 +143,7 @@ export function AppModals() {
         {kind === 'shortcuts' ? <Shortcuts /> : null}
         {kind === 'about' ? <About /> : null}
         {kind === 'examples' ? <Examples onDone={close} /> : null}
+        {kind === 'guide' ? <Guide /> : null}
       </div>
     </div>
   )
@@ -355,6 +360,63 @@ async function confirmDiscardForExample(): Promise<boolean> {
     confirmLabel: 'Discard',
     danger: true
   })
+}
+
+
+/**
+ * The user guide, from `docs/USER_GUIDE.md`.
+ *
+ * One Markdown file is the source of truth: it renders here, it reads on
+ * GitHub, and it is imported at build time (`?raw`) so the built app carries
+ * it with no fetch — the CSP forbids one anyway. Headings become a table of
+ * contents; clicking one scrolls the article, not the window.
+ */
+function Guide() {
+  const openLink = useCallback((url: string) => {
+    const w = window as unknown as { daisy?: { openExternal?: (u: string) => void } }
+    // Through main's detached opener — never `window.open`, which the
+    // window-open handler would refuse, and never in-window navigation.
+    if (w.daisy?.openExternal) w.daisy.openExternal(url)
+  }, [])
+  const headings = useMemo(() => extractHeadings(GUIDE_MD).filter((h) => h.level <= 2), [])
+  const body = useMemo(
+    () =>
+      renderMarkdown(GUIDE_MD, openLink, {
+        h1: styles.gH1,
+        h2: styles.gH2,
+        h3: styles.gH3,
+        p: styles.gP,
+        ul: styles.gList,
+        ol: styles.gList,
+        pre: styles.gPre,
+        table: styles.gTable
+      }),
+    [openLink]
+  )
+  const articleRef = useRef<HTMLDivElement | null>(null)
+  const jump = (id: string) => {
+    const el = articleRef.current?.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+    el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
+  return (
+    <div className={styles.guide}>
+      <nav className={styles.toc} aria-label="Contents">
+        {headings.map((h) => (
+          <button
+            key={h.id}
+            type="button"
+            className={h.level === 1 ? styles.tocTop : styles.tocItem}
+            onClick={() => jump(h.id)}
+          >
+            {h.text}
+          </button>
+        ))}
+      </nav>
+      <div className={styles.article} ref={articleRef}>
+        {body}
+      </div>
+    </div>
+  )
 }
 
 function About() {

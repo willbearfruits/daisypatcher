@@ -194,6 +194,14 @@ export function buildCommands(ctx: CommandContext): Command[] {
       run: () => window.dispatchEvent(new CustomEvent(TOGGLE_CODE_PANEL_EVENT))
     },
     {
+      id: 'help.guide',
+      label: 'Open the guide',
+      group: 'View',
+      shortcut: 'F1',
+      keywords: 'help docs documentation manual how to',
+      run: () => openAppModal('guide')
+    },
+    {
       id: 'view.assistant',
       label: 'Ask the assistant',
       group: 'View',

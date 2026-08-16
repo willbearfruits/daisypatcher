@@ -490,6 +490,14 @@ function registerIpcHandlers(): void {
     return list
   })
 
+  /* ---------------- external links ---------------- */
+
+  // Renderer-requested URLs (the guide's links). http(s) only, enforced in
+  // `openExternalSafe`; the renderer cannot make main open anything else.
+  ipcMain.on('app:open-external', (_evt, url: string) => {
+    if (typeof url === 'string') void openExternalSafe(url)
+  })
+
   /* ---------------- window chrome ---------------- */
 
   ipcMain.on('window:document', (evt, p: { path?: string | null; edited?: boolean }) => {

@@ -231,6 +231,9 @@ export function useMenuCommands(): void {
         case 'about':
           openAppModal('about')
           break
+        case 'guide':
+          openAppModal('guide')
+          break
 
         default:
           // A command the main process knows and this does not is a real

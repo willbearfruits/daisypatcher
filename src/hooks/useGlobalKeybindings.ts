@@ -13,6 +13,7 @@ import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
 import { newPatch, openPatch, savePatch, savePatchAs } from '@/state/patchFile'
 import { openAppModal } from '@/components/layout/AppModals'
+import { CANVAS_COMMAND_EVENT } from '@/hooks/useMenuCommands'
 import { OPEN_COMMAND_PALETTE_EVENT } from '@/components/layout/CommandPalette'
 import { TOGGLE_CODE_PANEL_EVENT } from '@/components/layout/CodePanel'
 import { TOGGLE_ASSISTANT_EVENT } from '@/components/layout/AssistantPanel'
@@ -30,6 +31,14 @@ export function useGlobalKeybindings(): void {
   useEffect(() => {
     const onKeyDown = (ev: KeyboardEvent) => {
       const editable = isEditableTarget(document.activeElement)
+
+      // F1 — the guide. The one help key every desktop app honours, and it
+      // is safe from any text field because nothing types an F1.
+      if (ev.key === 'F1') {
+        ev.preventDefault()
+        openAppModal('guide')
+        return
+      }
       const mod = ev.metaKey || ev.ctrlKey
       const key = ev.key
 
@@ -135,6 +144,14 @@ export function useGlobalKeybindings(): void {
         // Shift+S is Save As — the dialog every time; plain S writes back
         // to the file the patch came from (see patchFile.savePatch).
         void (ev.shiftKey ? savePatchAs() : savePatch())
+        return
+      }
+      // Cmd/Ctrl+0 — zoom to fit; Shift adds reset. The menu shows both.
+      if (k === '0') {
+        ev.preventDefault()
+        window.dispatchEvent(
+          new CustomEvent(CANVAS_COMMAND_EVENT, { detail: ev.shiftKey ? 'zoom_reset' : 'zoom_fit' })
+        )
         return
       }
       // Cmd/Ctrl+1/2/3 — the three views. Digit keys are how every tabbed

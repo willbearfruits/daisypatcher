@@ -233,6 +233,8 @@ const api = {
   menu: {
     onCommand: (cb: (cmd: string) => void): (() => void) => onChannel('app:command', cb)
   },
+  /** Open an http(s) URL in the system browser via main's detached opener. */
+  openExternal: (url: string): void => ipcRenderer.send('app:open-external', url),
   /**
    * A `.dpatch` dropped onto the window from the OS.
    *

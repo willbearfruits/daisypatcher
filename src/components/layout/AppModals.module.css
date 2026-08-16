@@ -220,3 +220,163 @@
   line-height: 1.45;
   color: var(--dp-text-muted);
 }
+
+/* ---------- guide ---------- */
+
+.sheetWide {
+  width: 880px;
+  height: calc(100vh - var(--dp-space-8));
+}
+
+.guide {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+
+.toc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--dp-space-3) var(--dp-space-2);
+  border-right: 1px solid var(--dp-border);
+  overflow-y: auto;
+}
+
+.tocTop,
+.tocItem {
+  font: inherit;
+  font-size: var(--dp-fs-xs);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--dp-radius-xs);
+  padding: 4px var(--dp-space-2);
+  color: var(--dp-text-muted);
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.tocTop {
+  color: var(--dp-text);
+  font-weight: 600;
+  margin-bottom: var(--dp-space-1);
+}
+
+.tocItem:hover,
+.tocTop:hover {
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+}
+
+.article {
+  overflow-y: auto;
+  padding: var(--dp-space-4) var(--dp-space-6);
+  font-size: var(--dp-fs-md);
+  line-height: 1.65;
+  color: var(--dp-text);
+  /* Reading measure. At 13px, 74ch is ~600px — the sheet minus the TOC. */
+  max-width: 74ch;
+  scroll-behavior: smooth;
+}
+
+.gH1 {
+  margin: 0 0 var(--dp-space-3);
+  font-family: var(--dp-font-display);
+  font-size: var(--dp-fs-xl);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
+.gH2 {
+  margin: var(--dp-space-6) 0 var(--dp-space-2);
+  padding-top: var(--dp-space-4);
+  border-top: 1px solid var(--dp-border);
+  font-size: var(--dp-fs-lg);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.gH3 {
+  margin: var(--dp-space-4) 0 var(--dp-space-1);
+  font-size: var(--dp-fs-md);
+  font-weight: 600;
+  color: var(--dp-text);
+}
+
+.gP {
+  margin: 0 0 var(--dp-space-3);
+}
+
+.gP code,
+.gList code,
+.gTable code {
+  font-family: var(--dp-font-mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: var(--dp-radius-xs);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text);
+}
+
+.gP a,
+.gList a {
+  color: var(--dp-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.gList {
+  margin: 0 0 var(--dp-space-3);
+  padding-left: var(--dp-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gPre {
+  margin: 0 0 var(--dp-space-3);
+  padding: var(--dp-space-3);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  line-height: 1.5;
+  background: var(--dp-surface-sunken);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  overflow-x: auto;
+  color: var(--dp-text);
+}
+
+.gTable {
+  margin: 0 0 var(--dp-space-3);
+  overflow-x: auto;
+}
+
+.gTable table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.gTable td,
+.gTable th {
+  padding: 4px var(--dp-space-2);
+  border-bottom: 1px solid var(--dp-border);
+  vertical-align: baseline;
+  text-align: left;
+}
+
+.gTable th {
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gTable td:first-child {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  white-space: nowrap;
+  color: var(--dp-text);
+}
