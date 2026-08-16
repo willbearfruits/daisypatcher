@@ -10,6 +10,8 @@ import type { ReactNode } from 'react'
 import type { NodeKind } from '@/types/graph'
 import { useEditorStore } from '@/state/store'
 import { loadStarterPatch } from '@/state/starterPatch'
+import { openPatchFromPath } from '@/state/patchFile'
+import { requestConfirm } from './ConfirmDialog'
 import { openAppModal } from './AppModals'
 import { NODE_DRAG_MIME } from './Palette'
 import styles from './CanvasShell.module.css'
@@ -31,8 +33,8 @@ export function CanvasShell({ children, onDropNode }: CanvasShellProps) {
   const isEmpty = nodes.length === 0
 
   const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    // accept only our payload
-    if (e.dataTransfer.types.includes(NODE_DRAG_MIME)) {
+    // Our own node payload, or a file from the OS (a .dpatch to open).
+    if (e.dataTransfer.types.includes(NODE_DRAG_MIME) || e.dataTransfer.types.includes('Files')) {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'copy'
       setDragOver(true)
@@ -49,8 +51,40 @@ export function CanvasShell({ children, onDropNode }: CanvasShellProps) {
       e.preventDefault()
       setDragOver(false)
       const kind = e.dataTransfer.getData(NODE_DRAG_MIME) as NodeKind | ''
-      if (!kind) return
-      onDropNode?.(kind, e.clientX, e.clientY)
+      if (kind) {
+        onDropNode?.(kind, e.clientX, e.clientY)
+        return
+      }
+      /*
+       * A file from the OS. Only .dpatch is meaningful here — the preload
+       * helper returns null for anything else, and main grants the path
+       * on the same terms as a dialog pick, so this widens nothing. Same
+       * "discard unsaved changes?" as Open…, because dropping a file onto
+       * work you meant to keep is exactly the accident to guard.
+       */
+      const file = e.dataTransfer.files?.[0]
+      if (!file) return
+      const w = window as unknown as {
+        daisy?: { pathForDroppedPatch?: (f: File) => Promise<string | null> }
+      }
+      void (async () => {
+        const path = await w.daisy?.pathForDroppedPatch?.(file)
+        if (!path) {
+          useEditorStore.getState().setStatus({ kind: 'warn', message: `not a .dpatch: ${file.name}` })
+          return
+        }
+        const st = useEditorStore.getState()
+        if (st.isDirty || st.history.past.length > 0) {
+          const ok = await requestConfirm({
+            title: 'Open patch',
+            message: 'Discard unsaved changes?',
+            confirmLabel: 'Discard',
+            danger: true
+          })
+          if (!ok) return
+        }
+        await openPatchFromPath(path)
+      })()
     },
     [onDropNode]
   )

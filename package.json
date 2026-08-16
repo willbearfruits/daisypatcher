@@ -41,6 +41,15 @@
       "out/**/*",
       "package.json"
     ],
+    "fileAssociations": [
+      {
+        "ext": "dpatch",
+        "name": "Daisypatcher Patch",
+        "description": "Daisypatcher patch",
+        "mimeType": "application/x-daisypatcher-patch",
+        "role": "Editor"
+      }
+    ],
     "extraResources": [
       {
         "from": "examples",

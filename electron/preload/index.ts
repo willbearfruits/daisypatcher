@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 /**
  * Types exposed to the renderer. These mirror the canonical defs in
@@ -233,11 +233,35 @@ const api = {
   menu: {
     onCommand: (cb: (cmd: string) => void): (() => void) => onChannel('app:command', cb)
   },
+  /**
+   * A `.dpatch` dropped onto the window from the OS.
+   *
+   * `webUtils.getPathForFile` is the only sanctioned way to learn a
+   * dropped File's path under contextIsolation. The path is then granted
+   * by main (same allow-list `fs:readFile` checks) and returned; a
+   * non-.dpatch drop returns null and is granted nothing.
+   */
+  pathForDroppedPatch: (file: File): Promise<string | null> => {
+    let path = ''
+    try {
+      path = webUtils.getPathForFile(file)
+    } catch {
+      return Promise.resolve(null)
+    }
+    if (!path || !/\.(dpatch|json)$/i.test(path)) return Promise.resolve(null)
+    return ipcRenderer.invoke('fs:grantDropped', path)
+  },
   recent: {
     add: (path: string): void => ipcRenderer.send('recent:add', path),
     list: (): Promise<string[]> => ipcRenderer.invoke('recent:list'),
-    /** File → Open Recent → item: main hands the path over; the renderer opens it. */
-    onOpenPath: (cb: (path: string) => void): (() => void) => onChannel('app:open-path', cb)
+    /** File → Open Recent → item, or a file opened from the OS: main hands the path over. */
+    onOpenPath: (cb: (path: string) => void): (() => void) => {
+      const off = onChannel('app:open-path', cb)
+      // Now that someone is listening, main may drain a path that arrived
+      // before the window existed (double-click launch, argv).
+      ipcRenderer.send('app:ready-for-open')
+      return off
+    }
   },
   window: {
     /** Represented file + edited flag: macOS proxy icon and title-bar dot. */

@@ -453,6 +453,17 @@ function registerIpcHandlers(): void {
   // "no entry" as unknown status.
   const VERIFICATION_PATH = join(app.getPath('userData'), 'verified.json')
 
+  /* ---------------- dropped files ---------------- */
+
+  // A file the user physically dragged onto the window is as deliberate a
+  // choice as one picked in a dialog; grant it on the same terms.
+  ipcMain.handle('fs:grantDropped', async (_evt, path: string) => {
+    if (typeof path !== 'string' || !hasPatchExt(path) || !existsSync(path)) return null
+    const abs = resolve(path)
+    grantPath(abs)
+    return abs
+  })
+
   /* ---------------- recent files ---------------- */
 
   // The renderer reports a successful open/save; a cancelled dialog or a
@@ -782,17 +793,59 @@ app.on('child-process-gone', (_evt, details) => {
   }
 })
 
+/*
+ * Opening a .dpatch from the OS: double-click in a file manager, drag onto
+ * the dock icon, `daisypatcher foo.dpatch`. macOS delivers `open-file`
+ * (possibly before the window exists); Linux and Windows put it in argv,
+ * and a second launch arrives via `second-instance` with ITS argv. All
+ * three funnel into one queue that drains once the renderer says it is
+ * listening — a path sent before that is a message to nobody.
+ */
+const pendingOpen: string[] = []
+let rendererReadyForOpen = false
+function patchArgFrom(argv: string[]): string | null {
+  // Skip the binary and any electron/chromium flags; take the first .dpatch.
+  return argv.slice(1).find((a) => !a.startsWith('-') && hasPatchExt(a) && existsSync(a)) ?? null
+}
+function openFromOs(path: string): void {
+  const abs = resolve(path)
+  grantPath(abs)
+  const win = BrowserWindow.getAllWindows()[0]
+  if (rendererReadyForOpen && win && !win.webContents.isDestroyed()) {
+    win.webContents.send('app:open-path', abs)
+  } else {
+    pendingOpen.push(abs)
+  }
+}
+app.on('open-file', (ev, path) => {
+  ev.preventDefault()
+  openFromOs(path)
+})
+ipcMain.on('app:ready-for-open', (evt) => {
+  rendererReadyForOpen = true
+  const win = BrowserWindow.fromWebContents(evt.sender)
+  for (const p of pendingOpen.splice(0)) win?.webContents.send('app:open-path', p)
+})
+{
+  // Through `openFromOs`, not a raw push: it is what grants the path.
+  const fromArgv = patchArgFrom(process.argv)
+  if (fromArgv) openFromOs(fromArgv)
+}
+
 // Two instances share one workspace and SDK dir — a second app racing the
 // first mid-build corrupts project dirs. Single-instance, focus the first.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_evt, argv) => {
     const win = BrowserWindow.getAllWindows()[0]
     if (win) {
       if (win.isMinimized()) win.restore()
       win.focus()
     }
+    // "Open with Daisypatcher" while it is already running lands here.
+    const p = patchArgFrom(argv)
+    if (p) openFromOs(p)
   })
 
   app.whenReady().then(() => {
