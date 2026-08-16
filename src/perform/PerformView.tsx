@@ -159,6 +159,20 @@ function groupStyle(ec: EnclosureComponent, animate: boolean): React.CSSProperti
  * Top-level view.
  * ===================================================================== */
 
+
+/** Any CSS colour → [r,g,b], via a 1px canvas. Once per mount, not per frame. */
+function cssToRgb(css: string): [number, number, number] {
+  const c = document.createElement('canvas')
+  c.width = 1
+  c.height = 1
+  const x = c.getContext('2d')
+  if (!x) return [255, 255, 255]
+  x.fillStyle = css
+  x.fillRect(0, 0, 1, 1)
+  const d = x.getImageData(0, 0, 1, 1).data
+  return [d[0], d[1], d[2]]
+}
+
 export function PerformView() {
   const hardware = useEditorStore((s) => s.hardware)
   const patchName = useEditorStore((s) => s.graph.meta.name)
@@ -1391,6 +1405,17 @@ function OledControl({
     const pixelOff = cs.getPropertyValue('--dp-bg').trim() || '#0a0f14'
 
     const bitmap = new Uint8Array(OLED_BITMAP_BYTES)
+    // Same skip-if-identical + single-blit as OledNode's canvas loop; see the
+    // note there. While playing this ran 8192 fillRects a frame regardless.
+    const lastPainted = new Uint8Array(OLED_BITMAP_BYTES)
+    let paintedOnce = false
+    const img = ctx.createImageData(OLED_WIDTH, OLED_HEIGHT)
+    const onRgb = cssToRgb(pixelOn)
+    const offRgb = cssToRgb(pixelOff)
+    const off = document.createElement('canvas')
+    off.width = OLED_WIDTH
+    off.height = OLED_HEIGHT
+    const offCtx = off.getContext('2d')
 
     const paint = () => {
       const inputMap: InputMap = {}
@@ -1411,13 +1436,42 @@ function OledControl({
         }
       }
       renderFrame(elementsRef.current, inputMap, bitmap, menus)
-      ctx.fillStyle = pixelOff
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      ctx.fillStyle = pixelOn
-      for (let y = 0; y < OLED_HEIGHT; y++) {
-        for (let x = 0; x < OLED_WIDTH; x++) {
-          if (getPixel(bitmap, x, y)) {
-            ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE)
+      if (paintedOnce) {
+        let same = true
+        for (let i = 0; i < OLED_BITMAP_BYTES; i++) {
+          if (bitmap[i] !== lastPainted[i]) {
+            same = false
+            break
+          }
+        }
+        if (same) return
+      }
+      lastPainted.set(bitmap)
+      paintedOnce = true
+      if (offCtx) {
+        const d = img.data
+        for (let y = 0; y < OLED_HEIGHT; y++) {
+          for (let x = 0; x < OLED_WIDTH; x++) {
+            const c = getPixel(bitmap, x, y) ? onRgb : offRgb
+            const i = (y * OLED_WIDTH + x) * 4
+            d[i] = c[0]
+            d[i + 1] = c[1]
+            d[i + 2] = c[2]
+            d[i + 3] = 255
+          }
+        }
+        offCtx.putImageData(img, 0, 0)
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(off, 0, 0, OLED_WIDTH, OLED_HEIGHT, 0, 0, canvas.width, canvas.height)
+      } else {
+        ctx.fillStyle = pixelOff
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = pixelOn
+        for (let y = 0; y < OLED_HEIGHT; y++) {
+          for (let x = 0; x < OLED_WIDTH; x++) {
+            if (getPixel(bitmap, x, y)) {
+              ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE)
+            }
           }
         }
       }

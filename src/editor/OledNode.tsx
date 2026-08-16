@@ -101,6 +101,24 @@ function readTheme(el: HTMLElement): ThemeColors {
   }
 }
 
+
+/**
+ * Resolve any CSS colour to [r,g,b] by letting a canvas parse it. Theme
+ * tokens can be hex, rgb(), or a named colour; the ImageData path needs
+ * bytes. Done once per canvas mount, not per frame.
+ */
+function parseCssColor(css: string): [number, number, number] {
+  const c = document.createElement('canvas')
+  c.width = 1
+  c.height = 1
+  const x = c.getContext('2d')
+  if (!x) return [255, 255, 255]
+  x.fillStyle = css
+  x.fillRect(0, 0, 1, 1)
+  const d = x.getImageData(0, 0, 1, 1).data
+  return [d[0], d[1], d[2]]
+}
+
 export function OledNode<S extends ClassicScheme>(props: Props<S>): React.JSX.Element {
   const { data, emit } = props
   const selected = data.selected ?? false
@@ -207,6 +225,30 @@ export function OledNode<S extends ClassicScheme>(props: Props<S>): React.JSX.El
 
     const theme = readTheme(canvas)
     const bitmap = new Uint8Array(OLED_BITMAP_BYTES)
+    /*
+     * The frame we last painted, so an identical one can be skipped.
+     *
+     * This loop runs at 60 fps whether or not anything changes — it has
+     * to, because a scope element follows a live signal and there is no
+     * event to subscribe to for "the audio moved". But an idle OLED
+     * showing a static menu was costing ~92,000 canvas draw calls a second
+     * (one `fillRect` per lit pixel, every frame). Comparing the freshly
+     * rendered bitmap against the last painted one is 1 KB of memcmp and
+     * skips all of it when nothing moved.
+     */
+    const lastPainted = new Uint8Array(OLED_BITMAP_BYTES)
+    let lastSelected: string | null | undefined = undefined
+    let paintedOnce = false
+    /* One ImageData for the whole display: a single `putImageData` beats
+       eight thousand `fillRect`s by two orders of magnitude. */
+    const img = ctx.createImageData(OLED_WIDTH, OLED_HEIGHT)
+    const onRgb = parseCssColor(theme.pixelOn)
+    const offRgb = parseCssColor(theme.pixelOff)
+    /* Offscreen at 1:1 pixels; scaled onto the visible canvas with smoothing off. */
+    const off = document.createElement('canvas')
+    off.width = OLED_WIDTH
+    off.height = OLED_HEIGHT
+    const offCtx = off.getContext('2d')
 
     let raf = 0
     let stopped = false
@@ -242,14 +284,50 @@ export function OledNode<S extends ClassicScheme>(props: Props<S>): React.JSX.El
       }
       renderFrame(els, inputMap, bitmap, menus)
 
-      // Paint background.
-      ctx.fillStyle = theme.pixelOff
-      ctx.fillRect(0, 0, PREVIEW_CSS_W, PREVIEW_CSS_H)
-      ctx.fillStyle = theme.pixelOn
-      for (let y = 0; y < OLED_HEIGHT; y++) {
-        for (let x = 0; x < OLED_WIDTH; x++) {
-          if (getPixel(bitmap, x, y)) {
-            ctx.fillRect(x * PREVIEW_SCALE, y * PREVIEW_SCALE, PREVIEW_SCALE, PREVIEW_SCALE)
+      // Nothing changed since the last paint: keep the loop, skip the work.
+      let same = paintedOnce && lastSelected === selectedId
+      if (same) {
+        for (let i = 0; i < OLED_BITMAP_BYTES; i++) {
+          if (bitmap[i] !== lastPainted[i]) {
+            same = false
+            break
+          }
+        }
+      }
+      if (same) {
+        bboxesRef.current = els.map((el) => ({ id: el.id, ...elementBBox(el) }))
+        raf = requestAnimationFrame(draw)
+        return
+      }
+      lastPainted.set(bitmap)
+      lastSelected = selectedId
+      paintedOnce = true
+
+      // Paint the display: one ImageData, one blit.
+      if (offCtx) {
+        const d = img.data
+        for (let y = 0; y < OLED_HEIGHT; y++) {
+          for (let x = 0; x < OLED_WIDTH; x++) {
+            const c = getPixel(bitmap, x, y) ? onRgb : offRgb
+            const i = (y * OLED_WIDTH + x) * 4
+            d[i] = c[0]
+            d[i + 1] = c[1]
+            d[i + 2] = c[2]
+            d[i + 3] = 255
+          }
+        }
+        offCtx.putImageData(img, 0, 0)
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(off, 0, 0, OLED_WIDTH, OLED_HEIGHT, 0, 0, PREVIEW_CSS_W, PREVIEW_CSS_H)
+      } else {
+        ctx.fillStyle = theme.pixelOff
+        ctx.fillRect(0, 0, PREVIEW_CSS_W, PREVIEW_CSS_H)
+        ctx.fillStyle = theme.pixelOn
+        for (let y = 0; y < OLED_HEIGHT; y++) {
+          for (let x = 0; x < OLED_WIDTH; x++) {
+            if (getPixel(bitmap, x, y)) {
+              ctx.fillRect(x * PREVIEW_SCALE, y * PREVIEW_SCALE, PREVIEW_SCALE, PREVIEW_SCALE)
+            }
           }
         }
       }
