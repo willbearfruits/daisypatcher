@@ -15,8 +15,10 @@
 import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
-import { newPatch, openPatch, savePatch } from '@/state/patchFile'
+import { newPatch, openPatch, savePatch, savePatchAs } from '@/state/patchFile'
+import { openAppModal } from './AppModals'
 import { TOGGLE_CODE_PANEL_EVENT } from './CodePanel'
+import { TOGGLE_ASSISTANT_EVENT } from './AssistantPanel'
 import { TARGETS } from '@/codegen/targets'
 import { BOARD_IDS } from '../../../shared/boards'
 import { THEMES } from '@/theme/themes'
@@ -55,6 +57,8 @@ export function buildCommands(ctx: CommandContext): Command[] {
     { id: 'file.new', label: 'New patch', group: 'File', shortcut: `${MOD}+N`, run: () => void newPatch() },
     { id: 'file.open', label: 'Open patch…', group: 'File', shortcut: `${MOD}+O`, run: () => void openPatch() },
     { id: 'file.save', label: 'Save patch', group: 'File', shortcut: `${MOD}+S`, run: () => void savePatch() },
+    { id: 'file.saveAs', label: 'Save patch as…', group: 'File', shortcut: `${MOD}+Shift+S`, run: () => void savePatchAs() },
+    { id: 'file.examples', label: 'Open an example patch…', group: 'File', keywords: 'demo sample template starter', run: () => openAppModal('examples') },
 
     /* ---- edit ---- */
     {
@@ -188,6 +192,14 @@ export function buildCommands(ctx: CommandContext): Command[] {
       shortcut: `${MOD}+Shift+C`,
       keywords: 'c++ source firmware inspect read',
       run: () => window.dispatchEvent(new CustomEvent(TOGGLE_CODE_PANEL_EVENT))
+    },
+    {
+      id: 'view.assistant',
+      label: 'Ask the assistant',
+      group: 'View',
+      shortcut: `${MOD}+Shift+K`,
+      keywords: 'ai llm chat help suggest generate patch ollama claude',
+      run: () => window.dispatchEvent(new CustomEvent(TOGGLE_ASSISTANT_EVENT))
     },
     {
       id: 'view.buildLog',

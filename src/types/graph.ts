@@ -160,6 +160,8 @@ export interface AudioGraph {
     name: string
     sampleRate: number
     blockSize: number
+    /** One line on what the patch is. Optional; shown in the examples picker. */
+    description?: string
   }
 }
 

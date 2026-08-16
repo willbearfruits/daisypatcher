@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { getSdkStatus, installSdk, installEsp32Toolchain, WORKSPACE } from './sdk'
+import { installAppMenu } from './appMenu'
 import {
   complete as assistantComplete,
   listLocalModels,
@@ -35,6 +36,15 @@ import {
 import { initAutoUpdater } from './updater'
 
 const isDev = !app.isPackaged
+
+/*
+ * Dev only: expose a Chrome DevTools Protocol endpoint so the renderer can
+ * be driven and inspected from outside the window. Never in a packaged
+ * build — an open debugging port in a shipped app is a remote-code hole.
+ */
+if (isDev && process.env.DP_CDP_PORT) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.DP_CDP_PORT)
+}
 
 const FILE_FILTERS = [
   { name: 'Daisy Patch', extensions: ['dpatch', 'json'] },
@@ -443,6 +453,63 @@ function registerIpcHandlers(): void {
   // "no entry" as unknown status.
   const VERIFICATION_PATH = join(app.getPath('userData'), 'verified.json')
 
+  /* ---------------- examples ---------------- */
+
+  /**
+   * Where the bundled example patches live.
+   *
+   * In a packaged app they are copied to `resources/examples` by
+   * electron-builder's `extraResources`; in dev they are the repo folder.
+   * Opening the folder rather than a picker means the user sees the README
+   * next to the patches, which is what explains what each one is.
+   */
+  const examplesDir = (): string =>
+    app.isPackaged ? join(process.resourcesPath, 'examples') : join(app.getAppPath(), 'examples')
+
+  ipcMain.handle('examples:open', async () => {
+    const dir = examplesDir()
+    if (!existsSync(dir)) return { opened: false, error: `no examples folder at ${dir}` }
+    const err = await shell.openPath(dir)
+    return { opened: !err, error: err || undefined }
+  })
+
+  ipcMain.handle('examples:list', async () => {
+    const dir = examplesDir()
+    if (!existsSync(dir)) return []
+    const { readdir } = await import('node:fs/promises')
+    const names = await readdir(dir)
+    const { readFile: rf } = await import('node:fs/promises')
+    const out: { name: string; path: string; board?: string; description?: string }[] = []
+    for (const n of names.filter((x) => x.endsWith('.dpatch')).sort()) {
+      const path = join(dir, n)
+      let board: string | undefined
+      let description: string | undefined
+      try {
+        // Only the two fields the picker shows. A malformed example is
+        // still listed — the open path will report what is wrong with it.
+        const d = JSON.parse(await rf(path, 'utf8')) as {
+          graph?: { meta?: { description?: string } }
+          hardware?: { board?: string }
+        }
+        board = d.hardware?.board
+        description = d.graph?.meta?.description
+      } catch {
+        /* listed without metadata */
+      }
+      out.push({ name: n, path, board, description })
+    }
+    /*
+     * Grant these the same way a dialog pick would. `fs:readFile` refuses
+     * any path the user did not choose through a dialog — the right rule —
+     * so an example the app itself lists has to be admitted here or the
+     * "open example" flow lists files it then refuses to open. Bundled
+     * examples are the app's own files; letting the renderer read them is
+     * not a widening of anything.
+     */
+    for (const e of out) grantPath(e.path)
+    return out
+  })
+
   /* ---------------- assistant ---------------- */
 
   ipcMain.handle('assistant:config', async () => readConfigSafe())
@@ -507,10 +574,23 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
-    minWidth: 1100,
+    /*
+     * 1360, not 1100: the top bar carries three view tabs, four boards, a
+     * filename, flash mode and eight controls, and below ~1350px they
+     * physically overlap. A minimum the layout cannot honour is worse than
+     * a larger one — the window let you shrink into a state where buttons
+     * sat on top of each other and half of them were unclickable.
+     */
+    minWidth: 1360,
     minHeight: 700,
     show: false,
-    autoHideMenuBar: true,
+    /*
+     * The menu bar is VISIBLE on Linux and Windows. `autoHideMenuBar: true`
+     * hid it behind Alt, and a menu nobody can see is a menu that does not
+     * exist — "there is no File menu" was the exact report. macOS puts it in
+     * the system bar regardless.
+     */
+    autoHideMenuBar: false,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#07090c',
     webPreferences: {
@@ -522,6 +602,36 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false
     }
+  })
+
+  /*
+   * A dead renderer is a blank window with no way out. Reload it — the
+   * store re-hydrates from nothing, which loses unsaved edits, but that is
+   * strictly better than a frozen frame the user has to force-quit. The
+   * message names the loss so nobody wonders where their patch went.
+   */
+  win.webContents.on('render-process-gone', (_evt, details) => {
+    if (details.reason === 'clean-exit') return
+    console.error(`[main] renderer gone: ${details.reason}`)
+    dialog
+      .showMessageBox(win, {
+        type: 'error',
+        title: 'Daisypatcher stopped responding',
+        message: `The editor crashed (${details.reason}).`,
+        detail: 'Reloading will recover the app. Unsaved changes since your last save are lost.',
+        buttons: ['Reload', 'Quit'],
+        defaultId: 0,
+        cancelId: 1
+      })
+      .then(({ response }) => {
+        if (response === 0) win.webContents.reload()
+        else app.quit()
+      })
+      .catch(() => win.webContents.reload())
+  })
+
+  win.on('unresponsive', () => {
+    console.warn('[main] renderer unresponsive')
   })
 
   win.on('ready-to-show', () => {
@@ -553,6 +663,46 @@ function createWindow(): void {
   }
 }
 
+/*
+ * Last-resort error handling in the main process.
+ *
+ * An unhandled rejection in main used to be a silent nothing — Electron
+ * prints it and carries on, and the user sees a button that did not work
+ * with no explanation. An uncaught exception is worse: the default is to
+ * kill the process, taking an unsaved patch with it. Neither is a reason
+ * to die. Log both, tell the renderer so it can show a status line, and
+ * keep the window up — a save is one keystroke away and that is the thing
+ * to protect.
+ */
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason)
+  console.error('[main] unhandled rejection:', msg)
+  for (const w of BrowserWindow.getAllWindows()) {
+    w.webContents.send('app:main-error', `internal error: ${msg}`)
+  }
+})
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaught exception:', err)
+  for (const w of BrowserWindow.getAllWindows()) {
+    w.webContents.send('app:main-error', `internal error: ${err.message}`)
+  }
+})
+
+/*
+ * The GPU process can die under us — seen here on Linux when the
+ * compositor is torn down mid-session ("GPU process isn't usable.
+ * Goodbye."), and it is the default Chromium response to a driver reset.
+ * Without this, Electron exits and the patch is gone. Falling back to
+ * software compositing keeps the window alive; the canvas is slower but
+ * the work is still there to save.
+ */
+app.on('child-process-gone', (_evt, details) => {
+  if (details.type === 'GPU' && details.reason !== 'clean-exit') {
+    console.error(`[main] GPU process gone (${details.reason}); disabling hardware acceleration`)
+    app.disableHardwareAcceleration()
+  }
+})
+
 // Two instances share one workspace and SDK dir — a second app racing the
 // first mid-build corrupts project dirs. Single-instance, focus the first.
 if (!app.requestSingleInstanceLock()) {
@@ -567,6 +717,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(() => {
+    installAppMenu()
     registerIpcHandlers()
     createWindow()
 

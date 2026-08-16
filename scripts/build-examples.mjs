@@ -193,7 +193,7 @@ class Patch {
       graph: {
         nodes: this.nodes,
         connections: this.connections,
-        meta: { name: this.name, sampleRate: 48000, blockSize: 48 }
+        meta: { name: this.name, sampleRate: 48000, blockSize: 48, description: this.description }
       },
       hardware: {
         board: this.board,

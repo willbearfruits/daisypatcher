@@ -159,15 +159,39 @@ function parseDpatch(parsed: unknown): {
   return null
 }
 
+/**
+ * Save.
+ *
+ * Writes straight back to `filePath` when the patch already has one — this
+ * used to open the Save dialog on EVERY Ctrl+S, which is the single most
+ * annoying thing a desktop app can do, and made "did that save?" a real
+ * question. `savePatchAs` is the dialog path, and this falls through to it
+ * for a patch that has never been saved.
+ */
 export async function savePatch(
   store: Store = useEditorStore
 ): Promise<{ saved: boolean; path?: string }> {
   const s = store.getState()
-  const defaultName = (s.graph.meta.name || 'untitled') + '.dpatch'
+  if (s.filePath) return writePatchTo(s.filePath, store)
+  return savePatchAs(store)
+}
 
+/** Save under a new name, always via the dialog. */
+export async function savePatchAs(
+  store: Store = useEditorStore
+): Promise<{ saved: boolean; path?: string }> {
+  const s = store.getState()
+  const defaultName = (s.graph.meta.name || 'untitled') + '.dpatch'
   const { canceled, path } = await window.daisy.dialogs.save(defaultName)
   if (canceled || !path) return { saved: false }
+  return writePatchTo(path, store)
+}
 
+async function writePatchTo(
+  path: string,
+  store: Store
+): Promise<{ saved: boolean; path?: string }> {
+  const s = store.getState()
   const name = stripExt(basename(path))
   /*
    * Save the ROOT patch. `s.graph` is whichever level is open, so saving
@@ -210,13 +234,44 @@ export async function savePatch(
   }
 }
 
+/** Should we throw away what is on the canvas? Asks only if there is something to lose. */
+async function confirmDiscard(store: Store, title: string): Promise<boolean> {
+  const s = store.getState()
+  if (!s.isDirty && s.history.past.length === 0) return true
+  return requestConfirm({
+    title,
+    message: 'Discard unsaved changes?',
+    confirmLabel: 'Discard',
+    danger: true
+  })
+}
+
 export async function openPatch(
   store: Store = useEditorStore
 ): Promise<{ loaded: boolean; path?: string }> {
-  const s = store.getState()
+  /*
+   * Ask BEFORE the file dialog, not after: picking a file and then being
+   * asked whether to discard your work is the wrong order, and cancelling
+   * at that point has already cost you the pick. `newPatch` had this
+   * guard; `openPatch` did not, so opening a file could silently drop an
+   * hour of unsaved patching.
+   */
+  if (!(await confirmDiscard(store, 'Open patch'))) return { loaded: false }
   const { canceled, path } = await window.daisy.dialogs.open()
   if (canceled || !path) return { loaded: false }
+  return openPatchFromPath(path, store)
+}
 
+/**
+ * Load a patch the caller already has a path for — a bundled example, a
+ * recent file. Does NOT confirm; the caller decides whether there is
+ * anything to protect.
+ */
+export async function openPatchFromPath(
+  path: string,
+  store: Store = useEditorStore
+): Promise<{ loaded: boolean; path?: string }> {
+  const s = store.getState()
   try {
     const text = await window.daisy.fs.readFile(path)
     const parsed: unknown = JSON.parse(text)
@@ -255,15 +310,7 @@ export async function openPatch(
 
 export async function newPatch(store: Store = useEditorStore): Promise<void> {
   const s = store.getState()
-  if (s.isDirty || s.history.past.length > 0) {
-    const ok = await requestConfirm({
-      title: 'New patch',
-      message: 'Discard unsaved changes?',
-      confirmLabel: 'Discard',
-      danger: true
-    })
-    if (!ok) return
-  }
+  if (!(await confirmDiscard(store, 'New patch'))) return
   s.resetGraph()
   s.setStatus({ kind: 'idle', message: 'ready' })
 }

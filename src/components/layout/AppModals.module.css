@@ -1,0 +1,222 @@
+/* AppModals — same backdrop/sheet language as ConfirmDialog. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--dp-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--dp-z-modal, 40);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: dp-modals-backdrop-in var(--dp-motion-fast) var(--dp-ease-out);
+}
+
+.sheet {
+  width: 560px;
+  max-width: calc(100vw - var(--dp-space-8));
+  max-height: calc(100vh - var(--dp-space-8));
+  overflow-y: auto;
+  background: var(--dp-surface);
+  border: 1px solid var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  box-shadow: var(--dp-shadow-md);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--dp-font-sans);
+  color: var(--dp-text);
+  animation: dp-modals-surface-in var(--dp-motion-normal) var(--dp-ease-out);
+}
+
+@keyframes dp-modals-backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes dp-modals-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .sheet {
+    animation: none;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  padding: var(--dp-space-3) var(--dp-space-4);
+  border-bottom: 1px solid var(--dp-border);
+}
+
+.title {
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.08em;
+  color: var(--dp-text-dim);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.close {
+  font: inherit;
+  font-size: var(--dp-fs-sm);
+  background: none;
+  border: none;
+  color: var(--dp-text-dim);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--dp-radius-xs);
+}
+
+.close:hover {
+  color: var(--dp-text);
+  background: var(--dp-surface-sunken);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-4);
+  padding: var(--dp-space-4);
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--dp-space-4) var(--dp-space-6);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+}
+
+.h {
+  margin: 0;
+  font-size: var(--dp-fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dp-text-dim);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dp-space-3);
+  font-size: var(--dp-fs-sm);
+}
+
+.select {
+  font: inherit;
+  font-size: var(--dp-fs-sm);
+  padding: 3px var(--dp-space-2);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text);
+  min-width: 160px;
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--dp-fs-sm);
+}
+
+.table td {
+  padding: 3px 0;
+  vertical-align: baseline;
+  color: var(--dp-text-muted);
+}
+
+.key {
+  width: 46%;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-xs);
+  color: var(--dp-text);
+  white-space: nowrap;
+  padding-right: var(--dp-space-3);
+}
+
+.lede {
+  margin: 0;
+  font-size: var(--dp-fs-md);
+  line-height: 1.5;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--dp-fs-xs);
+  line-height: 1.5;
+  color: var(--dp-text-dim);
+}
+
+.note code {
+  font-family: var(--dp-font-mono);
+  color: var(--dp-text-muted);
+}
+
+.exampleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-1);
+}
+
+.exampleRow {
+  font: inherit;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--dp-space-2) var(--dp-space-3);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  background: var(--dp-surface-sunken);
+  color: var(--dp-text);
+  cursor: pointer;
+  transition: border-color var(--dp-motion-fast) var(--dp-ease);
+}
+
+.exampleRow:hover:not(:disabled) {
+  border-color: var(--dp-accent);
+}
+
+.exampleRow:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.exampleName {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dp-space-2);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-fs-sm);
+}
+
+.exampleBoard {
+  font-size: var(--dp-fs-xs);
+  letter-spacing: 0.04em;
+  color: var(--dp-text-dim);
+}
+
+.exampleDesc {
+  font-size: var(--dp-fs-xs);
+  line-height: 1.45;
+  color: var(--dp-text-muted);
+}

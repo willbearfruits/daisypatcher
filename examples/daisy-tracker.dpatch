@@ -634,7 +634,8 @@
     "meta": {
       "name": "daisy-tracker",
       "sampleRate": 48000,
-      "blockSize": 48
+      "blockSize": 48,
+      "description": "Four-track pattern sequencer with per-track faders — a tracker laid out as a patch."
     }
   },
   "hardware": {

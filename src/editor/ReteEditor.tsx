@@ -22,6 +22,7 @@ import {
   type GetSchemes
 } from 'rete'
 import { AreaPlugin, AreaExtensions, Drag } from 'rete-area-plugin'
+import { CANVAS_COMMAND_EVENT, type CanvasCommand } from '@/hooks/useMenuCommands'
 import {
   ConnectionPlugin,
   ClassicFlow,
@@ -817,10 +818,11 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
      * the case that fires several graph changes back to back.
      */
     let applyQueue: Promise<void> = Promise.resolve()
-    const scheduleApply = (graph: AudioGraph, remeasure = false): void => {
+    const scheduleApply = (graph: AudioGraph, remeasure = false, fit = false): void => {
       applyQueue = applyQueue
         .then(() => applyStoreToRete(graph, editor, area, syncingRef, lastGraphRef))
         .then(() => (remeasure ? remeasureSockets() : undefined))
+        .then(() => (fit ? fitToContent() : undefined))
         .catch((err) => {
           // A failed apply must not poison the queue, or the canvas stops
           // tracking the store for the rest of the session.
@@ -842,6 +844,21 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
      * Called on the two occasions a measurement could have been taken
      * badly: a bulk load, and returning to the Patch tab.
      */
+    /**
+     * Frame the whole patch in the viewport.
+     *
+     * Opening a file left the camera wherever it had been, so a patch
+     * saved with its nodes at (-700, -500) opened as an empty-looking
+     * canvas with the work off the top-left edge — the minimap showed it,
+     * the viewport did not, and "the example is blank" was the read.
+     * Only called on a LOAD; an ordinary edit must never move the camera.
+     */
+    const fitToContent = async (): Promise<void> => {
+      const nodes = editor.getNodes()
+      if (nodes.length === 0) return
+      await AreaExtensions.zoomAt(area, nodes)
+    }
+
     const remeasureSockets = async (): Promise<void> => {
       for (const id of [...area.nodeViews.keys()]) {
         await area.update('node', id)
@@ -863,7 +880,15 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
          */
         const ids = new Set(prev.graph.nodes.map((n) => n.id))
         const bulk = s.graph.nodes.filter((n) => !ids.has(n.id)).length > 1
-        scheduleApply(s.graph, bulk)
+        /*
+         * A file open replaces the whole graph AND changes `filePath` in the
+         * same set; a starter/example load replaces the whole graph from an
+         * empty one. Both deserve a fresh camera. A paste of several nodes
+         * is also `bulk` but keeps `filePath` and starts non-empty, and must
+         * NOT recentre — you pasted where you were looking.
+         */
+        const isLoad = bulk && (s.filePath !== prev.filePath || prev.graph.nodes.length === 0)
+        scheduleApply(s.graph, bulk, isLoad)
       }
       // Returning to the Patch tab: anything measured while it was hidden
       // is suspect, so measure again now that it is laid out.
@@ -934,8 +959,32 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
     if (onReady) onReady(handle)
     currentHandleRef.current = handle
 
+    /*
+     * Zoom commands from the application menu. The store cannot answer
+     * these — the viewport transform is Rete's, not the patch's — so the
+     * menu bridge fires a window event and this is where it lands.
+     */
+    const onCanvasCommand = (ev: Event) => {
+      const cmd = (ev as CustomEvent<CanvasCommand>).detail
+      if (cmd === 'zoom_reset') {
+        void area.area.zoom(1, 0, 0)
+        return
+      }
+      if (cmd === 'zoom_fit') {
+        const nodes = editor.getNodes()
+        if (nodes.length === 0) {
+          void area.area.zoom(1, 0, 0)
+          void area.area.translate(0, 0)
+          return
+        }
+        void AreaExtensions.zoomAt(area, nodes)
+      }
+    }
+    window.addEventListener(CANVAS_COMMAND_EVENT, onCanvasCommand)
+
     return () => {
       disposed = true
+      window.removeEventListener(CANVAS_COMMAND_EVENT, onCanvasCommand)
       // Close a dangling drag transaction (shouldn't happen in practice,
       // but prevents a leaked history slot if teardown races a drag).
       if (dragOpenRef.current) {

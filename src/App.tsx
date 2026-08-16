@@ -44,6 +44,8 @@ import { SdkInstallModal } from '@/components/layout/SdkInstallModal'
 import { CommandPalette } from '@/components/layout/CommandPalette'
 import { CanvasContextMenu } from '@/editor/CanvasContextMenu'
 import { AssistantPanel } from '@/components/layout/AssistantPanel'
+import { AppModals } from '@/components/layout/AppModals'
+import { useMenuCommands } from '@/hooks/useMenuCommands'
 import { CodePanel } from '@/components/layout/CodePanel'
 import { ConfirmHost } from '@/components/layout/ConfirmDialog'
 import type { NodeKind } from '@/types/graph'
@@ -56,12 +58,49 @@ import { usePerformMode } from '@/perform/performMode'
 export default function App() {
   const reteRef = useRef<ReteEditorHandle>(null)
   useGlobalKeybindings()
+  useMenuCommands()
+
+  /*
+   * The last net under every fire-and-forget promise.
+   *
+   * Dozens of UI handlers call `void savePatch()` and the like — correct,
+   * because a click handler cannot await — but a rejection from any of them
+   * used to vanish into the devtools console the user does not have open.
+   * A save that failed for lack of permission looked exactly like a save
+   * that worked. Surface it on the status line, where every other error
+   * already goes, and keep the console entry for anyone debugging.
+   */
+  useEffect(() => {
+    const onRejection = (ev: PromiseRejectionEvent) => {
+      const reason = ev.reason
+      const msg = reason instanceof Error ? reason.message : String(reason ?? 'unknown error')
+      // Rete's own internal cancellations are not user-facing.
+      if (/aborted|cancel/i.test(msg)) return
+      useEditorStore.getState().setStatus({ kind: 'error', message: msg.slice(0, 200) })
+    }
+    window.addEventListener('unhandledrejection', onRejection)
+    return () => window.removeEventListener('unhandledrejection', onRejection)
+  }, [])
 
   // Engine is constructed once, synchronously — the constructor is cheap
   // and does NOT create an AudioContext (that only happens on start()).
   // Creating it up front means VisualNode children can call engine.tap()
   // on first render instead of waiting for a useEffect tick.
   const engine = useMemo(() => createAudioEngine(), [])
+
+  /*
+   * Dev-only handle for poking the store from a devtools console. Stripped
+   * from production by the DEV guard; a released build exposes nothing on
+   * `window` beyond the preload bridge.
+   */
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const w = window as unknown as { __dp?: unknown }
+    w.__dp = { store: useEditorStore, engine }
+    return () => {
+      delete w.__dp
+    }
+  }, [engine])
 
   useEffect(() => {
     const store = useEditorStore
@@ -223,6 +262,7 @@ export default function App() {
         <MainShell reteRef={reteRef} />
         <CodePanel />
         <AssistantPanel />
+        <AppModals />
         <BuildLogPanel />
         <SerialMonitorPanel />
         <SdkInstallModal />

@@ -41,6 +41,16 @@
       "out/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "examples",
+        "to": "examples",
+        "filter": [
+          "*.dpatch",
+          "README.md"
+        ]
+      }
+    ],
     "linux": {
       "target": [
         {

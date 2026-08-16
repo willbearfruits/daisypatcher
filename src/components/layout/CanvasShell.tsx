@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 import type { NodeKind } from '@/types/graph'
 import { useEditorStore } from '@/state/store'
 import { loadStarterPatch } from '@/state/starterPatch'
+import { openAppModal } from './AppModals'
 import { NODE_DRAG_MIME } from './Palette'
 import styles from './CanvasShell.module.css'
 
@@ -79,6 +80,13 @@ export function CanvasShell({ children, onDropNode }: CanvasShellProps) {
             onClick={() => loadStarterPatch()}
           >
             load a starter patch
+          </button>
+          <button
+            type="button"
+            className={styles.starterButton}
+            onClick={() => openAppModal('examples')}
+          >
+            open an example
           </button>
         </div>
       ) : null}

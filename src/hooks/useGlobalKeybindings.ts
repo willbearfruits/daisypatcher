@@ -11,7 +11,8 @@ import { useEffect } from 'react'
 import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
-import { newPatch, openPatch, savePatch } from '@/state/patchFile'
+import { newPatch, openPatch, savePatch, savePatchAs } from '@/state/patchFile'
+import { openAppModal } from '@/components/layout/AppModals'
 import { OPEN_COMMAND_PALETTE_EVENT } from '@/components/layout/CommandPalette'
 import { TOGGLE_CODE_PANEL_EVENT } from '@/components/layout/CodePanel'
 import { TOGGLE_ASSISTANT_EVENT } from '@/components/layout/AssistantPanel'
@@ -75,7 +76,7 @@ export function useGlobalKeybindings(): void {
       // Cmd/Ctrl+K — open the floating command palette (fuzzy picker).
       // Works from anywhere, including text inputs: it's a "jump to
       // command" that should override current focus.
-      if (k === 'k') {
+      if (k === 'k' && !ev.shiftKey) {
         ev.preventDefault()
         window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT))
         return
@@ -92,7 +93,9 @@ export function useGlobalKeybindings(): void {
 
       // Cmd/Ctrl+Shift+K — the assistant. K for "ask", and Shift for the
       // same reason as the code panel: plain Cmd+K is a search binding
-      // people expect elsewhere.
+      // people expect elsewhere. The plain-K branch above MUST exclude
+      // Shift, or this one is unreachable — which it was, and "I can't
+      // find the assistant" was the symptom.
       if (k === 'k' && ev.shiftKey) {
         ev.preventDefault()
         window.dispatchEvent(new CustomEvent(TOGGLE_ASSISTANT_EVENT))
@@ -129,7 +132,29 @@ export function useGlobalKeybindings(): void {
       // happens to be focused.
       if (k === 's') {
         ev.preventDefault()
-        void savePatch()
+        // Shift+S is Save As — the dialog every time; plain S writes back
+        // to the file the patch came from (see patchFile.savePatch).
+        void (ev.shiftKey ? savePatchAs() : savePatch())
+        return
+      }
+      // Cmd/Ctrl+1/2/3 — the three views. Digit keys are how every tabbed
+      // app switches tabs, and the menu shows these as accelerators.
+      if (k === '1' || k === '2' || k === '3') {
+        ev.preventDefault()
+        useEditorStore.getState().setView(k === '1' ? 'patch' : k === '2' ? 'hardware' : 'perform')
+        return
+      }
+      // Cmd/Ctrl+/ — the shortcut list. `/` is the convention (GitHub,
+      // Slack, Linear); `?` needs Shift and reads as a question.
+      if (k === '/') {
+        ev.preventDefault()
+        openAppModal('shortcuts')
+        return
+      }
+      // Cmd/Ctrl+, — preferences, the macOS-universal binding.
+      if (k === ',') {
+        ev.preventDefault()
+        openAppModal('preferences')
         return
       }
       if (k === 'o') {

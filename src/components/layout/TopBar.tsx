@@ -19,6 +19,8 @@ import type { DaisyFlashMode } from '@/types/store'
 import type { NodeKind } from '@/types/graph'
 import { UpdateBadge, UpdateMenu } from './UpdateBadge'
 import { VerificationPanel } from './VerificationPanel'
+import { TOGGLE_ASSISTANT_EVENT } from './AssistantPanel'
+import { TOGGLE_CODE_PANEL_EVENT } from './CodePanel'
 import { TestRigModal } from './TestRigModal'
 import { requestConfirm } from './ConfirmDialog'
 import styles from './TopBar.module.css'
@@ -89,6 +91,36 @@ function IconVerify() {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
       <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
       <path d="M5 8.25l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/* Sparkle-in-a-speech-bubble: ask the assistant. */
+function IconAssistant() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M8 5.25v3.5M6.25 7h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/* Braces: the generated source. */
+function IconCode() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M5.5 3.5c-1.5 0-2 .75-2 2v1.25c0 .75-.5 1.25-1.25 1.25.75 0 1.25.5 1.25 1.25V10.5c0 1.25.5 2 2 2M10.5 3.5c1.5 0 2 .75 2 2v1.25c0 .75.5 1.25 1.25 1.25-.75 0-1.25.5-1.25 1.25V10.5c0 1.25-.5 2-2 2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -242,6 +274,18 @@ export function TopBar() {
 
       <div className={styles.right}>
         <UpdateMenu />
+        <IconButton
+          label="Assistant (Ctrl+Shift+K)"
+          onClick={() => window.dispatchEvent(new CustomEvent(TOGGLE_ASSISTANT_EVENT))}
+        >
+          <IconAssistant />
+        </IconButton>
+        <IconButton
+          label="Generated code (Ctrl+Shift+C)"
+          onClick={() => window.dispatchEvent(new CustomEvent(TOGGLE_CODE_PANEL_EVENT))}
+        >
+          <IconCode />
+        </IconButton>
         <IconButton
           label="Verification checklist"
           onClick={() => setVerificationOpen(true)}

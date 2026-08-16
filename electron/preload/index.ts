@@ -227,6 +227,20 @@ const api = {
    * what crosses this boundary is already raw interleaved Float32 PCM.
    */
   /**
+   * Application-menu commands. The main process owns the menu bar; the
+   * renderer owns every behaviour. One channel, one string per click.
+   */
+  menu: {
+    onCommand: (cb: (cmd: string) => void): (() => void) => onChannel('app:command', cb)
+  },
+  /** Errors the main process caught instead of dying from. */
+  onMainError: (cb: (msg: string) => void): (() => void) => onChannel('app:main-error', cb),
+  examples: {
+    open: (): Promise<{ opened: boolean; error?: string }> => ipcRenderer.invoke('examples:open'),
+    list: (): Promise<{ name: string; path: string; board?: string; description?: string }[]> =>
+      ipcRenderer.invoke('examples:list')
+  },
+  /**
    * Assistant. Network calls and API keys stay in the main process — see
    * `electron/main/assistantService.ts` for why. The renderer never holds a
    * credential and `config()` never returns one.

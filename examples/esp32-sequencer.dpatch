@@ -479,7 +479,8 @@
     "meta": {
       "name": "esp32-sequencer",
       "sampleRate": 48000,
-      "blockSize": 48
+      "blockSize": 48,
+      "description": "Eight-step melodic sequencer with a Euclidean drum track, encoder menu and OLED."
     }
   },
   "hardware": {

@@ -1172,11 +1172,18 @@ export const useEditorStore = create<EditorStore>((set, get) => {
        * have no patch-side counterpart, so without this "a node sometimes
        * appears in the other view" reads as a bug rather than a rule.
        */
+      /*
+       * Select the node we just made, so switching to the Patch tab lands
+       * with it highlighted and its Inspector open — the paired node is
+       * otherwise easy to miss among an existing patch, and "I added a pot
+       * and nothing appeared" is what that reads as.
+       */
       set({
+        ...(node ? syncedSelection(new Set([node.id])) : {}),
         status: {
           kind: 'info',
           message: node
-            ? `${component.label} added \u00B7 ${NODE_DEFINITIONS[nodeKind!].label} node created`
+            ? `${component.label} added \u00B7 ${NODE_DEFINITIONS[nodeKind!].label} node created in Patch`
             : `${component.label} added \u00B7 no patch node for this kind`
         }
       })

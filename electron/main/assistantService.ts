@@ -47,9 +47,23 @@ export interface SafeAssistantConfig {
   hasKey: Record<ProviderId, boolean>
 }
 
+const PROVIDERS: readonly ProviderId[] = ['ollama', 'anthropic', 'openai']
+
+/**
+ * A sensible model per provider. Used when the provider changes and the
+ * current model name plainly belongs to a different one — switching from
+ * Ollama to Anthropic with `qwen2.5-coder:7b` still in the box gets a 404
+ * that never says why.
+ */
+const DEFAULT_MODEL: Record<ProviderId, string> = {
+  ollama: 'qwen2.5-coder:7b',
+  anthropic: 'claude-sonnet-5',
+  openai: 'gpt-4o-mini'
+}
+
 const DEFAULTS: AssistantConfig = {
   provider: 'ollama',
-  model: 'qwen2.5-coder:7b',
+  model: DEFAULT_MODEL.ollama,
   baseUrl: 'http://127.0.0.1:11434',
   keys: {}
 }
@@ -62,7 +76,7 @@ function readConfig(): AssistantConfig {
   try {
     const raw = JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<AssistantConfig>
     return {
-      provider: raw.provider ?? DEFAULTS.provider,
+      provider: PROVIDERS.includes(raw.provider as ProviderId) ? (raw.provider as ProviderId) : DEFAULTS.provider,
       model: typeof raw.model === 'string' ? raw.model : DEFAULTS.model,
       baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : DEFAULTS.baseUrl,
       keys: raw.keys && typeof raw.keys === 'object' ? raw.keys : {}
@@ -107,9 +121,32 @@ export function saveConfig(patch: {
   key?: { provider: ProviderId; value: string }
 }): SafeAssistantConfig {
   const c = readConfig()
-  if (patch.provider) c.provider = patch.provider
-  if (typeof patch.model === 'string') c.model = patch.model
-  if (typeof patch.baseUrl === 'string') c.baseUrl = patch.baseUrl
+  if (patch.provider && PROVIDERS.includes(patch.provider)) {
+    const was = c.provider
+    c.provider = patch.provider
+    // Only swap the model when the old one is the OTHER provider's default,
+    // so a hand-picked model name survives a round-trip through providers.
+    if (was !== patch.provider && c.model === DEFAULT_MODEL[was]) c.model = DEFAULT_MODEL[patch.provider]
+  }
+  if (typeof patch.model === 'string' && patch.model.trim()) c.model = patch.model.trim()
+  if (typeof patch.baseUrl === 'string') {
+    /*
+     * http(s) only, and it has to parse. `fetch('file:///…')` and
+     * `fetch('not a url')` fail with messages that never mention the
+     * settings field that caused them; better to refuse here with one that
+     * does. The renderer sends whatever was typed into the box.
+     */
+    const trimmed = patch.baseUrl.trim()
+    let ok = false
+    try {
+      const u = new URL(trimmed)
+      ok = u.protocol === 'http:' || u.protocol === 'https:'
+    } catch {
+      ok = false
+    }
+    if (!ok) throw new Error(`server must be an http(s) URL, got: ${trimmed.slice(0, 80)}`)
+    c.baseUrl = trimmed
+  }
   if (patch.key) {
     if (patch.key.value) c.keys[patch.key.provider] = patch.key.value
     else delete c.keys[patch.key.provider]

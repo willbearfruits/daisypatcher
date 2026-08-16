@@ -57,7 +57,18 @@ function manifestPath(): string {
   return path.join(libDir(), 'manifest.json')
 }
 
+/**
+ * The id becomes a filename, so it must be exactly the shape `storeSample`
+ * produces — 16 hex chars — before it is allowed anywhere near `join()`.
+ * Anything else (`../manifest`, an absolute path) is refused, not sanitised:
+ * an id that is not a hash is not a sample we made.
+ */
+function assertSampleId(id: string): void {
+  if (!/^[0-9a-f]{16}$/.test(id)) throw new Error(`invalid sample id: ${JSON.stringify(id).slice(0, 40)}`)
+}
+
 function pcmPath(id: string): string {
+  assertSampleId(id)
   return path.join(libDir(), `${id}.pcm`)
 }
 
@@ -76,7 +87,8 @@ function readManifest(): Manifest {
     // Drop entries whose PCM has gone missing — a manifest that lies about
     // what is on disk produces a node that plays silence with no explanation.
     const samples = raw.samples.filter(
-      (s): s is SampleMeta => typeof s?.id === 'string' && existsSync(pcmPath(s.id))
+      (s): s is SampleMeta =>
+        typeof s?.id === 'string' && /^[0-9a-f]{16}$/.test(s.id) && existsSync(pcmPath(s.id))
     )
     return { version: 1, samples }
   } catch {
@@ -104,6 +116,17 @@ export interface StoreSampleInput {
 }
 
 /**
+ * Hard ceiling on what one sample may occupy on disk.
+ *
+ * The renderer enforces the 30-second import limit in the picker, which is
+ * the friendly place to do it. This is the unfriendly place: the main
+ * process must not trust that check, because a bug in the picker — or a
+ * different caller entirely — would otherwise let a 200 MB buffer through
+ * to disk and into a firmware image. 60 s of stereo Float32 at 96 kHz.
+ */
+const MAX_PCM_BYTES = 60 * 96000 * 2 * 4
+
+/**
  * Store PCM and return its metadata.
  *
  * Re-importing identical audio returns the existing entry rather than a
@@ -111,8 +134,18 @@ export interface StoreSampleInput {
  * two patches already point at is a decision the user should make
  * explicitly, not a side effect of dragging a file in again.
  */
+
 export function storeSample(input: StoreSampleInput): SampleMeta {
   ensureDir()
+  if (input.pcm.byteLength > MAX_PCM_BYTES) {
+    throw new Error(
+      `sample too large (${(input.pcm.byteLength / 1024 / 1024).toFixed(1)} MB); ` +
+        `the limit is ${(MAX_PCM_BYTES / 1024 / 1024).toFixed(0)} MB of PCM`
+    )
+  }
+  if (!Number.isFinite(input.sampleRate) || input.sampleRate < 8000 || input.sampleRate > 192000) {
+    throw new Error(`implausible sample rate ${input.sampleRate}`)
+  }
   const bytes = Buffer.from(input.pcm)
   const id = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
 

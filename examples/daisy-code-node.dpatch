@@ -222,7 +222,8 @@
     "meta": {
       "name": "daisy-code-node",
       "sampleRate": 48000,
-      "blockSize": 48
+      "blockSize": 48,
+      "description": "A wavefolder and a bitcrusher written by hand, in the patch, running on both sides."
     }
   },
   "hardware": {

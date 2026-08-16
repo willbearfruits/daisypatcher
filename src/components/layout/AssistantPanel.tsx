@@ -72,7 +72,8 @@ export function AssistantPanel() {
   const [open, setOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [cfg, setCfg] = useState<SafeConfig | null>(null)
-  const [localModels, setLocalModels] = useState<string[]>([])
+  // `null` = not asked yet; `[]` = asked and Ollama had nothing (or was down).
+  const [localModels, setLocalModels] = useState<string[] | null>(null)
   const [keyDraft, setKeyDraft] = useState('')
 
   const [request, setRequest] = useState('')
@@ -94,6 +95,7 @@ export function AssistantPanel() {
     const a = api()
     if (!a) return
     void a.config().then(setCfg)
+    setLocalModels(null)
     void a.models().then(setLocalModels)
     inputRef.current?.focus()
   }, [open])
@@ -167,6 +169,23 @@ export function AssistantPanel() {
 
   const noBridge = api() === null
 
+  /*
+   * The single most likely first-run failure: Ollama is running, the
+   * default model is not pulled, and the first Ask fails with a 404. Say so
+   * BEFORE the ask, with the exact command, whenever the configured model
+   * is not in the local list. Only for Ollama — a cloud provider's model
+   * list is not something we can see.
+   */
+  const models = localModels ?? []
+  const missingLocalModel =
+    cfg?.provider === 'ollama' &&
+    localModels !== null &&
+    models.length > 0 &&
+    !models.some((m) => m === cfg.model || m.split(':')[0] === cfg.model.split(':')[0])
+  // Only after the list has actually come back — an empty list before the
+  // fetch resolves is "loading", not "down", and must not flash a warning.
+  const ollamaDown = cfg?.provider === 'ollama' && localModels !== null && models.length === 0
+
   return (
     <aside className={styles.root} aria-label="Assistant">
       <header className={styles.head}>
@@ -194,6 +213,25 @@ export function AssistantPanel() {
         <p className={styles.note}>
           The assistant needs the desktop app — it is not available in a browser
           preview.
+        </p>
+      ) : null}
+
+      {ollamaDown ? (
+        <p className={styles.warn}>
+          Ollama is not reachable at {cfg?.baseUrl}. Start it (<code>ollama serve</code>) or
+          pick a cloud provider in settings.
+        </p>
+      ) : missingLocalModel ? (
+        <p className={styles.warn}>
+          Ollama does not have <code>{cfg?.model}</code>. Pull it first:{' '}
+          <code>ollama pull {cfg?.model}</code>
+          {models.length > 0 ? (
+            <>
+              {' '}
+              — or pick one you have: {models.slice(0, 3).join(', ')}
+              {models.length > 3 ? '…' : ''}
+            </>
+          ) : null}
         </p>
       ) : null}
 
@@ -227,7 +265,7 @@ export function AssistantPanel() {
               onBlur={() => void api()?.saveConfig({ model: cfg.model }).then(setCfg)}
             />
             <datalist id="dp-local-models">
-              {localModels.map((m) => (
+              {models.map((m) => (
                 <option key={m} value={m} />
               ))}
             </datalist>

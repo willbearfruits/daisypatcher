@@ -477,7 +477,8 @@
     "meta": {
       "name": "esp32-drone-box",
       "sampleRate": 48000,
-      "blockSize": 48
+      "blockSize": 48,
+      "description": "Four detuned voices drifting against each other, on the smallest board that fits."
     }
   },
   "hardware": {

@@ -109,7 +109,25 @@ export function initAutoUpdater(win: BrowserWindow): void {
   })
 
   autoUpdater.on('error', (err: Error) => {
-    sendStatus(win, { state: 'error', message: err?.message || String(err) })
+    /*
+     * electron-updater's messages are written for its own developers: a
+     * private repo or a repo with no releases yet comes back as
+     * `HttpError: 404 ... Please double check that your authentication
+     * token is correct`, which sends a user looking for a token they never
+     * had. Translate the cases we can name; pass the rest through.
+     */
+    const raw = err?.message || String(err)
+    let message: string
+    if (/404/.test(raw)) {
+      message = 'No releases are published yet — check again after the first public release.'
+    } else if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN|net::ERR_INTERNET_DISCONNECTED/i.test(raw)) {
+      message = 'Could not reach GitHub — are you offline?'
+    } else if (/latest\.yml|app-update\.yml/i.test(raw)) {
+      message = 'This build was not published with update metadata.'
+    } else {
+      message = raw.split('\n')[0].slice(0, 200)
+    }
+    sendStatus(win, { state: 'error', message })
   })
 
   autoUpdater.on('download-progress', (p: ProgressInfo) => {

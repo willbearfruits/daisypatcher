@@ -1,7 +1,15 @@
 .root {
   height: var(--dp-topbar-h);
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  /*
+   * `minmax(0, 1fr)`, not `1fr`: a bare 1fr track has an implicit
+   * `min-content` floor, so at the default 1400px window the two side
+   * columns refused to shrink and the centre's filename ran into the
+   * board switcher. With a zero floor the sides yield, and the pieces
+   * inside them are what decide how to give way — see `.filename` and
+   * the theme label below.
+   */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   padding: 0 var(--dp-space-4);
   background: var(--dp-surface);
@@ -81,6 +89,9 @@
   align-items: center;
   gap: var(--dp-space-4);
   min-width: 0;
+  /* Room on either side so the neighbours never sit flush against the
+     board switcher, whatever the window width. */
+  padding: 0 var(--dp-space-3);
 }
 
 .viewSwitch {
@@ -190,6 +201,12 @@
   color: var(--dp-text-muted);
   text-transform: lowercase;
   letter-spacing: 0.04em;
+  /* The one thing in the centre that can give: a long name truncates
+     rather than pushing the board buttons into the right column. */
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dirty {
@@ -206,6 +223,25 @@
   align-items: center;
   gap: var(--dp-space-3);
   min-width: 0;
+  flex-wrap: nowrap;
+}
+
+/*
+ * Below ~1500px the right column no longer fits every control at full
+ * width. The theme NAME is the least load-bearing text in the bar — the
+ * swatch and the dropdown chevron still say what the button is — so it is
+ * the first thing to go. Icons and the flash controls stay.
+ */
+@media (max-width: 1520px) {
+  .themeBtn > span:first-child {
+    display: none;
+  }
+  .right {
+    gap: var(--dp-space-2);
+  }
+  .filename {
+    max-width: 96px;
+  }
 }
 
 /* ---------- theme picker (custom popover replacing the native select) ---------- */

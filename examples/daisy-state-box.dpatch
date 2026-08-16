@@ -458,7 +458,8 @@
     "meta": {
       "name": "daisy-state-box",
       "sampleRate": 48000,
-      "blockSize": 48
+      "blockSize": 48,
+      "description": "One button, four modes. A state machine picks which voice the knobs and the output belong to — the logic layer doing what it is for."
     }
   },
   "hardware": {

@@ -374,7 +374,8 @@
     "meta": {
       "name": "daisy-sampler",
       "sampleRate": 48000,
-      "blockSize": 48
+      "blockSize": 48,
+      "description": "Live-input sampler: hold a slice, smear it with grains, filter and reverb."
     }
   },
   "hardware": {

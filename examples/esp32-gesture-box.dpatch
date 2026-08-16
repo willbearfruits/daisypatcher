@@ -456,7 +456,8 @@
     "meta": {
       "name": "esp32-gesture-box",
       "sampleRate": 48000,
-      "blockSize": 48
+      "blockSize": 48,
+      "description": "A resonator you play by tilting the box and waving at it — IMU and time-of-flight as controllers."
     }
   },
   "hardware": {
