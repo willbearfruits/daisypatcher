@@ -61,6 +61,26 @@ export default function App() {
   useMenuCommands()
 
   /*
+   * Window title: "name — Daisypatcher", with the platform's unsaved
+   * marker. It was a static "Daisypatcher", so two windows were
+   * indistinguishable in the taskbar and nothing outside the app said
+   * whether the patch was saved. Electron mirrors `document.title` into the
+   * native title bar; `representedFilename` is main-side and macOS-only
+   * (the proxy icon), sent alongside.
+   */
+  const graphName = useEditorStore((s) => s.graph.meta.name)
+  const isDirty = useEditorStore((s) => s.isDirty)
+  const filePath = useEditorStore((s) => s.filePath)
+  useEffect(() => {
+    const name = graphName || 'untitled'
+    document.title = `${isDirty ? '• ' : ''}${name} — Daisypatcher`
+    const w = window as unknown as {
+      daisy?: { window?: { setDocument?: (p: { path: string | null; edited: boolean }) => void } }
+    }
+    w.daisy?.window?.setDocument?.({ path: filePath, edited: isDirty })
+  }, [graphName, isDirty, filePath])
+
+  /*
    * The last net under every fire-and-forget promise.
    *
    * Dozens of UI handlers call `void savePatch()` and the like — correct,

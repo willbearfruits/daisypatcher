@@ -453,6 +453,16 @@ function registerIpcHandlers(): void {
   // "no entry" as unknown status.
   const VERIFICATION_PATH = join(app.getPath('userData'), 'verified.json')
 
+  /* ---------------- window chrome ---------------- */
+
+  ipcMain.on('window:document', (evt, p: { path?: string | null; edited?: boolean }) => {
+    const win = BrowserWindow.fromWebContents(evt.sender)
+    if (!win) return
+    // Both are no-ops off macOS; harmless to call everywhere.
+    win.setRepresentedFilename(typeof p?.path === 'string' ? p.path : '')
+    win.setDocumentEdited(Boolean(p?.edited))
+  })
+
   /* ---------------- examples ---------------- */
 
   /**

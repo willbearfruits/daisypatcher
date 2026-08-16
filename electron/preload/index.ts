@@ -233,6 +233,11 @@ const api = {
   menu: {
     onCommand: (cb: (cmd: string) => void): (() => void) => onChannel('app:command', cb)
   },
+  window: {
+    /** Represented file + edited flag: macOS proxy icon and title-bar dot. */
+    setDocument: (p: { path: string | null; edited: boolean }): void =>
+      ipcRenderer.send('window:document', p)
+  },
   /** Errors the main process caught instead of dying from. */
   onMainError: (cb: (msg: string) => void): (() => void) => onChannel('app:main-error', cb),
   /**
