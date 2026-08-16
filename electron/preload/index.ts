@@ -233,6 +233,12 @@ const api = {
   menu: {
     onCommand: (cb: (cmd: string) => void): (() => void) => onChannel('app:command', cb)
   },
+  recent: {
+    add: (path: string): void => ipcRenderer.send('recent:add', path),
+    list: (): Promise<string[]> => ipcRenderer.invoke('recent:list'),
+    /** File → Open Recent → item: main hands the path over; the renderer opens it. */
+    onOpenPath: (cb: (path: string) => void): (() => void) => onChannel('app:open-path', cb)
+  },
   window: {
     /** Represented file + edited flag: macOS proxy icon and title-bar dot. */
     setDocument: (p: { path: string | null; edited: boolean }): void =>

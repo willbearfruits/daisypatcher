@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { getSdkStatus, installSdk, installEsp32Toolchain, WORKSPACE } from './sdk'
-import { installAppMenu } from './appMenu'
+import { addRecent, installAppMenu, readRecent, setRecentGrant } from './appMenu'
 import {
   complete as assistantComplete,
   listLocalModels,
@@ -453,6 +453,21 @@ function registerIpcHandlers(): void {
   // "no entry" as unknown status.
   const VERIFICATION_PATH = join(app.getPath('userData'), 'verified.json')
 
+  /* ---------------- recent files ---------------- */
+
+  // The renderer reports a successful open/save; a cancelled dialog or a
+  // failed write never reaches here, so "recent" means "actually used".
+  ipcMain.on('recent:add', (_evt, path: string) => {
+    if (typeof path === 'string' && hasPatchExt(path)) addRecent(resolve(path))
+  })
+
+  ipcMain.handle('recent:list', async () => {
+    const list = readRecent()
+    // Anything the menu can offer to open, the renderer must be able to read.
+    for (const p of list) grantPath(p)
+    return list
+  })
+
   /* ---------------- window chrome ---------------- */
 
   ipcMain.on('window:document', (evt, p: { path?: string | null; edited?: boolean }) => {
@@ -781,6 +796,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(() => {
+    setRecentGrant(grantPath)
     installAppMenu()
     registerIpcHandlers()
     createWindow()

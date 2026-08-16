@@ -18,7 +18,7 @@ import { useEffect } from 'react'
 import { useEditorStore } from '@/state/store'
 import { useCompileStore } from '@/state/compileState'
 import { useSerialStore } from '@/state/serialState'
-import { newPatch, openPatch, savePatch, savePatchAs } from '@/state/patchFile'
+import { newPatch, openPatch, openPatchFromPath, savePatch, savePatchAs } from '@/state/patchFile'
 import { OPEN_COMMAND_PALETTE_EVENT } from '@/components/layout/CommandPalette'
 import { TOGGLE_CODE_PANEL_EVENT } from '@/components/layout/CodePanel'
 import { TOGGLE_ASSISTANT_EVENT } from '@/components/layout/AssistantPanel'
@@ -84,6 +84,26 @@ export function useMenuCommands(): void {
         const r = await savePatch()
         respond(r.saved ? 'close' : 'cancel')
       })
+    })
+  }, [])
+
+  // File → Open Recent → item. Same guard as Open…: ask before discarding.
+  useEffect(() => {
+    const w = window as unknown as { daisy?: { recent?: { onOpenPath: (cb: (p: string) => void) => () => void } } }
+    return w.daisy?.recent?.onOpenPath((path) => {
+      void (async () => {
+        const st = useEditorStore.getState()
+        if (st.isDirty || st.history.past.length > 0) {
+          const ok = await requestChoice({
+            title: 'Open recent',
+            message: 'Discard unsaved changes?',
+            confirmLabel: 'Discard',
+            danger: true
+          })
+          if (ok !== 'confirm') return
+        }
+        await openPatchFromPath(path)
+      })()
     })
   }, [])
 

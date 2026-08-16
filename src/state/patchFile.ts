@@ -224,6 +224,7 @@ async function writePatchTo(
       isDirty: false
     })
     s.setStatus({ kind: 'info', message: `saved ${basename(path)}` })
+    noteRecent(path)
     return { saved: true, path }
   } catch (err) {
     s.setStatus({
@@ -232,6 +233,12 @@ async function writePatchTo(
     })
     return { saved: false }
   }
+}
+
+/** Tell main a file was actually used, so File → Open Recent learns it. */
+function noteRecent(path: string): void {
+  const w = window as unknown as { daisy?: { recent?: { add: (p: string) => void } } }
+  w.daisy?.recent?.add(path)
 }
 
 /** Should we throw away what is on the canvas? Asks only if there is something to lose. */
@@ -298,6 +305,7 @@ export async function openPatchFromPath(
       if (daisyFlashMode) s.setDaisyFlashMode(daisyFlashMode)
     }
     s.setStatus({ kind: 'info', message: `opened ${basename(path)}` })
+    noteRecent(path)
     return { loaded: true, path }
   } catch (err) {
     s.setStatus({

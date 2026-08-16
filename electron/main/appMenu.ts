@@ -24,6 +24,8 @@
  */
 
 import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 
 /** Commands the renderer understands. Keep in sync with `src/app/commands.ts`. */
 export type AppCommand =
@@ -60,6 +62,84 @@ export type AppCommand =
   | 'about'
 
 const isMac = process.platform === 'darwin'
+
+/* ---------------- recent files ---------------- */
+
+const MAX_RECENT = 10
+
+function recentPath(): string {
+  return join(app.getPath('userData'), 'recent.json')
+}
+
+/**
+ * Most-recent first, existing files only.
+ *
+ * Filtered on read rather than on write, so a file deleted or moved after
+ * it was recorded silently drops out of the menu instead of opening to
+ * "no such file". Kept small: ten is what fits a submenu without a scroll.
+ */
+export function readRecent(): string[] {
+  try {
+    const raw = JSON.parse(readFileSync(recentPath(), 'utf8')) as unknown
+    if (!Array.isArray(raw)) return []
+    return raw.filter((p): p is string => typeof p === 'string' && existsSync(p)).slice(0, MAX_RECENT)
+  } catch {
+    return []
+  }
+}
+
+/** Record a file as just-used and rebuild the menu so it shows at once. */
+export function addRecent(path: string): void {
+  const next = [path, ...readRecent().filter((p) => p !== path)].slice(0, MAX_RECENT)
+  try {
+    writeFileSync(recentPath(), JSON.stringify(next, null, 2), 'utf8')
+  } catch {
+    // Not worth failing a save over.
+  }
+  // macOS Dock menu / Windows jump list get it too.
+  app.addRecentDocument(path)
+  installAppMenu()
+}
+
+export function clearRecent(): void {
+  try {
+    writeFileSync(recentPath(), '[]', 'utf8')
+  } catch {
+    /* nop */
+  }
+  app.clearRecentDocuments()
+  installAppMenu()
+}
+
+/**
+ * The renderer opens the path itself, through the same guarded read as
+ * Open…. `onGrant` is how this module (which does not own the path
+ * allow-list) admits the file first — set by `index.ts` at startup.
+ */
+let onGrant: ((p: string) => void) | null = null
+export function setRecentGrant(fn: (p: string) => void): void {
+  onGrant = fn
+}
+function sendOpenPath(path: string): void {
+  onGrant?.(path)
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  win?.webContents.send('app:open-path', path)
+}
+
+function recentSubmenu(): MenuItemConstructorOptions[] {
+  const files = readRecent()
+  if (files.length === 0) return [{ label: 'No Recent Patches', enabled: false }]
+  return [
+    ...files.map((p) => ({
+      label: basename(p).replace(/\.dpatch$/, ''),
+      sublabel: p,
+      toolTip: p,
+      click: () => sendOpenPath(p)
+    })),
+    { type: 'separator' as const },
+    { label: 'Clear Menu', click: () => clearRecent() }
+  ]
+}
 
 /**
  * Send a command to the focused window's renderer.
@@ -116,6 +196,7 @@ export function buildAppMenu(): Menu {
     submenu: [
       { label: 'New Patch', accelerator: 'CmdOrCtrl+N', click: onClick('new') },
       { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: onClick('open') },
+      { label: 'Open Recent', submenu: recentSubmenu() },
       { label: 'Open Example…', click: onClick('examples') },
       { label: 'Show Examples Folder', click: onClick('open_examples') },
       { type: 'separator' },
