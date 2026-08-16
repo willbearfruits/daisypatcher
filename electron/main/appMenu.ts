@@ -15,15 +15,15 @@
  * command names are the same ones the renderer's keybindings and command
  * palette already dispatch, so a menu item and its shortcut cannot drift.
  *
- * Accelerators are DECLARATIVE ONLY. Electron would fire the menu item AND
- * the renderer's own keydown handler for the same chord, so every item's
- * `click` is guarded to run only when the menu was actually opened — the
- * shortcut path stays with the renderer, which already handles focus and
- * text-field exclusion correctly. Showing the accelerator next to the item
- * is the whole point: it is how people learn the shortcuts exist.
+ * Accelerators are shown next to items so people learn the shortcuts
+ * exist. Whether the chord is handled by the menu or by the renderer's
+ * keydown differs by platform, but it is always exactly one of them — see
+ * `onClick` for the measurement that established that, and why the click
+ * handler therefore has no guard.
  */
 
-import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron'
+import { openExternalSafe } from './openExternal'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 
@@ -154,19 +154,22 @@ function send(cmd: AppCommand): void {
 }
 
 /**
- * Menu-click-only handler.
+ * Every activation of a menu item runs its command. Mouse, keyboard
+ * Enter, or accelerator chord — all of them.
  *
- * `click` receives (menuItem, browserWindow, event); the event carries
- * `triggeredByAccelerator` when the chord fired it. We refuse those, so the
- * renderer's keydown path is the ONLY thing that acts on a shortcut and
- * nothing fires twice. Electron still shows the accelerator label, which
- * is what we want from it.
+ * The first version refused `triggeredByAccelerator` events to stop a
+ * chord (Ctrl+S) firing both the menu item and the renderer's keydown
+ * handler. That guard was wrong twice over. On Linux GTK, pressing Enter
+ * on a highlighted item is ALSO reported as accelerator-triggered, so the
+ * menu was unusable from the keyboard: arrow down, Enter, nothing. And the
+ * double-fire it guarded against does not happen: measured here, a bare
+ * Ctrl+N never reaches the menu's click at all — the renderer's keydown
+ * consumes it first — and on platforms where the menu DOES claim the chord
+ * (macOS), Electron eats the keydown so the renderer never sees it. Exactly
+ * one side acts, on every platform, without any guard. So there is none.
  */
 function onClick(cmd: AppCommand) {
-  return (_item: unknown, _win: unknown, ev: { triggeredByAccelerator?: boolean } | undefined) => {
-    if (ev?.triggeredByAccelerator) return
-    send(cmd)
-  }
+  return () => send(cmd)
 }
 
 export function buildAppMenu(): Menu {
@@ -276,11 +279,11 @@ export function buildAppMenu(): Menu {
       { type: 'separator' },
       {
         label: 'Daisy Seed Documentation',
-        click: () => void shell.openExternal('https://electro-smith.github.io/libDaisy/')
+        click: () => void openExternalSafe('https://electro-smith.github.io/libDaisy/')
       },
       {
         label: 'DaisySP Reference',
-        click: () => void shell.openExternal('https://electro-smith.github.io/DaisySP/')
+        click: () => void openExternalSafe('https://electro-smith.github.io/DaisySP/')
       },
       { type: 'separator' },
       ...(isMac ? [] : ([{ label: 'About Daisypatcher', click: onClick('about') }] as MenuItemConstructorOptions[]))

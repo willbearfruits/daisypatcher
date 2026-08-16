@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
@@ -7,6 +7,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { getSdkStatus, installSdk, installEsp32Toolchain, WORKSPACE } from './sdk'
 import { addRecent, installAppMenu, readRecent, setRecentGrant } from './appMenu'
+import { openExternalSafe, openPathSafe } from './openExternal'
 import {
   complete as assistantComplete,
   listLocalModels,
@@ -364,7 +365,8 @@ function registerIpcHandlers(): void {
    */
   ipcMain.handle('project:eject', async (_evt, input: BuildInput) => {
     const projectPath = await writeProjectFiles(input)
-    const err = await shell.openPath(projectPath)
+    const r = await openPathSafe(projectPath)
+    const err = r.ok ? '' : (r.error ?? 'could not open')
     // A non-empty string is Electron's way of reporting failure here. The
     // path is still returned so the UI can show it even when no file
     // manager is registered — common on a bare Linux install.
@@ -514,8 +516,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('examples:open', async () => {
     const dir = examplesDir()
     if (!existsSync(dir)) return { opened: false, error: `no examples folder at ${dir}` }
-    const err = await shell.openPath(dir)
-    return { opened: !err, error: err || undefined }
+    const r = await openPathSafe(dir)
+    return { opened: r.ok, error: r.error }
   })
 
   ipcMain.handle('examples:list', async () => {
@@ -750,7 +752,7 @@ function createWindow(): void {
     // Web links only — never forward file:// or custom protocol handlers
     // to the OS from renderer-controlled URLs.
     if (url.startsWith('https://') || url.startsWith('http://')) {
-      shell.openExternal(url)
+      void openExternalSafe(url)
     }
     return { action: 'deny' }
   })
