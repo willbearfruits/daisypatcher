@@ -476,7 +476,13 @@
           "scl": "GPIO1",
           "int": "GPIO2"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "address": "0x68",
+          "rate": 200,
+          "pullup": true,
+          "hasInt": true
+        }
       },
       {
         "id": "hw_tof_2",
@@ -491,7 +497,12 @@
           "scl": "GPIO1",
           "xshut": "GPIO3"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "address": "0x29",
+          "profile": "short",
+          "hasXshut": true
+        }
       },
       {
         "id": "hw_oled_ssd1306_3",
@@ -505,7 +516,12 @@
           "sda": "GPIO0",
           "scl": "GPIO1"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "width": 128,
+          "height": 64,
+          "address": "0x3C"
+        }
       },
       {
         "id": "hw_pcm5102a_4",
@@ -521,6 +537,12 @@
           "sd_out": "GPIO6"
         },
         "config": {
+          "rotation": 0,
+          "xsmtHigh": true,
+          "fmt": "i2s",
+          "flt": "normal",
+          "deemphasis": false,
+          "sckToGnd": true,
           "jumper": "i2s"
         }
       }

@@ -476,7 +476,9 @@
         "pins": {
           "io": "D0"
         },
-        "config": {}
+        "config": {
+          "rotation": 0
+        }
       },
       {
         "id": "hw_pot_2",
@@ -489,7 +491,10 @@
         "pins": {
           "wiper": "D15"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pot_3",
@@ -502,7 +507,10 @@
         "pins": {
           "wiper": "D16"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_led_4",
@@ -515,7 +523,11 @@
         "pins": {
           "anode": "D1"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "color": "white",
+          "pwm": false
+        }
       }
     ],
     "meta": {

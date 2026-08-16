@@ -37,10 +37,26 @@ interface ActiveHandle {
 
 let active: ActiveHandle | null = null
 
+/**
+ * Is this a port a Daisy or an ESP32 could actually be behind?
+ *
+ * Linux enumerates `/dev/ttyS0`–`ttyS31` for the legacy 8250 UART slots on
+ * every machine, populated or not; on a typical desktop none of them has
+ * anything wired to it. Listing all 32 buried the one real `/dev/ttyACM0`
+ * or `/dev/ttyUSB0` in a wall of phantoms in the serial-port picker. A
+ * USB device always carries a vendor id; a bare `ttyS*` with none is a
+ * motherboard header nobody is patching a synth into. `ttyS*` WITH a
+ * vendor id (some USB-serial bridges land there) is kept.
+ */
+function isPlausibleDevicePort(p: { path: string; vendorId?: string }): boolean {
+  if (/^\/dev\/ttyS\d+$/.test(p.path) && !p.vendorId) return false
+  return true
+}
+
 export async function listSerialPorts(): Promise<SerialPortInfo[]> {
   try {
     const ports = await SerialPort.list()
-    return ports.map((p) => ({
+    return ports.filter(isPlausibleDevicePort).map((p) => ({
       path: p.path,
       manufacturer: p.manufacturer,
       vendorId: p.vendorId,

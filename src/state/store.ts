@@ -17,6 +17,7 @@
  */
 
 import { create } from 'zustand'
+import { defaultHardwareConfig } from '@/hardware/defaultConfig'
 import { nanoid } from 'nanoid'
 
 import type { BoardTarget, DaisyFlashMode, EditorStore, HistorySnapshot, LayoutSizes } from '@/types/store'
@@ -147,6 +148,7 @@ function socketSignal(
  */
 let txDepth = 0
 let txSnapshot: HistorySnapshot | null = null
+let txSilent = false
 
 /** Push `prev` onto the past stack (respecting limit) and clear future. */
 function pushHistory(
@@ -622,43 +624,6 @@ function countInvalidComponentsForBoard(
   return bad
 }
 
-function defaultHardwareConfig(kind: HardwareKind): Record<string, number | string | boolean> {
-  // `rotation` and kind-specific defaults. Rotation lives in config to keep
-  // the `PlacedComponent` schema stable (optional config keys tolerate
-  // unknown kinds cleanly).
-  const base: Record<string, number | string | boolean> = { rotation: 0 }
-  switch (kind) {
-    case 'pot':          return { ...base, taper: 'linear' }
-    case 'led':          return { ...base, color: 'white', pwm: false }
-    case 'switch_3way':  return { ...base, positions: 3 }
-    case 'encoder':      return { ...base, detents: 24, withSwitch: true }
-    case 'oled_ssd1306': return { ...base, width: 128, height: 64, address: '0x3C' }
-    case 'i2s_codec':    return { ...base, model: 'pcm3060' }
-    /*
-     * GY-PCM5102 straps. `xsmt` is the one that actually bites people:
-     * the purple board ships jumper 3 on the LOW side, which holds the
-     * DAC muted, so a correctly-wired module is silent until it's moved
-     * HIGH. Default to the working configuration and surface it.
-     */
-    case 'pcm5102a':     return { ...base, xsmtHigh: true, fmt: 'i2s', flt: 'normal', deemphasis: false, sckToGnd: true }
-    /*
-     * MAX98357A straps. `gainDb` and `channel` are set by resistors on the
-     * GAIN and SD pins, not by the MCU — config, not roles.
-     */
-    // gainDb is a string: the GAIN pad has five discrete resistor taps, so
-    // the inspector renders it as an enum (a slider would imply a range).
-    case 'max98357a':    return { ...base, gainDb: '9', channel: 'stereo_avg', i2sOnly: false }
-    case 'slider':       return { ...base, orientation: 'vertical', travel: 60 }
-    case 'touch_ribbon': return { ...base, orientation: 'vertical', length: 80 }
-    case 'ldr':          return { ...base }
-    case 'gyroscope':    return { ...base, address: '0x68', rate: 200, pullup: true, hasInt: true }
-    case 'magnetometer': return { ...base, address: '0x1E', offsetX: 0, offsetY: 0, offsetZ: 0 }
-    case 'tof':          return { ...base, address: '0x29', profile: 'short', hasXshut: true }
-    case 'electret':     return { ...base, gainDb: 20, acCouple: true }
-    case 'piezo':        return { ...base, direction: 'input', threshold: 0.2 }
-    default:             return base
-  }
-}
 
 export const useEditorStore = create<EditorStore>((set, get) => {
   /**
@@ -908,7 +873,26 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     },
 
     loadGraph(graph, filePath = null, hardware, presets) {
-      const nextHardware = hardware ?? emptyHardwareLayout()
+      const raw = hardware ?? emptyHardwareLayout()
+      /*
+       * Backfill component config with the kind's defaults.
+       *
+       * A file written by an older build, or by the example generator,
+       * can carry `config: {}` for a component whose emitter reads
+       * `config.address` or `config.width`. That surfaced as an OLED
+       * showing Width 0 / Height 0 and an empty I2C address in the
+       * inspector — and would have emitted `Wire.begin()` with nothing.
+       * Merging defaults UNDER the stored values means an explicit setting
+       * always wins and a missing one becomes the right thing rather than
+       * `undefined`.
+       */
+      const nextHardware: HardwareLayout = {
+        ...raw,
+        components: raw.components.map((c) => ({
+          ...c,
+          config: { ...defaultHardwareConfig(c.kind), ...(c.config ?? {}) }
+        }))
+      }
       // Presets name nodes by id; a preset from another patch would be a
       // pile of references to nodes that do not exist here.
       const nextPresets = prunePresets(presets ?? [], graph)
@@ -1008,13 +992,30 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       txDepth++
     },
 
+    /** A transaction whose net change is applied but never recorded. */
+    beginTransactionSilent() {
+      get().beginTransaction()
+      txSilent = true
+    },
+
     endTransaction() {
       if (txDepth === 0) return
       txDepth--
       if (txDepth > 0) return
       const snapshot = txSnapshot
       txSnapshot = null
+      const silent = txSilent
+      txSilent = false
       if (!snapshot) return
+      /*
+       * A silent transaction applies its edits and records nothing. Used
+       * for changes the PATCH made to itself — a `preset_recall` node
+       * firing off a clock — which are not the user's edits and must not
+       * evict the user's edits from undo. At 600 BPM a clocked recall
+       * pushed ten history entries a second and emptied the stack of
+       * everything real inside five seconds.
+       */
+      if (silent) return
       const cur: HistorySnapshot = { graph: get().graph, hardware: get().hardware, presets: get().presets }
       // No net change — discard the transaction quietly.
       if (
@@ -1410,7 +1411,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       return id
     },
 
-    recallPreset(id) {
+    recallPreset(id, opts) {
       const preset = get().presets.find((p) => p.id === id)
       if (!preset) return
       const edits = recallEdits(get().graph, preset)
@@ -1418,6 +1419,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       // step, not sixty. `setParam` is the single write path so live
       // worklets and the code node's AST re-post stay correct.
       get().beginTransaction()
+      if (opts?.silent) txSilent = true
       for (const e of edits) get().setParam(e.nodeId, e.paramId, e.value)
       get().endTransaction()
       set({ activePresetId: id })

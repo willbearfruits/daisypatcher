@@ -240,7 +240,10 @@
         "pins": {
           "wiper": "D15"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pot_2",
@@ -253,7 +256,10 @@
         "pins": {
           "wiper": "D16"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pot_3",
@@ -266,7 +272,10 @@
         "pins": {
           "wiper": "D17"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pot_4",
@@ -279,7 +288,10 @@
         "pins": {
           "wiper": "D18"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       }
     ],
     "meta": {

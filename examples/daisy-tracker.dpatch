@@ -652,7 +652,11 @@
         "pins": {
           "wiper": "D15"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "orientation": "vertical",
+          "travel": 60
+        }
       },
       {
         "id": "hw_slider_2",
@@ -665,7 +669,11 @@
         "pins": {
           "wiper": "D16"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "orientation": "vertical",
+          "travel": 60
+        }
       },
       {
         "id": "hw_slider_3",
@@ -678,7 +686,11 @@
         "pins": {
           "wiper": "D17"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "orientation": "vertical",
+          "travel": 60
+        }
       },
       {
         "id": "hw_slider_4",
@@ -691,7 +703,11 @@
         "pins": {
           "wiper": "D18"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "orientation": "vertical",
+          "travel": 60
+        }
       },
       {
         "id": "hw_encoder_5",
@@ -706,7 +722,11 @@
           "b": "D1",
           "sw": "D2"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "detents": 24,
+          "withSwitch": true
+        }
       },
       {
         "id": "hw_oled_ssd1306_6",
@@ -720,7 +740,12 @@
           "sda": "D3",
           "scl": "D11"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "width": 128,
+          "height": 64,
+          "address": "0x3C"
+        }
       }
     ],
     "meta": {

@@ -246,12 +246,22 @@ export default function App() {
       const presets = st.presets
       if (req.action === 'apply') {
         const p = presets[req.slot]
-        if (p) st.recallPreset(p.id)
+        // Silent: a recall the patch fired is not a user edit and must not
+        // fill the undo stack — see `endTransaction`.
+        if (p) st.recallPreset(p.id, { silent: true })
         return
       }
       const a = presets[req.a]
       const b = presets[req.b]
-      if (a && b && a.id !== b.id) st.morphPresets(a.id, b.id, req.t)
+      if (a && b && a.id !== b.id) {
+        // `morphPresets` leaves the transaction to its caller (the slider
+        // brackets a whole drag). From a CV there is no drag — each tick
+        // stands alone — so bracket it here, silently, for the same reason
+        // as the recall above.
+        st.beginTransactionSilent()
+        st.morphPresets(a.id, b.id, req.t)
+        st.endTransaction()
+      }
     })
     return () => engine.setPresetHandler(null)
   }, [engine])

@@ -499,7 +499,11 @@
           "b": "GPIO1",
           "sw": "GPIO2"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "detents": 24,
+          "withSwitch": true
+        }
       },
       {
         "id": "hw_oled_ssd1306_2",
@@ -513,7 +517,12 @@
           "sda": "GPIO3",
           "scl": "GPIO4"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "width": 128,
+          "height": 64,
+          "address": "0x3C"
+        }
       },
       {
         "id": "hw_pcm5102a_3",
@@ -529,6 +538,12 @@
           "sd_out": "GPIO7"
         },
         "config": {
+          "rotation": 0,
+          "xsmtHigh": true,
+          "fmt": "i2s",
+          "flt": "normal",
+          "deemphasis": false,
+          "sckToGnd": true,
           "jumper": "i2s"
         }
       }

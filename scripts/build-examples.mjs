@@ -48,7 +48,8 @@ writeFileSync(
     `export { KIND_ROLES, emptyHardwareLayout } from '${p('src/types/hardware')}'`,
     `export { getBoardPinout } from '${p('src/hardware/boardPinout')}'`,
     `export { generateProject } from '${p('src/codegen/generateProject')}'`,
-    `export { supportLevel } from '${p('src/nodes/targetSupport')}'`
+    `export { supportLevel } from '${p('src/nodes/targetSupport')}'`,
+    `export { defaultHardwareConfig } from '${p('src/hardware/defaultConfig')}'`
   ].join('\n'),
   'utf8'
 )
@@ -63,7 +64,7 @@ await esbuild.build({
   alias: { '@': path.join(PROJECT_ROOT, 'src') },
   external: ['react', 'react-dom']
 })
-const { NODE_DEFINITIONS, KIND_ROLES, getBoardPinout, generateProject, supportLevel } =
+const { NODE_DEFINITIONS, KIND_ROLES, getBoardPinout, generateProject, supportLevel, defaultHardwareConfig } =
   require_(BUNDLE)
 
 /* ---------------- builder ---------------- */
@@ -175,7 +176,7 @@ class Patch {
       this.taken.set(free, role)
     }
     const id = `hw_${kind}_${this.components.length + 1}`
-    this.components.push({ id, kind, label, position, pins, config })
+    this.components.push({ id, kind, label, position, pins, config: { ...defaultHardwareConfig(kind), ...config } })
     if (nodeId) {
       const node = this.nodes.find((x) => x.id === nodeId)
       if (!node) throw new Error(`${this.name}: no such node ${nodeId}`)

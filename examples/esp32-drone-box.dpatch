@@ -495,7 +495,10 @@
         "pins": {
           "wiper": "GPIO0"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pot_2",
@@ -508,7 +511,10 @@
         "pins": {
           "wiper": "GPIO1"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pot_3",
@@ -521,7 +527,10 @@
         "pins": {
           "wiper": "GPIO2"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pot_4",
@@ -534,7 +543,10 @@
         "pins": {
           "wiper": "GPIO3"
         },
-        "config": {}
+        "config": {
+          "rotation": 0,
+          "taper": "linear"
+        }
       },
       {
         "id": "hw_pcm5102a_5",
@@ -550,6 +562,12 @@
           "sd_out": "GPIO6"
         },
         "config": {
+          "rotation": 0,
+          "xsmtHigh": true,
+          "fmt": "i2s",
+          "flt": "normal",
+          "deemphasis": false,
+          "sckToGnd": true,
           "jumper": "i2s"
         }
       }

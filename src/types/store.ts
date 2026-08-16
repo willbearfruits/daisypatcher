@@ -270,7 +270,8 @@ export interface EditorStoreActions {
 
   /* presets — see state/presets.ts */
   capturePreset(name?: string): string
-  recallPreset(id: string): void
+  /** `silent`: apply without an undo entry — for recalls the patch itself fires. */
+  recallPreset(id: string, opts?: { silent?: boolean }): void
   deletePreset(id: string): void
   renamePreset(id: string, name: string): void
   reorderPreset(id: string, toIndex: number): void
@@ -292,6 +293,8 @@ export interface EditorStoreActions {
    * slider drags in the Inspector (pointerdown / pointerup).
    */
   beginTransaction(): void
+  /** Like `beginTransaction`, but the result is not pushed to history. */
+  beginTransactionSilent(): void
   endTransaction(): void
 
   /* clipboard / multi-select ops */
