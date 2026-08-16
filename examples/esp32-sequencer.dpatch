@@ -3,7 +3,7 @@
   "graph": {
     "nodes": [
       {
-        "id": "clock_1",
+        "id": "esp32-sequencer-clock_1",
         "kind": "clock",
         "position": {
           "x": -760,
@@ -15,7 +15,7 @@
         }
       },
       {
-        "id": "clock_divider_2",
+        "id": "esp32-sequencer-clock_divider_2",
         "kind": "clock_divider",
         "position": {
           "x": -540,
@@ -24,7 +24,7 @@
         "params": {}
       },
       {
-        "id": "step_seq_3",
+        "id": "esp32-sequencer-step_seq_3",
         "kind": "step_seq",
         "position": {
           "x": -540,
@@ -50,7 +50,7 @@
         }
       },
       {
-        "id": "range_4",
+        "id": "esp32-sequencer-range_4",
         "kind": "range",
         "position": {
           "x": -300,
@@ -65,7 +65,7 @@
         }
       },
       {
-        "id": "oscillator_5",
+        "id": "esp32-sequencer-oscillator_5",
         "kind": "oscillator",
         "position": {
           "x": -60,
@@ -78,7 +78,7 @@
         }
       },
       {
-        "id": "adsr_6",
+        "id": "esp32-sequencer-adsr_6",
         "kind": "adsr",
         "position": {
           "x": -300,
@@ -92,7 +92,7 @@
         }
       },
       {
-        "id": "vca_7",
+        "id": "esp32-sequencer-vca_7",
         "kind": "vca",
         "position": {
           "x": 180,
@@ -103,7 +103,7 @@
         }
       },
       {
-        "id": "filter_moog_8",
+        "id": "esp32-sequencer-filter_moog_8",
         "kind": "filter_moog",
         "position": {
           "x": 420,
@@ -115,7 +115,7 @@
         }
       },
       {
-        "id": "euclidean_9",
+        "id": "esp32-sequencer-euclidean_9",
         "kind": "euclidean",
         "position": {
           "x": -540,
@@ -128,7 +128,7 @@
         }
       },
       {
-        "id": "drum_kick_10",
+        "id": "esp32-sequencer-drum_kick_10",
         "kind": "drum_kick",
         "position": {
           "x": -300,
@@ -142,7 +142,7 @@
         }
       },
       {
-        "id": "drum_hat_11",
+        "id": "esp32-sequencer-drum_hat_11",
         "kind": "drum_hat",
         "position": {
           "x": -300,
@@ -154,7 +154,7 @@
         }
       },
       {
-        "id": "drum_snare_12",
+        "id": "esp32-sequencer-drum_snare_12",
         "kind": "drum_snare",
         "position": {
           "x": -300,
@@ -167,7 +167,7 @@
         }
       },
       {
-        "id": "mixer4_13",
+        "id": "esp32-sequencer-mixer4_13",
         "kind": "mixer4",
         "position": {
           "x": 660,
@@ -181,7 +181,7 @@
         }
       },
       {
-        "id": "delay_14",
+        "id": "esp32-sequencer-delay_14",
         "kind": "delay",
         "position": {
           "x": 900,
@@ -194,7 +194,7 @@
         }
       },
       {
-        "id": "audio_output_15",
+        "id": "esp32-sequencer-audio_output_15",
         "kind": "audio_output",
         "position": {
           "x": 1140,
@@ -203,7 +203,7 @@
         "params": {}
       },
       {
-        "id": "encoder_in_16",
+        "id": "esp32-sequencer-encoder_in_16",
         "kind": "encoder_in",
         "position": {
           "x": -1020,
@@ -220,18 +220,18 @@
         }
       },
       {
-        "id": "menu_17",
+        "id": "esp32-sequencer-menu_17",
         "kind": "menu",
         "position": {
           "x": -760,
           "y": 320
         },
         "params": {
-          "tree": "{\"root\":[{\"id\":\"tempo\",\"kind\":\"value\",\"label\":\"TEMPO\",\"type\":\"number\",\"min\":40,\"max\":200,\"step\":1,\"value\":112,\"defaultValue\":112,\"unit\":\"bpm\",\"target\":{\"nodeId\":\"clock_1\",\"paramId\":\"bpm\"},\"out\":\"a\"},{\"id\":\"voice\",\"kind\":\"submenu\",\"label\":\"VOICE\",\"children\":[{\"id\":\"wave\",\"kind\":\"value\",\"label\":\"WAVE\",\"type\":\"enum\",\"min\":0,\"max\":3,\"step\":1,\"options\":[\"SINE\",\"SAW\",\"SQR\",\"TRI\"],\"value\":1,\"defaultValue\":1,\"out\":\"none\"},{\"id\":\"cutoff\",\"kind\":\"value\",\"label\":\"CUTOFF\",\"type\":\"number\",\"min\":120,\"max\":9000,\"step\":20,\"value\":1800,\"defaultValue\":1800,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"filter_moog_8\",\"paramId\":\"frequency\"},\"out\":\"b\"},{\"id\":\"reso\",\"kind\":\"value\",\"label\":\"RESO\",\"type\":\"number\",\"min\":0,\"max\":0.9,\"step\":0.02,\"value\":0.35,\"defaultValue\":0.35,\"target\":{\"nodeId\":\"filter_moog_8\",\"paramId\":\"resonance\"},\"out\":\"none\"},{\"id\":\"decay\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.02,\"max\":1,\"step\":0.01,\"value\":0.14,\"defaultValue\":0.14,\"unit\":\"s\",\"target\":{\"nodeId\":\"adsr_6\",\"paramId\":\"decay\"},\"out\":\"none\"}]},{\"id\":\"rhythm\",\"kind\":\"submenu\",\"label\":\"RHYTHM\",\"children\":[{\"id\":\"pulses\",\"kind\":\"value\",\"label\":\"PULSES\",\"type\":\"number\",\"min\":1,\"max\":16,\"step\":1,\"value\":7,\"defaultValue\":7,\"target\":{\"nodeId\":\"euclidean_9\",\"paramId\":\"pulses\"},\"out\":\"c\"},{\"id\":\"rotate\",\"kind\":\"value\",\"label\":\"ROTATE\",\"type\":\"number\",\"min\":0,\"max\":15,\"step\":1,\"value\":0,\"defaultValue\":0,\"target\":{\"nodeId\":\"euclidean_9\",\"paramId\":\"rotate\"},\"out\":\"none\"},{\"id\":\"kicklvl\",\"kind\":\"value\",\"label\":\"KICK\",\"type\":\"number\",\"min\":0,\"max\":1.5,\"step\":0.05,\"value\":0.8,\"defaultValue\":0.8,\"target\":{\"nodeId\":\"mixer4_13\",\"paramId\":\"gain2\"},\"out\":\"none\"}]},{\"id\":\"space\",\"kind\":\"submenu\",\"label\":\"SPACE\",\"children\":[{\"id\":\"dtime\",\"kind\":\"value\",\"label\":\"TIME\",\"type\":\"number\",\"min\":0.02,\"max\":0.9,\"step\":0.01,\"value\":0.24,\"defaultValue\":0.24,\"unit\":\"s\",\"target\":{\"nodeId\":\"delay_14\",\"paramId\":\"time\"},\"out\":\"none\"},{\"id\":\"dfb\",\"kind\":\"value\",\"label\":\"FBACK\",\"type\":\"number\",\"min\":0,\"max\":0.85,\"step\":0.02,\"value\":0.32,\"defaultValue\":0.32,\"target\":{\"nodeId\":\"delay_14\",\"paramId\":\"feedback\"},\"out\":\"none\"},{\"id\":\"dmix\",\"kind\":\"value\",\"label\":\"MIX\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.28,\"defaultValue\":0.28,\"target\":{\"nodeId\":\"delay_14\",\"paramId\":\"mix\"},\"out\":\"d\"}]}],\"longPress\":\"back\",\"doubleClick\":\"home\",\"longMs\":500,\"doubleMs\":300}"
+          "tree": "{\"root\":[{\"id\":\"tempo\",\"kind\":\"value\",\"label\":\"TEMPO\",\"type\":\"number\",\"min\":40,\"max\":200,\"step\":1,\"value\":112,\"defaultValue\":112,\"unit\":\"bpm\",\"target\":{\"nodeId\":\"esp32-sequencer-clock_1\",\"paramId\":\"bpm\"},\"out\":\"a\"},{\"id\":\"voice\",\"kind\":\"submenu\",\"label\":\"VOICE\",\"children\":[{\"id\":\"wave\",\"kind\":\"value\",\"label\":\"WAVE\",\"type\":\"enum\",\"min\":0,\"max\":3,\"step\":1,\"options\":[\"SINE\",\"SAW\",\"SQR\",\"TRI\"],\"value\":1,\"defaultValue\":1,\"out\":\"none\"},{\"id\":\"cutoff\",\"kind\":\"value\",\"label\":\"CUTOFF\",\"type\":\"number\",\"min\":120,\"max\":9000,\"step\":20,\"value\":1800,\"defaultValue\":1800,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"esp32-sequencer-filter_moog_8\",\"paramId\":\"frequency\"},\"out\":\"b\"},{\"id\":\"reso\",\"kind\":\"value\",\"label\":\"RESO\",\"type\":\"number\",\"min\":0,\"max\":0.9,\"step\":0.02,\"value\":0.35,\"defaultValue\":0.35,\"target\":{\"nodeId\":\"esp32-sequencer-filter_moog_8\",\"paramId\":\"resonance\"},\"out\":\"none\"},{\"id\":\"decay\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.02,\"max\":1,\"step\":0.01,\"value\":0.14,\"defaultValue\":0.14,\"unit\":\"s\",\"target\":{\"nodeId\":\"esp32-sequencer-adsr_6\",\"paramId\":\"decay\"},\"out\":\"none\"}]},{\"id\":\"rhythm\",\"kind\":\"submenu\",\"label\":\"RHYTHM\",\"children\":[{\"id\":\"pulses\",\"kind\":\"value\",\"label\":\"PULSES\",\"type\":\"number\",\"min\":1,\"max\":16,\"step\":1,\"value\":7,\"defaultValue\":7,\"target\":{\"nodeId\":\"esp32-sequencer-euclidean_9\",\"paramId\":\"pulses\"},\"out\":\"c\"},{\"id\":\"rotate\",\"kind\":\"value\",\"label\":\"ROTATE\",\"type\":\"number\",\"min\":0,\"max\":15,\"step\":1,\"value\":0,\"defaultValue\":0,\"target\":{\"nodeId\":\"esp32-sequencer-euclidean_9\",\"paramId\":\"rotate\"},\"out\":\"none\"},{\"id\":\"kicklvl\",\"kind\":\"value\",\"label\":\"KICK\",\"type\":\"number\",\"min\":0,\"max\":1.5,\"step\":0.05,\"value\":0.8,\"defaultValue\":0.8,\"target\":{\"nodeId\":\"esp32-sequencer-mixer4_13\",\"paramId\":\"gain2\"},\"out\":\"none\"}]},{\"id\":\"space\",\"kind\":\"submenu\",\"label\":\"SPACE\",\"children\":[{\"id\":\"dtime\",\"kind\":\"value\",\"label\":\"TIME\",\"type\":\"number\",\"min\":0.02,\"max\":0.9,\"step\":0.01,\"value\":0.24,\"defaultValue\":0.24,\"unit\":\"s\",\"target\":{\"nodeId\":\"esp32-sequencer-delay_14\",\"paramId\":\"time\"},\"out\":\"none\"},{\"id\":\"dfb\",\"kind\":\"value\",\"label\":\"FBACK\",\"type\":\"number\",\"min\":0,\"max\":0.85,\"step\":0.02,\"value\":0.32,\"defaultValue\":0.32,\"target\":{\"nodeId\":\"esp32-sequencer-delay_14\",\"paramId\":\"feedback\"},\"out\":\"none\"},{\"id\":\"dmix\",\"kind\":\"value\",\"label\":\"MIX\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.28,\"defaultValue\":0.28,\"target\":{\"nodeId\":\"esp32-sequencer-delay_14\",\"paramId\":\"mix\"},\"out\":\"d\"}]}],\"longPress\":\"back\",\"doubleClick\":\"home\",\"longMs\":500,\"doubleMs\":300}"
         }
       },
       {
-        "id": "oled_18",
+        "id": "esp32-sequencer-oled_18",
         "kind": "oled",
         "position": {
           "x": -460,
@@ -239,239 +239,239 @@
         },
         "params": {
           "bindingId": "hw_oled_ssd1306_2",
-          "elements": "[{\"id\":\"el_870596966\",\"kind\":\"menu\",\"x\":0,\"y\":0,\"width\":128,\"height\":64,\"rows\":6,\"menuNodeId\":\"menu_17\"}]"
+          "elements": "[{\"id\":\"el_640838194\",\"kind\":\"menu\",\"x\":0,\"y\":0,\"width\":128,\"height\":64,\"rows\":6,\"menuNodeId\":\"esp32-sequencer-menu_17\"}]"
         }
       }
     ],
     "connections": [
       {
-        "id": "c1",
+        "id": "esp32-sequencer-c1",
         "from": {
-          "nodeId": "clock_1",
+          "nodeId": "esp32-sequencer-clock_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "clock_divider_2",
+          "nodeId": "esp32-sequencer-clock_divider_2",
           "socketId": "in"
         }
       },
       {
-        "id": "c2",
+        "id": "esp32-sequencer-c2",
         "from": {
-          "nodeId": "clock_1",
+          "nodeId": "esp32-sequencer-clock_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "step_seq_3",
+          "nodeId": "esp32-sequencer-step_seq_3",
           "socketId": "clock"
         }
       },
       {
-        "id": "c3",
+        "id": "esp32-sequencer-c3",
         "from": {
-          "nodeId": "step_seq_3",
+          "nodeId": "esp32-sequencer-step_seq_3",
           "socketId": "cv"
         },
         "to": {
-          "nodeId": "range_4",
+          "nodeId": "esp32-sequencer-range_4",
           "socketId": "in"
         }
       },
       {
-        "id": "c4",
+        "id": "esp32-sequencer-c4",
         "from": {
-          "nodeId": "range_4",
+          "nodeId": "esp32-sequencer-range_4",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oscillator_5",
+          "nodeId": "esp32-sequencer-oscillator_5",
           "socketId": "pitch_cv"
         }
       },
       {
-        "id": "c5",
+        "id": "esp32-sequencer-c5",
         "from": {
-          "nodeId": "step_seq_3",
+          "nodeId": "esp32-sequencer-step_seq_3",
           "socketId": "gate"
         },
         "to": {
-          "nodeId": "adsr_6",
+          "nodeId": "esp32-sequencer-adsr_6",
           "socketId": "gate"
         }
       },
       {
-        "id": "c6",
+        "id": "esp32-sequencer-c6",
         "from": {
-          "nodeId": "oscillator_5",
+          "nodeId": "esp32-sequencer-oscillator_5",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "vca_7",
+          "nodeId": "esp32-sequencer-vca_7",
           "socketId": "in"
         }
       },
       {
-        "id": "c7",
+        "id": "esp32-sequencer-c7",
         "from": {
-          "nodeId": "adsr_6",
+          "nodeId": "esp32-sequencer-adsr_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "vca_7",
+          "nodeId": "esp32-sequencer-vca_7",
           "socketId": "cv"
         }
       },
       {
-        "id": "c8",
+        "id": "esp32-sequencer-c8",
         "from": {
-          "nodeId": "vca_7",
+          "nodeId": "esp32-sequencer-vca_7",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_moog_8",
+          "nodeId": "esp32-sequencer-filter_moog_8",
           "socketId": "in"
         }
       },
       {
-        "id": "c9",
+        "id": "esp32-sequencer-c9",
         "from": {
-          "nodeId": "clock_1",
+          "nodeId": "esp32-sequencer-clock_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "euclidean_9",
+          "nodeId": "esp32-sequencer-euclidean_9",
           "socketId": "clock"
         }
       },
       {
-        "id": "c10",
+        "id": "esp32-sequencer-c10",
         "from": {
-          "nodeId": "clock_divider_2",
+          "nodeId": "esp32-sequencer-clock_divider_2",
           "socketId": "d4"
         },
         "to": {
-          "nodeId": "drum_kick_10",
+          "nodeId": "esp32-sequencer-drum_kick_10",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c11",
+        "id": "esp32-sequencer-c11",
         "from": {
-          "nodeId": "euclidean_9",
+          "nodeId": "esp32-sequencer-euclidean_9",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "drum_hat_11",
+          "nodeId": "esp32-sequencer-drum_hat_11",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c12",
+        "id": "esp32-sequencer-c12",
         "from": {
-          "nodeId": "clock_divider_2",
+          "nodeId": "esp32-sequencer-clock_divider_2",
           "socketId": "d8"
         },
         "to": {
-          "nodeId": "drum_snare_12",
+          "nodeId": "esp32-sequencer-drum_snare_12",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c13",
+        "id": "esp32-sequencer-c13",
         "from": {
-          "nodeId": "filter_moog_8",
+          "nodeId": "esp32-sequencer-filter_moog_8",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "esp32-sequencer-mixer4_13",
           "socketId": "in1"
         }
       },
       {
-        "id": "c14",
+        "id": "esp32-sequencer-c14",
         "from": {
-          "nodeId": "drum_kick_10",
+          "nodeId": "esp32-sequencer-drum_kick_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "esp32-sequencer-mixer4_13",
           "socketId": "in2"
         }
       },
       {
-        "id": "c15",
+        "id": "esp32-sequencer-c15",
         "from": {
-          "nodeId": "drum_snare_12",
+          "nodeId": "esp32-sequencer-drum_snare_12",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "esp32-sequencer-mixer4_13",
           "socketId": "in3"
         }
       },
       {
-        "id": "c16",
+        "id": "esp32-sequencer-c16",
         "from": {
-          "nodeId": "drum_hat_11",
+          "nodeId": "esp32-sequencer-drum_hat_11",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "esp32-sequencer-mixer4_13",
           "socketId": "in4"
         }
       },
       {
-        "id": "c17",
+        "id": "esp32-sequencer-c17",
         "from": {
-          "nodeId": "mixer4_13",
+          "nodeId": "esp32-sequencer-mixer4_13",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "delay_14",
+          "nodeId": "esp32-sequencer-delay_14",
           "socketId": "in"
         }
       },
       {
-        "id": "c18",
+        "id": "esp32-sequencer-c18",
         "from": {
-          "nodeId": "delay_14",
+          "nodeId": "esp32-sequencer-delay_14",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_15",
+          "nodeId": "esp32-sequencer-audio_output_15",
           "socketId": "left"
         }
       },
       {
-        "id": "c19",
+        "id": "esp32-sequencer-c19",
         "from": {
-          "nodeId": "delay_14",
+          "nodeId": "esp32-sequencer-delay_14",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_15",
+          "nodeId": "esp32-sequencer-audio_output_15",
           "socketId": "right"
         }
       },
       {
-        "id": "c20",
+        "id": "esp32-sequencer-c20",
         "from": {
-          "nodeId": "encoder_in_16",
+          "nodeId": "esp32-sequencer-encoder_in_16",
           "socketId": "delta"
         },
         "to": {
-          "nodeId": "menu_17",
+          "nodeId": "esp32-sequencer-menu_17",
           "socketId": "delta"
         }
       },
       {
-        "id": "c21",
+        "id": "esp32-sequencer-c21",
         "from": {
-          "nodeId": "encoder_in_16",
+          "nodeId": "esp32-sequencer-encoder_in_16",
           "socketId": "sw"
         },
         "to": {
-          "nodeId": "menu_17",
+          "nodeId": "esp32-sequencer-menu_17",
           "socketId": "click"
         }
       }

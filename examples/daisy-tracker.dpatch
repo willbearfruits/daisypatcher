@@ -3,7 +3,7 @@
   "graph": {
     "nodes": [
       {
-        "id": "clock_1",
+        "id": "daisy-tracker-clock_1",
         "kind": "clock",
         "position": {
           "x": -900,
@@ -15,7 +15,7 @@
         }
       },
       {
-        "id": "clock_divider_2",
+        "id": "daisy-tracker-clock_divider_2",
         "kind": "clock_divider",
         "position": {
           "x": -700,
@@ -24,7 +24,7 @@
         "params": {}
       },
       {
-        "id": "step_seq_3",
+        "id": "daisy-tracker-step_seq_3",
         "kind": "step_seq",
         "position": {
           "x": -700,
@@ -50,7 +50,7 @@
         }
       },
       {
-        "id": "range_4",
+        "id": "daisy-tracker-range_4",
         "kind": "range",
         "position": {
           "x": -460,
@@ -65,7 +65,7 @@
         }
       },
       {
-        "id": "oscillator_5",
+        "id": "daisy-tracker-oscillator_5",
         "kind": "oscillator",
         "position": {
           "x": -240,
@@ -78,7 +78,7 @@
         }
       },
       {
-        "id": "adsr_6",
+        "id": "daisy-tracker-adsr_6",
         "kind": "adsr",
         "position": {
           "x": -460,
@@ -92,7 +92,7 @@
         }
       },
       {
-        "id": "vca_7",
+        "id": "daisy-tracker-vca_7",
         "kind": "vca",
         "position": {
           "x": -20,
@@ -103,7 +103,7 @@
         }
       },
       {
-        "id": "step_seq_8",
+        "id": "daisy-tracker-step_seq_8",
         "kind": "step_seq",
         "position": {
           "x": -700,
@@ -129,7 +129,7 @@
         }
       },
       {
-        "id": "range_9",
+        "id": "daisy-tracker-range_9",
         "kind": "range",
         "position": {
           "x": -460,
@@ -144,7 +144,7 @@
         }
       },
       {
-        "id": "karplus_10",
+        "id": "daisy-tracker-karplus_10",
         "kind": "karplus",
         "position": {
           "x": -240,
@@ -158,7 +158,7 @@
         }
       },
       {
-        "id": "drum_kick_11",
+        "id": "daisy-tracker-drum_kick_11",
         "kind": "drum_kick",
         "position": {
           "x": -240,
@@ -172,7 +172,7 @@
         }
       },
       {
-        "id": "drum_hat_12",
+        "id": "daisy-tracker-drum_hat_12",
         "kind": "drum_hat",
         "position": {
           "x": -240,
@@ -184,7 +184,7 @@
         }
       },
       {
-        "id": "mixer4_13",
+        "id": "daisy-tracker-mixer4_13",
         "kind": "mixer4",
         "position": {
           "x": 240,
@@ -198,7 +198,7 @@
         }
       },
       {
-        "id": "knob_in_14",
+        "id": "daisy-tracker-knob_in_14",
         "kind": "knob_in",
         "position": {
           "x": -900,
@@ -213,7 +213,7 @@
         }
       },
       {
-        "id": "knob_in_15",
+        "id": "daisy-tracker-knob_in_15",
         "kind": "knob_in",
         "position": {
           "x": -900,
@@ -228,7 +228,7 @@
         }
       },
       {
-        "id": "knob_in_16",
+        "id": "daisy-tracker-knob_in_16",
         "kind": "knob_in",
         "position": {
           "x": -900,
@@ -243,7 +243,7 @@
         }
       },
       {
-        "id": "knob_in_17",
+        "id": "daisy-tracker-knob_in_17",
         "kind": "knob_in",
         "position": {
           "x": -900,
@@ -258,7 +258,7 @@
         }
       },
       {
-        "id": "filter_svf_18",
+        "id": "daisy-tracker-filter_svf_18",
         "kind": "filter_svf",
         "position": {
           "x": 480,
@@ -270,7 +270,7 @@
         }
       },
       {
-        "id": "reverb_19",
+        "id": "daisy-tracker-reverb_19",
         "kind": "reverb",
         "position": {
           "x": 700,
@@ -283,7 +283,7 @@
         }
       },
       {
-        "id": "audio_output_20",
+        "id": "daisy-tracker-audio_output_20",
         "kind": "audio_output",
         "position": {
           "x": 940,
@@ -292,7 +292,7 @@
         "params": {}
       },
       {
-        "id": "encoder_in_21",
+        "id": "daisy-tracker-encoder_in_21",
         "kind": "encoder_in",
         "position": {
           "x": -1180,
@@ -309,18 +309,18 @@
         }
       },
       {
-        "id": "menu_22",
+        "id": "daisy-tracker-menu_22",
         "kind": "menu",
         "position": {
           "x": -900,
           "y": 300
         },
         "params": {
-          "tree": "{\"root\":[{\"id\":\"tempo\",\"kind\":\"value\",\"label\":\"TEMPO\",\"type\":\"number\",\"min\":50,\"max\":220,\"step\":1,\"value\":128,\"defaultValue\":128,\"unit\":\"bpm\",\"target\":{\"nodeId\":\"clock_1\",\"paramId\":\"bpm\"},\"out\":\"a\"},{\"id\":\"t1\",\"kind\":\"submenu\",\"label\":\"TRK1 LEAD\",\"children\":[{\"id\":\"t1w\",\"kind\":\"value\",\"label\":\"WAVE\",\"type\":\"enum\",\"min\":0,\"max\":3,\"step\":1,\"options\":[\"SINE\",\"SAW\",\"SQR\",\"TRI\"],\"value\":2,\"defaultValue\":2,\"out\":\"none\"},{\"id\":\"t1d\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.02,\"max\":0.8,\"step\":0.01,\"value\":0.1,\"defaultValue\":0.1,\"unit\":\"s\",\"target\":{\"nodeId\":\"adsr_6\",\"paramId\":\"decay\"},\"out\":\"none\"},{\"id\":\"t1s\",\"kind\":\"value\",\"label\":\"SUSTAIN\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.2,\"defaultValue\":0.2,\"target\":{\"nodeId\":\"adsr_6\",\"paramId\":\"sustain\"},\"out\":\"none\"}]},{\"id\":\"t2\",\"kind\":\"submenu\",\"label\":\"TRK2 BASS\",\"children\":[{\"id\":\"t2d\",\"kind\":\"value\",\"label\":\"DAMP\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.4,\"defaultValue\":0.4,\"target\":{\"nodeId\":\"karplus_10\",\"paramId\":\"damping\"},\"out\":\"none\"},{\"id\":\"t2f\",\"kind\":\"value\",\"label\":\"SUSTAIN\",\"type\":\"number\",\"min\":0.9,\"max\":0.999,\"step\":0.002,\"value\":0.985,\"defaultValue\":0.985,\"target\":{\"nodeId\":\"karplus_10\",\"paramId\":\"feedback\"},\"out\":\"none\"}]},{\"id\":\"t3\",\"kind\":\"submenu\",\"label\":\"TRK3 KICK\",\"children\":[{\"id\":\"t3t\",\"kind\":\"value\",\"label\":\"TUNE\",\"type\":\"number\",\"min\":30,\"max\":90,\"step\":1,\"value\":48,\"defaultValue\":48,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"drum_kick_11\",\"paramId\":\"tune\"},\"out\":\"none\"},{\"id\":\"t3d\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.05,\"max\":1,\"step\":0.01,\"value\":0.42,\"defaultValue\":0.42,\"unit\":\"s\",\"target\":{\"nodeId\":\"drum_kick_11\",\"paramId\":\"decay\"},\"out\":\"none\"}]},{\"id\":\"mst\",\"kind\":\"submenu\",\"label\":\"MASTER\",\"children\":[{\"id\":\"mcut\",\"kind\":\"value\",\"label\":\"TONE\",\"type\":\"number\",\"min\":400,\"max\":12000,\"step\":50,\"value\":6000,\"defaultValue\":6000,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"filter_svf_18\",\"paramId\":\"frequency\"},\"out\":\"b\"},{\"id\":\"mrev\",\"kind\":\"value\",\"label\":\"REVERB\",\"type\":\"number\",\"min\":0,\"max\":0.8,\"step\":0.02,\"value\":0.22,\"defaultValue\":0.22,\"target\":{\"nodeId\":\"reverb_19\",\"paramId\":\"mix\"},\"out\":\"c\"}]}],\"longPress\":\"back\",\"doubleClick\":\"home\",\"longMs\":480,\"doubleMs\":280}"
+          "tree": "{\"root\":[{\"id\":\"tempo\",\"kind\":\"value\",\"label\":\"TEMPO\",\"type\":\"number\",\"min\":50,\"max\":220,\"step\":1,\"value\":128,\"defaultValue\":128,\"unit\":\"bpm\",\"target\":{\"nodeId\":\"daisy-tracker-clock_1\",\"paramId\":\"bpm\"},\"out\":\"a\"},{\"id\":\"t1\",\"kind\":\"submenu\",\"label\":\"TRK1 LEAD\",\"children\":[{\"id\":\"t1w\",\"kind\":\"value\",\"label\":\"WAVE\",\"type\":\"enum\",\"min\":0,\"max\":3,\"step\":1,\"options\":[\"SINE\",\"SAW\",\"SQR\",\"TRI\"],\"value\":2,\"defaultValue\":2,\"out\":\"none\"},{\"id\":\"t1d\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.02,\"max\":0.8,\"step\":0.01,\"value\":0.1,\"defaultValue\":0.1,\"unit\":\"s\",\"target\":{\"nodeId\":\"daisy-tracker-adsr_6\",\"paramId\":\"decay\"},\"out\":\"none\"},{\"id\":\"t1s\",\"kind\":\"value\",\"label\":\"SUSTAIN\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.2,\"defaultValue\":0.2,\"target\":{\"nodeId\":\"daisy-tracker-adsr_6\",\"paramId\":\"sustain\"},\"out\":\"none\"}]},{\"id\":\"t2\",\"kind\":\"submenu\",\"label\":\"TRK2 BASS\",\"children\":[{\"id\":\"t2d\",\"kind\":\"value\",\"label\":\"DAMP\",\"type\":\"number\",\"min\":0,\"max\":1,\"step\":0.02,\"value\":0.4,\"defaultValue\":0.4,\"target\":{\"nodeId\":\"daisy-tracker-karplus_10\",\"paramId\":\"damping\"},\"out\":\"none\"},{\"id\":\"t2f\",\"kind\":\"value\",\"label\":\"SUSTAIN\",\"type\":\"number\",\"min\":0.9,\"max\":0.999,\"step\":0.002,\"value\":0.985,\"defaultValue\":0.985,\"target\":{\"nodeId\":\"daisy-tracker-karplus_10\",\"paramId\":\"feedback\"},\"out\":\"none\"}]},{\"id\":\"t3\",\"kind\":\"submenu\",\"label\":\"TRK3 KICK\",\"children\":[{\"id\":\"t3t\",\"kind\":\"value\",\"label\":\"TUNE\",\"type\":\"number\",\"min\":30,\"max\":90,\"step\":1,\"value\":48,\"defaultValue\":48,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"daisy-tracker-drum_kick_11\",\"paramId\":\"tune\"},\"out\":\"none\"},{\"id\":\"t3d\",\"kind\":\"value\",\"label\":\"DECAY\",\"type\":\"number\",\"min\":0.05,\"max\":1,\"step\":0.01,\"value\":0.42,\"defaultValue\":0.42,\"unit\":\"s\",\"target\":{\"nodeId\":\"daisy-tracker-drum_kick_11\",\"paramId\":\"decay\"},\"out\":\"none\"}]},{\"id\":\"mst\",\"kind\":\"submenu\",\"label\":\"MASTER\",\"children\":[{\"id\":\"mcut\",\"kind\":\"value\",\"label\":\"TONE\",\"type\":\"number\",\"min\":400,\"max\":12000,\"step\":50,\"value\":6000,\"defaultValue\":6000,\"unit\":\"Hz\",\"target\":{\"nodeId\":\"daisy-tracker-filter_svf_18\",\"paramId\":\"frequency\"},\"out\":\"b\"},{\"id\":\"mrev\",\"kind\":\"value\",\"label\":\"REVERB\",\"type\":\"number\",\"min\":0,\"max\":0.8,\"step\":0.02,\"value\":0.22,\"defaultValue\":0.22,\"target\":{\"nodeId\":\"daisy-tracker-reverb_19\",\"paramId\":\"mix\"},\"out\":\"c\"}]}],\"longPress\":\"back\",\"doubleClick\":\"home\",\"longMs\":480,\"doubleMs\":280}"
         }
       },
       {
-        "id": "oled_23",
+        "id": "daisy-tracker-oled_23",
         "kind": "oled",
         "position": {
           "x": -620,
@@ -328,305 +328,305 @@
         },
         "params": {
           "bindingId": "hw_oled_ssd1306_6",
-          "elements": "[{\"id\":\"el_870571980\",\"kind\":\"menu\",\"x\":0,\"y\":0,\"width\":128,\"height\":64,\"rows\":6,\"menuNodeId\":\"menu_22\"}]"
+          "elements": "[{\"id\":\"el_856329724\",\"kind\":\"menu\",\"x\":0,\"y\":0,\"width\":128,\"height\":64,\"rows\":6,\"menuNodeId\":\"daisy-tracker-menu_22\"}]"
         }
       }
     ],
     "connections": [
       {
-        "id": "c1",
+        "id": "daisy-tracker-c1",
         "from": {
-          "nodeId": "clock_1",
+          "nodeId": "daisy-tracker-clock_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "clock_divider_2",
+          "nodeId": "daisy-tracker-clock_divider_2",
           "socketId": "in"
         }
       },
       {
-        "id": "c2",
+        "id": "daisy-tracker-c2",
         "from": {
-          "nodeId": "clock_1",
+          "nodeId": "daisy-tracker-clock_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "step_seq_3",
+          "nodeId": "daisy-tracker-step_seq_3",
           "socketId": "clock"
         }
       },
       {
-        "id": "c3",
+        "id": "daisy-tracker-c3",
         "from": {
-          "nodeId": "step_seq_3",
+          "nodeId": "daisy-tracker-step_seq_3",
           "socketId": "cv"
         },
         "to": {
-          "nodeId": "range_4",
+          "nodeId": "daisy-tracker-range_4",
           "socketId": "in"
         }
       },
       {
-        "id": "c4",
+        "id": "daisy-tracker-c4",
         "from": {
-          "nodeId": "range_4",
+          "nodeId": "daisy-tracker-range_4",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oscillator_5",
+          "nodeId": "daisy-tracker-oscillator_5",
           "socketId": "pitch_cv"
         }
       },
       {
-        "id": "c5",
+        "id": "daisy-tracker-c5",
         "from": {
-          "nodeId": "step_seq_3",
+          "nodeId": "daisy-tracker-step_seq_3",
           "socketId": "gate"
         },
         "to": {
-          "nodeId": "adsr_6",
+          "nodeId": "daisy-tracker-adsr_6",
           "socketId": "gate"
         }
       },
       {
-        "id": "c6",
+        "id": "daisy-tracker-c6",
         "from": {
-          "nodeId": "oscillator_5",
+          "nodeId": "daisy-tracker-oscillator_5",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "vca_7",
+          "nodeId": "daisy-tracker-vca_7",
           "socketId": "in"
         }
       },
       {
-        "id": "c7",
+        "id": "daisy-tracker-c7",
         "from": {
-          "nodeId": "adsr_6",
+          "nodeId": "daisy-tracker-adsr_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "vca_7",
+          "nodeId": "daisy-tracker-vca_7",
           "socketId": "cv"
         }
       },
       {
-        "id": "c8",
+        "id": "daisy-tracker-c8",
         "from": {
-          "nodeId": "clock_1",
+          "nodeId": "daisy-tracker-clock_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "step_seq_8",
+          "nodeId": "daisy-tracker-step_seq_8",
           "socketId": "clock"
         }
       },
       {
-        "id": "c9",
+        "id": "daisy-tracker-c9",
         "from": {
-          "nodeId": "step_seq_8",
+          "nodeId": "daisy-tracker-step_seq_8",
           "socketId": "cv"
         },
         "to": {
-          "nodeId": "range_9",
+          "nodeId": "daisy-tracker-range_9",
           "socketId": "in"
         }
       },
       {
-        "id": "c10",
+        "id": "daisy-tracker-c10",
         "from": {
-          "nodeId": "step_seq_8",
+          "nodeId": "daisy-tracker-step_seq_8",
           "socketId": "gate"
         },
         "to": {
-          "nodeId": "karplus_10",
+          "nodeId": "daisy-tracker-karplus_10",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c11",
+        "id": "daisy-tracker-c11",
         "from": {
-          "nodeId": "range_9",
+          "nodeId": "daisy-tracker-range_9",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "karplus_10",
+          "nodeId": "daisy-tracker-karplus_10",
           "socketId": "cv_pitch"
         }
       },
       {
-        "id": "c12",
+        "id": "daisy-tracker-c12",
         "from": {
-          "nodeId": "clock_divider_2",
+          "nodeId": "daisy-tracker-clock_divider_2",
           "socketId": "d4"
         },
         "to": {
-          "nodeId": "drum_kick_11",
+          "nodeId": "daisy-tracker-drum_kick_11",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c13",
+        "id": "daisy-tracker-c13",
         "from": {
-          "nodeId": "clock_divider_2",
+          "nodeId": "daisy-tracker-clock_divider_2",
           "socketId": "d2"
         },
         "to": {
-          "nodeId": "drum_hat_12",
+          "nodeId": "daisy-tracker-drum_hat_12",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c14",
+        "id": "daisy-tracker-c14",
         "from": {
-          "nodeId": "vca_7",
+          "nodeId": "daisy-tracker-vca_7",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "in1"
         }
       },
       {
-        "id": "c15",
+        "id": "daisy-tracker-c15",
         "from": {
-          "nodeId": "karplus_10",
+          "nodeId": "daisy-tracker-karplus_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "in2"
         }
       },
       {
-        "id": "c16",
+        "id": "daisy-tracker-c16",
         "from": {
-          "nodeId": "drum_kick_11",
+          "nodeId": "daisy-tracker-drum_kick_11",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "in3"
         }
       },
       {
-        "id": "c17",
+        "id": "daisy-tracker-c17",
         "from": {
-          "nodeId": "drum_hat_12",
+          "nodeId": "daisy-tracker-drum_hat_12",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "in4"
         }
       },
       {
-        "id": "c18",
+        "id": "daisy-tracker-c18",
         "from": {
-          "nodeId": "knob_in_14",
+          "nodeId": "daisy-tracker-knob_in_14",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "cv_level1"
         }
       },
       {
-        "id": "c19",
+        "id": "daisy-tracker-c19",
         "from": {
-          "nodeId": "knob_in_15",
+          "nodeId": "daisy-tracker-knob_in_15",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "cv_level2"
         }
       },
       {
-        "id": "c20",
+        "id": "daisy-tracker-c20",
         "from": {
-          "nodeId": "knob_in_16",
+          "nodeId": "daisy-tracker-knob_in_16",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "cv_level3"
         }
       },
       {
-        "id": "c21",
+        "id": "daisy-tracker-c21",
         "from": {
-          "nodeId": "knob_in_17",
+          "nodeId": "daisy-tracker-knob_in_17",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "cv_level4"
         }
       },
       {
-        "id": "c22",
+        "id": "daisy-tracker-c22",
         "from": {
-          "nodeId": "mixer4_13",
+          "nodeId": "daisy-tracker-mixer4_13",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_18",
+          "nodeId": "daisy-tracker-filter_svf_18",
           "socketId": "in"
         }
       },
       {
-        "id": "c23",
+        "id": "daisy-tracker-c23",
         "from": {
-          "nodeId": "filter_svf_18",
+          "nodeId": "daisy-tracker-filter_svf_18",
           "socketId": "lp"
         },
         "to": {
-          "nodeId": "reverb_19",
+          "nodeId": "daisy-tracker-reverb_19",
           "socketId": "in"
         }
       },
       {
-        "id": "c24",
+        "id": "daisy-tracker-c24",
         "from": {
-          "nodeId": "reverb_19",
+          "nodeId": "daisy-tracker-reverb_19",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_20",
+          "nodeId": "daisy-tracker-audio_output_20",
           "socketId": "left"
         }
       },
       {
-        "id": "c25",
+        "id": "daisy-tracker-c25",
         "from": {
-          "nodeId": "reverb_19",
+          "nodeId": "daisy-tracker-reverb_19",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_20",
+          "nodeId": "daisy-tracker-audio_output_20",
           "socketId": "right"
         }
       },
       {
-        "id": "c26",
+        "id": "daisy-tracker-c26",
         "from": {
-          "nodeId": "encoder_in_21",
+          "nodeId": "daisy-tracker-encoder_in_21",
           "socketId": "delta"
         },
         "to": {
-          "nodeId": "menu_22",
+          "nodeId": "daisy-tracker-menu_22",
           "socketId": "delta"
         }
       },
       {
-        "id": "c27",
+        "id": "daisy-tracker-c27",
         "from": {
-          "nodeId": "encoder_in_21",
+          "nodeId": "daisy-tracker-encoder_in_21",
           "socketId": "sw"
         },
         "to": {
-          "nodeId": "menu_22",
+          "nodeId": "daisy-tracker-menu_22",
           "socketId": "click"
         }
       }

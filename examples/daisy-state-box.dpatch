@@ -3,7 +3,7 @@
   "graph": {
     "nodes": [
       {
-        "id": "button_1",
+        "id": "daisy-state-box-button_1",
         "kind": "button",
         "position": {
           "x": -900,
@@ -16,7 +16,7 @@
         }
       },
       {
-        "id": "timer_2",
+        "id": "daisy-state-box-timer_2",
         "kind": "timer",
         "position": {
           "x": -700,
@@ -29,7 +29,7 @@
         }
       },
       {
-        "id": "edge_3",
+        "id": "daisy-state-box-edge_3",
         "kind": "edge",
         "position": {
           "x": -520,
@@ -40,7 +40,7 @@
         }
       },
       {
-        "id": "timer_4",
+        "id": "daisy-state-box-timer_4",
         "kind": "timer",
         "position": {
           "x": -700,
@@ -53,7 +53,7 @@
         }
       },
       {
-        "id": "state_machine_5",
+        "id": "daisy-state-box-state_machine_5",
         "kind": "state_machine",
         "position": {
           "x": -320,
@@ -65,7 +65,7 @@
         }
       },
       {
-        "id": "clock_6",
+        "id": "daisy-state-box-clock_6",
         "kind": "clock",
         "position": {
           "x": -900,
@@ -77,7 +77,7 @@
         }
       },
       {
-        "id": "oscillator_7",
+        "id": "daisy-state-box-oscillator_7",
         "kind": "oscillator",
         "position": {
           "x": -320,
@@ -90,7 +90,7 @@
         }
       },
       {
-        "id": "karplus_8",
+        "id": "daisy-state-box-karplus_8",
         "kind": "karplus",
         "position": {
           "x": -320,
@@ -104,7 +104,7 @@
         }
       },
       {
-        "id": "drum_kick_9",
+        "id": "daisy-state-box-drum_kick_9",
         "kind": "drum_kick",
         "position": {
           "x": -320,
@@ -118,7 +118,7 @@
         }
       },
       {
-        "id": "fm2_10",
+        "id": "daisy-state-box-fm2_10",
         "kind": "fm2",
         "position": {
           "x": -320,
@@ -132,7 +132,7 @@
         }
       },
       {
-        "id": "select_11",
+        "id": "daisy-state-box-select_11",
         "kind": "select",
         "position": {
           "x": -60,
@@ -144,7 +144,7 @@
         }
       },
       {
-        "id": "knob_in_12",
+        "id": "daisy-state-box-knob_in_12",
         "kind": "knob_in",
         "position": {
           "x": -900,
@@ -159,7 +159,7 @@
         }
       },
       {
-        "id": "knob_in_13",
+        "id": "daisy-state-box-knob_in_13",
         "kind": "knob_in",
         "position": {
           "x": -900,
@@ -174,7 +174,7 @@
         }
       },
       {
-        "id": "scale_14",
+        "id": "daisy-state-box-scale_14",
         "kind": "scale",
         "position": {
           "x": -700,
@@ -186,7 +186,7 @@
         }
       },
       {
-        "id": "filter_svf_15",
+        "id": "daisy-state-box-filter_svf_15",
         "kind": "filter_svf",
         "position": {
           "x": 160,
@@ -198,7 +198,7 @@
         }
       },
       {
-        "id": "reverb_16",
+        "id": "daisy-state-box-reverb_16",
         "kind": "reverb",
         "position": {
           "x": 380,
@@ -211,7 +211,7 @@
         }
       },
       {
-        "id": "audio_output_17",
+        "id": "daisy-state-box-audio_output_17",
         "kind": "audio_output",
         "position": {
           "x": 620,
@@ -220,7 +220,7 @@
         "params": {}
       },
       {
-        "id": "led_18",
+        "id": "daisy-state-box-led_18",
         "kind": "led",
         "position": {
           "x": -60,
@@ -235,222 +235,222 @@
     ],
     "connections": [
       {
-        "id": "c1",
+        "id": "daisy-state-box-c1",
         "from": {
-          "nodeId": "button_1",
+          "nodeId": "daisy-state-box-button_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "timer_2",
+          "nodeId": "daisy-state-box-timer_2",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c2",
+        "id": "daisy-state-box-c2",
         "from": {
-          "nodeId": "timer_2",
+          "nodeId": "daisy-state-box-timer_2",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "edge_3",
+          "nodeId": "daisy-state-box-edge_3",
           "socketId": "in"
         }
       },
       {
-        "id": "c3",
+        "id": "daisy-state-box-c3",
         "from": {
-          "nodeId": "edge_3",
+          "nodeId": "daisy-state-box-edge_3",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "state_machine_5",
+          "nodeId": "daisy-state-box-state_machine_5",
           "socketId": "next"
         }
       },
       {
-        "id": "c4",
+        "id": "daisy-state-box-c4",
         "from": {
-          "nodeId": "timer_2",
+          "nodeId": "daisy-state-box-timer_2",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "timer_4",
+          "nodeId": "daisy-state-box-timer_4",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c5",
+        "id": "daisy-state-box-c5",
         "from": {
-          "nodeId": "timer_4",
+          "nodeId": "daisy-state-box-timer_4",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "state_machine_5",
+          "nodeId": "daisy-state-box-state_machine_5",
           "socketId": "reset"
         }
       },
       {
-        "id": "c6",
+        "id": "daisy-state-box-c6",
         "from": {
-          "nodeId": "clock_6",
+          "nodeId": "daisy-state-box-clock_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "karplus_8",
+          "nodeId": "daisy-state-box-karplus_8",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c7",
+        "id": "daisy-state-box-c7",
         "from": {
-          "nodeId": "clock_6",
+          "nodeId": "daisy-state-box-clock_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "drum_kick_9",
+          "nodeId": "daisy-state-box-drum_kick_9",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c8",
+        "id": "daisy-state-box-c8",
         "from": {
-          "nodeId": "oscillator_7",
+          "nodeId": "daisy-state-box-oscillator_7",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "select_11",
+          "nodeId": "daisy-state-box-select_11",
           "socketId": "in0"
         }
       },
       {
-        "id": "c9",
+        "id": "daisy-state-box-c9",
         "from": {
-          "nodeId": "karplus_8",
+          "nodeId": "daisy-state-box-karplus_8",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "select_11",
+          "nodeId": "daisy-state-box-select_11",
           "socketId": "in1"
         }
       },
       {
-        "id": "c10",
+        "id": "daisy-state-box-c10",
         "from": {
-          "nodeId": "drum_kick_9",
+          "nodeId": "daisy-state-box-drum_kick_9",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "select_11",
+          "nodeId": "daisy-state-box-select_11",
           "socketId": "in2"
         }
       },
       {
-        "id": "c11",
+        "id": "daisy-state-box-c11",
         "from": {
-          "nodeId": "fm2_10",
+          "nodeId": "daisy-state-box-fm2_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "select_11",
+          "nodeId": "daisy-state-box-select_11",
           "socketId": "in3"
         }
       },
       {
-        "id": "c12",
+        "id": "daisy-state-box-c12",
         "from": {
-          "nodeId": "state_machine_5",
+          "nodeId": "daisy-state-box-state_machine_5",
           "socketId": "state"
         },
         "to": {
-          "nodeId": "select_11",
+          "nodeId": "daisy-state-box-select_11",
           "socketId": "sel"
         }
       },
       {
-        "id": "c13",
+        "id": "daisy-state-box-c13",
         "from": {
-          "nodeId": "knob_in_12",
+          "nodeId": "daisy-state-box-knob_in_12",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "scale_14",
+          "nodeId": "daisy-state-box-scale_14",
           "socketId": "in"
         }
       },
       {
-        "id": "c14",
+        "id": "daisy-state-box-c14",
         "from": {
-          "nodeId": "scale_14",
+          "nodeId": "daisy-state-box-scale_14",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_15",
+          "nodeId": "daisy-state-box-filter_svf_15",
           "socketId": "cv_cutoff"
         }
       },
       {
-        "id": "c15",
+        "id": "daisy-state-box-c15",
         "from": {
-          "nodeId": "select_11",
+          "nodeId": "daisy-state-box-select_11",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_15",
+          "nodeId": "daisy-state-box-filter_svf_15",
           "socketId": "in"
         }
       },
       {
-        "id": "c16",
+        "id": "daisy-state-box-c16",
         "from": {
-          "nodeId": "filter_svf_15",
+          "nodeId": "daisy-state-box-filter_svf_15",
           "socketId": "lp"
         },
         "to": {
-          "nodeId": "reverb_16",
+          "nodeId": "daisy-state-box-reverb_16",
           "socketId": "in"
         }
       },
       {
-        "id": "c17",
+        "id": "daisy-state-box-c17",
         "from": {
-          "nodeId": "knob_in_13",
+          "nodeId": "daisy-state-box-knob_in_13",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "reverb_16",
+          "nodeId": "daisy-state-box-reverb_16",
           "socketId": "cv_mix"
         }
       },
       {
-        "id": "c18",
+        "id": "daisy-state-box-c18",
         "from": {
-          "nodeId": "reverb_16",
+          "nodeId": "daisy-state-box-reverb_16",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_17",
+          "nodeId": "daisy-state-box-audio_output_17",
           "socketId": "left"
         }
       },
       {
-        "id": "c19",
+        "id": "daisy-state-box-c19",
         "from": {
-          "nodeId": "reverb_16",
+          "nodeId": "daisy-state-box-reverb_16",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_17",
+          "nodeId": "daisy-state-box-audio_output_17",
           "socketId": "right"
         }
       },
       {
-        "id": "c20",
+        "id": "daisy-state-box-c20",
         "from": {
-          "nodeId": "state_machine_5",
+          "nodeId": "daisy-state-box-state_machine_5",
           "socketId": "state"
         },
         "to": {
-          "nodeId": "led_18",
+          "nodeId": "daisy-state-box-led_18",
           "socketId": "in"
         }
       }

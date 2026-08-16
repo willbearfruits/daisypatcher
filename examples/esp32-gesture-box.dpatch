@@ -3,7 +3,7 @@
   "graph": {
     "nodes": [
       {
-        "id": "imu_in_1",
+        "id": "esp32-gesture-box-imu_in_1",
         "kind": "imu_in",
         "position": {
           "x": -900,
@@ -23,7 +23,7 @@
         }
       },
       {
-        "id": "distance_in_2",
+        "id": "esp32-gesture-box-distance_in_2",
         "kind": "distance_in",
         "position": {
           "x": -900,
@@ -38,7 +38,7 @@
         }
       },
       {
-        "id": "range_3",
+        "id": "esp32-gesture-box-range_3",
         "kind": "range",
         "position": {
           "x": -660,
@@ -53,7 +53,7 @@
         }
       },
       {
-        "id": "range_4",
+        "id": "esp32-gesture-box-range_4",
         "kind": "range",
         "position": {
           "x": -660,
@@ -68,7 +68,7 @@
         }
       },
       {
-        "id": "range_5",
+        "id": "esp32-gesture-box-range_5",
         "kind": "range",
         "position": {
           "x": -660,
@@ -83,7 +83,7 @@
         }
       },
       {
-        "id": "clock_6",
+        "id": "esp32-gesture-box-clock_6",
         "kind": "clock",
         "position": {
           "x": -900,
@@ -95,7 +95,7 @@
         }
       },
       {
-        "id": "random_7",
+        "id": "esp32-gesture-box-random_7",
         "kind": "random",
         "position": {
           "x": -660,
@@ -108,7 +108,7 @@
         }
       },
       {
-        "id": "karplus_8",
+        "id": "esp32-gesture-box-karplus_8",
         "kind": "karplus",
         "position": {
           "x": -380,
@@ -122,7 +122,7 @@
         }
       },
       {
-        "id": "slew_9",
+        "id": "esp32-gesture-box-slew_9",
         "kind": "slew",
         "position": {
           "x": -380,
@@ -134,7 +134,7 @@
         }
       },
       {
-        "id": "oscillator_10",
+        "id": "esp32-gesture-box-oscillator_10",
         "kind": "oscillator",
         "position": {
           "x": -140,
@@ -147,7 +147,7 @@
         }
       },
       {
-        "id": "mixer4_11",
+        "id": "esp32-gesture-box-mixer4_11",
         "kind": "mixer4",
         "position": {
           "x": 120,
@@ -161,7 +161,7 @@
         }
       },
       {
-        "id": "filter_svf_12",
+        "id": "esp32-gesture-box-filter_svf_12",
         "kind": "filter_svf",
         "position": {
           "x": 360,
@@ -173,7 +173,7 @@
         }
       },
       {
-        "id": "delay_13",
+        "id": "esp32-gesture-box-delay_13",
         "kind": "delay",
         "position": {
           "x": 600,
@@ -186,7 +186,7 @@
         }
       },
       {
-        "id": "reverb_14",
+        "id": "esp32-gesture-box-reverb_14",
         "kind": "reverb",
         "position": {
           "x": 840,
@@ -199,7 +199,7 @@
         }
       },
       {
-        "id": "audio_output_15",
+        "id": "esp32-gesture-box-audio_output_15",
         "kind": "audio_output",
         "position": {
           "x": 1080,
@@ -208,7 +208,7 @@
         "params": {}
       },
       {
-        "id": "oled_16",
+        "id": "esp32-gesture-box-oled_16",
         "kind": "oled",
         "position": {
           "x": 360,
@@ -222,233 +222,233 @@
     ],
     "connections": [
       {
-        "id": "c1",
+        "id": "esp32-gesture-box-c1",
         "from": {
-          "nodeId": "imu_in_1",
+          "nodeId": "esp32-gesture-box-imu_in_1",
           "socketId": "ax"
         },
         "to": {
-          "nodeId": "range_3",
+          "nodeId": "esp32-gesture-box-range_3",
           "socketId": "in"
         }
       },
       {
-        "id": "c2",
+        "id": "esp32-gesture-box-c2",
         "from": {
-          "nodeId": "imu_in_1",
+          "nodeId": "esp32-gesture-box-imu_in_1",
           "socketId": "ay"
         },
         "to": {
-          "nodeId": "range_4",
+          "nodeId": "esp32-gesture-box-range_4",
           "socketId": "in"
         }
       },
       {
-        "id": "c3",
+        "id": "esp32-gesture-box-c3",
         "from": {
-          "nodeId": "distance_in_2",
+          "nodeId": "esp32-gesture-box-distance_in_2",
           "socketId": "dist"
         },
         "to": {
-          "nodeId": "range_5",
+          "nodeId": "esp32-gesture-box-range_5",
           "socketId": "in"
         }
       },
       {
-        "id": "c4",
+        "id": "esp32-gesture-box-c4",
         "from": {
-          "nodeId": "clock_6",
+          "nodeId": "esp32-gesture-box-clock_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "random_7",
+          "nodeId": "esp32-gesture-box-random_7",
           "socketId": "clock"
         }
       },
       {
-        "id": "c5",
+        "id": "esp32-gesture-box-c5",
         "from": {
-          "nodeId": "clock_6",
+          "nodeId": "esp32-gesture-box-clock_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "karplus_8",
+          "nodeId": "esp32-gesture-box-karplus_8",
           "socketId": "trigger"
         }
       },
       {
-        "id": "c6",
+        "id": "esp32-gesture-box-c6",
         "from": {
-          "nodeId": "range_3",
+          "nodeId": "esp32-gesture-box-range_3",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "karplus_8",
+          "nodeId": "esp32-gesture-box-karplus_8",
           "socketId": "cv_pitch"
         }
       },
       {
-        "id": "c7",
+        "id": "esp32-gesture-box-c7",
         "from": {
-          "nodeId": "range_4",
+          "nodeId": "esp32-gesture-box-range_4",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "karplus_8",
+          "nodeId": "esp32-gesture-box-karplus_8",
           "socketId": "cv_damp"
         }
       },
       {
-        "id": "c8",
+        "id": "esp32-gesture-box-c8",
         "from": {
-          "nodeId": "random_7",
+          "nodeId": "esp32-gesture-box-random_7",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "slew_9",
+          "nodeId": "esp32-gesture-box-slew_9",
           "socketId": "in"
         }
       },
       {
-        "id": "c9",
+        "id": "esp32-gesture-box-c9",
         "from": {
-          "nodeId": "slew_9",
+          "nodeId": "esp32-gesture-box-slew_9",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oscillator_10",
+          "nodeId": "esp32-gesture-box-oscillator_10",
           "socketId": "pitch_cv"
         }
       },
       {
-        "id": "c10",
+        "id": "esp32-gesture-box-c10",
         "from": {
-          "nodeId": "karplus_8",
+          "nodeId": "esp32-gesture-box-karplus_8",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_11",
+          "nodeId": "esp32-gesture-box-mixer4_11",
           "socketId": "in1"
         }
       },
       {
-        "id": "c11",
+        "id": "esp32-gesture-box-c11",
         "from": {
-          "nodeId": "oscillator_10",
+          "nodeId": "esp32-gesture-box-oscillator_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "mixer4_11",
+          "nodeId": "esp32-gesture-box-mixer4_11",
           "socketId": "in2"
         }
       },
       {
-        "id": "c12",
+        "id": "esp32-gesture-box-c12",
         "from": {
-          "nodeId": "mixer4_11",
+          "nodeId": "esp32-gesture-box-mixer4_11",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_12",
+          "nodeId": "esp32-gesture-box-filter_svf_12",
           "socketId": "in"
         }
       },
       {
-        "id": "c13",
+        "id": "esp32-gesture-box-c13",
         "from": {
-          "nodeId": "filter_svf_12",
+          "nodeId": "esp32-gesture-box-filter_svf_12",
           "socketId": "lp"
         },
         "to": {
-          "nodeId": "delay_13",
+          "nodeId": "esp32-gesture-box-delay_13",
           "socketId": "in"
         }
       },
       {
-        "id": "c14",
+        "id": "esp32-gesture-box-c14",
         "from": {
-          "nodeId": "range_5",
+          "nodeId": "esp32-gesture-box-range_5",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "delay_13",
+          "nodeId": "esp32-gesture-box-delay_13",
           "socketId": "cv_mix"
         }
       },
       {
-        "id": "c15",
+        "id": "esp32-gesture-box-c15",
         "from": {
-          "nodeId": "delay_13",
+          "nodeId": "esp32-gesture-box-delay_13",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "reverb_14",
+          "nodeId": "esp32-gesture-box-reverb_14",
           "socketId": "in"
         }
       },
       {
-        "id": "c16",
+        "id": "esp32-gesture-box-c16",
         "from": {
-          "nodeId": "reverb_14",
+          "nodeId": "esp32-gesture-box-reverb_14",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_15",
+          "nodeId": "esp32-gesture-box-audio_output_15",
           "socketId": "left"
         }
       },
       {
-        "id": "c17",
+        "id": "esp32-gesture-box-c17",
         "from": {
-          "nodeId": "reverb_14",
+          "nodeId": "esp32-gesture-box-reverb_14",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_15",
+          "nodeId": "esp32-gesture-box-audio_output_15",
           "socketId": "right"
         }
       },
       {
-        "id": "c18",
+        "id": "esp32-gesture-box-c18",
         "from": {
-          "nodeId": "imu_in_1",
+          "nodeId": "esp32-gesture-box-imu_in_1",
           "socketId": "ax"
         },
         "to": {
-          "nodeId": "oled_16",
+          "nodeId": "esp32-gesture-box-oled_16",
           "socketId": "a"
         }
       },
       {
-        "id": "c19",
+        "id": "esp32-gesture-box-c19",
         "from": {
-          "nodeId": "imu_in_1",
+          "nodeId": "esp32-gesture-box-imu_in_1",
           "socketId": "ay"
         },
         "to": {
-          "nodeId": "oled_16",
+          "nodeId": "esp32-gesture-box-oled_16",
           "socketId": "b"
         }
       },
       {
-        "id": "c20",
+        "id": "esp32-gesture-box-c20",
         "from": {
-          "nodeId": "distance_in_2",
+          "nodeId": "esp32-gesture-box-distance_in_2",
           "socketId": "dist"
         },
         "to": {
-          "nodeId": "oled_16",
+          "nodeId": "esp32-gesture-box-oled_16",
           "socketId": "c"
         }
       },
       {
-        "id": "c21",
+        "id": "esp32-gesture-box-c21",
         "from": {
-          "nodeId": "random_7",
+          "nodeId": "esp32-gesture-box-random_7",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oled_16",
+          "nodeId": "esp32-gesture-box-oled_16",
           "socketId": "d"
         }
       }

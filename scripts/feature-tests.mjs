@@ -51,6 +51,7 @@ writeFileSync(
     `export { flattenGraph } from '${p('src/state/subpatch')}'`,
     `export { captureFrom } from '${p('src/state/presets')}'`,
     `export * from '${p('src/assistant/editSchema')}'`,
+    `export { diffConnections } from '${p('src/editor/sync')}'`,
     `export { systemPrompt, userPrompt } from '${p('src/assistant/prompt')}'`
   ].join('\n'),
   'utf8'
@@ -70,7 +71,7 @@ await esbuild.build({
 
 const M = await import(pathToFileURL(BUNDLE).href)
 const { NODE_DEFINITIONS, WORKLET_REGISTRY, generateProject, flattenGraph, captureFrom } = M
-const { parseEditPlan, validatePlan, describePlan, systemPrompt, userPrompt } = M
+const { parseEditPlan, validatePlan, describePlan, systemPrompt, userPrompt, diffConnections } = M
 
 const { renderGraph } = await import(pathToFileURL(path.join(ROOT, 'scripts/lib/renderEmulator.mjs')).href)
 
@@ -371,6 +372,30 @@ if (want('logic')) {
     chk(`${kind} has a definition and a worklet`,
       Boolean(NODE_DEFINITIONS[kind]) && Boolean(WORKLET_REGISTRY[kind]))
   }
+}
+
+
+/* =====================================================================
+ * Editor sync — the diff that drives Rete
+ * ===================================================================== */
+if (want('sync')) {
+  g('sync')
+  /*
+   * Two patches that reuse connection ids for different cables. Diffing by
+   * id alone called these "unchanged" and left the FIRST patch's cables
+   * mounted after opening the second — frozen in place, pointing at nodes
+   * that no longer existed. Every bundled example collided this way.
+   */
+  const a = [w('c1', 'button_1', 'out', 'timer_2', 'trigger'), w('c2', 'timer_2', 'out', 'edge_3', 'in')]
+  const b = [w('c1', 'clock_1', 'out', 'div_2', 'in'), w('c2', 'timer_2', 'out', 'edge_3', 'in')]
+  const d = diffConnections(a, b)
+  chk('a reused id with different ends is REMOVED', d.removed.some((c) => c.id === 'c1'))
+  chk('…and ADDED', d.added.some((c) => c.id === 'c1'))
+  chk('a genuinely unchanged cable is neither', !d.removed.some((c) => c.id === 'c2') && !d.added.some((c) => c.id === 'c2'))
+  const same = diffConnections(a, a)
+  chk('identical lists produce an empty diff', same.added.length === 0 && same.removed.length === 0)
+  const fromEmpty = diffConnections([], b)
+  chk('first load adds everything', fromEmpty.added.length === 2 && fromEmpty.removed.length === 0)
 }
 
 /* =====================================================================

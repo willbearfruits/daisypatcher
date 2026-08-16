@@ -3,7 +3,7 @@
   "graph": {
     "nodes": [
       {
-        "id": "oscillator_1",
+        "id": "daisy-code-node-oscillator_1",
         "kind": "oscillator",
         "position": {
           "x": -720,
@@ -16,7 +16,7 @@
         }
       },
       {
-        "id": "code_2",
+        "id": "daisy-code-node-code_2",
         "kind": "code",
         "position": {
           "x": -440,
@@ -31,7 +31,7 @@
         }
       },
       {
-        "id": "code_3",
+        "id": "daisy-code-node-code_3",
         "kind": "code",
         "position": {
           "x": -180,
@@ -46,7 +46,7 @@
         }
       },
       {
-        "id": "filter_svf_4",
+        "id": "daisy-code-node-filter_svf_4",
         "kind": "filter_svf",
         "position": {
           "x": 80,
@@ -58,7 +58,7 @@
         }
       },
       {
-        "id": "reverb_5",
+        "id": "daisy-code-node-reverb_5",
         "kind": "reverb",
         "position": {
           "x": 340,
@@ -71,7 +71,7 @@
         }
       },
       {
-        "id": "audio_output_6",
+        "id": "daisy-code-node-audio_output_6",
         "kind": "audio_output",
         "position": {
           "x": 600,
@@ -80,7 +80,7 @@
         "params": {}
       },
       {
-        "id": "knob_in_7",
+        "id": "daisy-code-node-knob_in_7",
         "kind": "knob_in",
         "position": {
           "x": -720,
@@ -95,7 +95,7 @@
         }
       },
       {
-        "id": "knob_in_8",
+        "id": "daisy-code-node-knob_in_8",
         "kind": "knob_in",
         "position": {
           "x": -720,
@@ -110,7 +110,7 @@
         }
       },
       {
-        "id": "knob_in_9",
+        "id": "daisy-code-node-knob_in_9",
         "kind": "knob_in",
         "position": {
           "x": -720,
@@ -125,7 +125,7 @@
         }
       },
       {
-        "id": "knob_in_10",
+        "id": "daisy-code-node-knob_in_10",
         "kind": "knob_in",
         "position": {
           "x": -720,
@@ -142,79 +142,79 @@
     ],
     "connections": [
       {
-        "id": "c1",
+        "id": "daisy-code-node-c1",
         "from": {
-          "nodeId": "oscillator_1",
+          "nodeId": "daisy-code-node-oscillator_1",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "code_2",
+          "nodeId": "daisy-code-node-code_2",
           "socketId": "a"
         }
       },
       {
-        "id": "c2",
+        "id": "daisy-code-node-c2",
         "from": {
-          "nodeId": "code_2",
+          "nodeId": "daisy-code-node-code_2",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "code_3",
+          "nodeId": "daisy-code-node-code_3",
           "socketId": "a"
         }
       },
       {
-        "id": "c3",
+        "id": "daisy-code-node-c3",
         "from": {
-          "nodeId": "code_3",
+          "nodeId": "daisy-code-node-code_3",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_4",
+          "nodeId": "daisy-code-node-filter_svf_4",
           "socketId": "in"
         }
       },
       {
-        "id": "c4",
+        "id": "daisy-code-node-c4",
         "from": {
-          "nodeId": "filter_svf_4",
+          "nodeId": "daisy-code-node-filter_svf_4",
           "socketId": "lp"
         },
         "to": {
-          "nodeId": "reverb_5",
+          "nodeId": "daisy-code-node-reverb_5",
           "socketId": "in"
         }
       },
       {
-        "id": "c5",
+        "id": "daisy-code-node-c5",
         "from": {
-          "nodeId": "reverb_5",
+          "nodeId": "daisy-code-node-reverb_5",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_6",
+          "nodeId": "daisy-code-node-audio_output_6",
           "socketId": "left"
         }
       },
       {
-        "id": "c6",
+        "id": "daisy-code-node-c6",
         "from": {
-          "nodeId": "reverb_5",
+          "nodeId": "daisy-code-node-reverb_5",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_6",
+          "nodeId": "daisy-code-node-audio_output_6",
           "socketId": "right"
         }
       },
       {
-        "id": "c7",
+        "id": "daisy-code-node-c7",
         "from": {
-          "nodeId": "knob_in_10",
+          "nodeId": "daisy-code-node-knob_in_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_4",
+          "nodeId": "daisy-code-node-filter_svf_4",
           "socketId": "cv_cutoff"
         }
       }

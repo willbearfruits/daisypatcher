@@ -3,7 +3,7 @@
   "graph": {
     "nodes": [
       {
-        "id": "audio_in_1",
+        "id": "daisy-sampler-audio_in_1",
         "kind": "audio_in",
         "position": {
           "x": -700,
@@ -12,7 +12,7 @@
         "params": {}
       },
       {
-        "id": "gate_in_2",
+        "id": "daisy-sampler-gate_in_2",
         "kind": "gate_in",
         "position": {
           "x": -700,
@@ -25,7 +25,7 @@
         }
       },
       {
-        "id": "freeze_3",
+        "id": "daisy-sampler-freeze_3",
         "kind": "freeze",
         "position": {
           "x": -460,
@@ -36,7 +36,7 @@
         }
       },
       {
-        "id": "granulator_4",
+        "id": "daisy-sampler-granulator_4",
         "kind": "granulator",
         "position": {
           "x": -200,
@@ -51,7 +51,7 @@
         }
       },
       {
-        "id": "knob_in_5",
+        "id": "daisy-sampler-knob_in_5",
         "kind": "knob_in",
         "position": {
           "x": -700,
@@ -66,7 +66,7 @@
         }
       },
       {
-        "id": "knob_in_6",
+        "id": "daisy-sampler-knob_in_6",
         "kind": "knob_in",
         "position": {
           "x": -700,
@@ -81,7 +81,7 @@
         }
       },
       {
-        "id": "knob_in_7",
+        "id": "daisy-sampler-knob_in_7",
         "kind": "knob_in",
         "position": {
           "x": -700,
@@ -96,7 +96,7 @@
         }
       },
       {
-        "id": "knob_in_8",
+        "id": "daisy-sampler-knob_in_8",
         "kind": "knob_in",
         "position": {
           "x": -700,
@@ -111,7 +111,7 @@
         }
       },
       {
-        "id": "filter_svf_9",
+        "id": "daisy-sampler-filter_svf_9",
         "kind": "filter_svf",
         "position": {
           "x": 60,
@@ -123,7 +123,7 @@
         }
       },
       {
-        "id": "reverb_10",
+        "id": "daisy-sampler-reverb_10",
         "kind": "reverb",
         "position": {
           "x": 320,
@@ -136,7 +136,7 @@
         }
       },
       {
-        "id": "audio_output_11",
+        "id": "daisy-sampler-audio_output_11",
         "kind": "audio_output",
         "position": {
           "x": 600,
@@ -145,7 +145,7 @@
         "params": {}
       },
       {
-        "id": "envelope_follower_12",
+        "id": "daisy-sampler-envelope_follower_12",
         "kind": "envelope_follower",
         "position": {
           "x": 320,
@@ -157,7 +157,7 @@
         }
       },
       {
-        "id": "led_13",
+        "id": "daisy-sampler-led_13",
         "kind": "led",
         "position": {
           "x": 600,
@@ -170,7 +170,7 @@
         }
       },
       {
-        "id": "oled_14",
+        "id": "daisy-sampler-oled_14",
         "kind": "oled",
         "position": {
           "x": 60,
@@ -184,189 +184,189 @@
     ],
     "connections": [
       {
-        "id": "c1",
+        "id": "daisy-sampler-c1",
         "from": {
-          "nodeId": "audio_in_1",
+          "nodeId": "daisy-sampler-audio_in_1",
           "socketId": "left"
         },
         "to": {
-          "nodeId": "freeze_3",
+          "nodeId": "daisy-sampler-freeze_3",
           "socketId": "in"
         }
       },
       {
-        "id": "c2",
+        "id": "daisy-sampler-c2",
         "from": {
-          "nodeId": "gate_in_2",
+          "nodeId": "daisy-sampler-gate_in_2",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "freeze_3",
+          "nodeId": "daisy-sampler-freeze_3",
           "socketId": "gate"
         }
       },
       {
-        "id": "c3",
+        "id": "daisy-sampler-c3",
         "from": {
-          "nodeId": "freeze_3",
+          "nodeId": "daisy-sampler-freeze_3",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "granulator_4",
+          "nodeId": "daisy-sampler-granulator_4",
           "socketId": "in"
         }
       },
       {
-        "id": "c4",
+        "id": "daisy-sampler-c4",
         "from": {
-          "nodeId": "knob_in_5",
+          "nodeId": "daisy-sampler-knob_in_5",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "granulator_4",
+          "nodeId": "daisy-sampler-granulator_4",
           "socketId": "cv_grain_size"
         }
       },
       {
-        "id": "c5",
+        "id": "daisy-sampler-c5",
         "from": {
-          "nodeId": "knob_in_6",
+          "nodeId": "daisy-sampler-knob_in_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "granulator_4",
+          "nodeId": "daisy-sampler-granulator_4",
           "socketId": "cv_density"
         }
       },
       {
-        "id": "c6",
+        "id": "daisy-sampler-c6",
         "from": {
-          "nodeId": "knob_in_7",
+          "nodeId": "daisy-sampler-knob_in_7",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "granulator_4",
+          "nodeId": "daisy-sampler-granulator_4",
           "socketId": "cv_pitch"
         }
       },
       {
-        "id": "c7",
+        "id": "daisy-sampler-c7",
         "from": {
-          "nodeId": "granulator_4",
+          "nodeId": "daisy-sampler-granulator_4",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_9",
+          "nodeId": "daisy-sampler-filter_svf_9",
           "socketId": "in"
         }
       },
       {
-        "id": "c8",
+        "id": "daisy-sampler-c8",
         "from": {
-          "nodeId": "knob_in_8",
+          "nodeId": "daisy-sampler-knob_in_8",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "filter_svf_9",
+          "nodeId": "daisy-sampler-filter_svf_9",
           "socketId": "cv_cutoff"
         }
       },
       {
-        "id": "c9",
+        "id": "daisy-sampler-c9",
         "from": {
-          "nodeId": "filter_svf_9",
+          "nodeId": "daisy-sampler-filter_svf_9",
           "socketId": "lp"
         },
         "to": {
-          "nodeId": "reverb_10",
+          "nodeId": "daisy-sampler-reverb_10",
           "socketId": "in"
         }
       },
       {
-        "id": "c10",
+        "id": "daisy-sampler-c10",
         "from": {
-          "nodeId": "reverb_10",
+          "nodeId": "daisy-sampler-reverb_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_11",
+          "nodeId": "daisy-sampler-audio_output_11",
           "socketId": "left"
         }
       },
       {
-        "id": "c11",
+        "id": "daisy-sampler-c11",
         "from": {
-          "nodeId": "reverb_10",
+          "nodeId": "daisy-sampler-reverb_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "audio_output_11",
+          "nodeId": "daisy-sampler-audio_output_11",
           "socketId": "right"
         }
       },
       {
-        "id": "c12",
+        "id": "daisy-sampler-c12",
         "from": {
-          "nodeId": "reverb_10",
+          "nodeId": "daisy-sampler-reverb_10",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "envelope_follower_12",
+          "nodeId": "daisy-sampler-envelope_follower_12",
           "socketId": "in"
         }
       },
       {
-        "id": "c13",
+        "id": "daisy-sampler-c13",
         "from": {
-          "nodeId": "envelope_follower_12",
+          "nodeId": "daisy-sampler-envelope_follower_12",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "led_13",
+          "nodeId": "daisy-sampler-led_13",
           "socketId": "in"
         }
       },
       {
-        "id": "c14",
+        "id": "daisy-sampler-c14",
         "from": {
-          "nodeId": "knob_in_5",
+          "nodeId": "daisy-sampler-knob_in_5",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oled_14",
+          "nodeId": "daisy-sampler-oled_14",
           "socketId": "a"
         }
       },
       {
-        "id": "c15",
+        "id": "daisy-sampler-c15",
         "from": {
-          "nodeId": "knob_in_6",
+          "nodeId": "daisy-sampler-knob_in_6",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oled_14",
+          "nodeId": "daisy-sampler-oled_14",
           "socketId": "b"
         }
       },
       {
-        "id": "c16",
+        "id": "daisy-sampler-c16",
         "from": {
-          "nodeId": "knob_in_7",
+          "nodeId": "daisy-sampler-knob_in_7",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oled_14",
+          "nodeId": "daisy-sampler-oled_14",
           "socketId": "c"
         }
       },
       {
-        "id": "c17",
+        "id": "daisy-sampler-c17",
         "from": {
-          "nodeId": "envelope_follower_12",
+          "nodeId": "daisy-sampler-envelope_follower_12",
           "socketId": "out"
         },
         "to": {
-          "nodeId": "oled_14",
+          "nodeId": "daisy-sampler-oled_14",
           "socketId": "d"
         }
       }

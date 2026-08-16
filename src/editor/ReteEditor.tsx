@@ -22,6 +22,7 @@ import {
   type GetSchemes
 } from 'rete'
 import { AreaPlugin, AreaExtensions, Drag } from 'rete-area-plugin'
+import { getDOMSocketPosition } from 'rete-render-utils'
 import { CANVAS_COMMAND_EVENT, type CanvasCommand } from '@/hooks/useMenuCommands'
 import {
   ConnectionPlugin,
@@ -325,8 +326,19 @@ export const ReteEditor = forwardRef<ReteEditorHandle, ReteEditorProps>(function
       return ctx
     })
 
+    /*
+     * One explicit socket-position watcher, so the reference is ours to
+     * hand to a debugger. `classic.setup` would otherwise construct one
+     * internally that nothing outside the plugin can reach.
+     */
+    const socketPositionWatcher = getDOMSocketPosition<Schemes, AreaExtra>()
+    if (import.meta.env.DEV) {
+      ;(window as unknown as { __dpSockets?: unknown }).__dpSockets = socketPositionWatcher
+    }
+
     render.addPreset(
       ReactPresets.classic.setup({
+        socketPositionWatcher,
         customize: {
           node: (context) => {
             const payload = context.payload as DaisyNode

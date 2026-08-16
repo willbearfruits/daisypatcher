@@ -108,7 +108,7 @@ class Patch {
       }
       full[k] = v
     }
-    const id = `${kind}_${++this.n}`
+    const id = `${this.name}-${kind}_${++this.n}`
     this.nodes.push({ id, kind, position, params: full })
     return id
   }
@@ -137,7 +137,10 @@ class Patch {
       throw new Error(`${this.name}: ${to.kind}.${toSocket} already has a cable`)
     }
     this.connections.push({
-      id: `c${++this.c}`,
+      // Prefixed with the patch name so no two examples share a cable id.
+      // Rete diffs by (id + endpoints) now, but ids that never collide is
+      // the cheaper guarantee, and a saved patch is forever.
+      id: `${this.name}-c${++this.c}`,
       from: { nodeId: fromId, socketId: fromSocket },
       to: { nodeId: toId, socketId: toSocket }
     })

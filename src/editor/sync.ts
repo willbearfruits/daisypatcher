@@ -47,6 +47,32 @@ export function diffNodes(prev: NodeInstance[], next: NodeInstance[]): NodeDiff 
   return { added, removed, modified }
 }
 
+/** Same cable? Same id AND same two ends. An id alone is not an identity. */
+function sameConnection(a: Connection, b: Connection): boolean {
+  return (
+    a.id === b.id &&
+    a.from.nodeId === b.from.nodeId &&
+    a.from.socketId === b.from.socketId &&
+    a.to.nodeId === b.to.nodeId &&
+    a.to.socketId === b.to.socketId
+  )
+}
+
+/**
+ * Connections that must be torn down and rebuilt.
+ *
+ * Compared by id AND endpoints, not by id alone. Two patches can — and the
+ * bundled examples all did — reuse the same connection ids (`c1`, `c2`, …)
+ * for entirely different cables. Diffing by id treated those as unchanged,
+ * so opening a second patch left the FIRST patch's Rete connections mounted:
+ * still subscribed to nodes that no longer existed, still drawing the old
+ * geometry, frozen in place while the new nodes sat elsewhere. That was
+ * "cables don't refresh when I open a patch after another one".
+ *
+ * A connection whose id survives with different ends is reported as both
+ * removed and added, which is what it is: a different cable that happens to
+ * share a name.
+ */
 export function diffConnections(
   prev: Connection[],
   next: Connection[]
@@ -57,8 +83,14 @@ export function diffConnections(
   const added: Connection[] = []
   const removed: Connection[] = []
 
-  for (const c of next) if (!prevById.has(c.id)) added.push(c)
-  for (const c of prev) if (!nextById.has(c.id)) removed.push(c)
+  for (const c of next) {
+    const p = prevById.get(c.id)
+    if (!p || !sameConnection(p, c)) added.push(c)
+  }
+  for (const c of prev) {
+    const n = nextById.get(c.id)
+    if (!n || !sameConnection(c, n)) removed.push(c)
+  }
 
   return { added, removed }
 }

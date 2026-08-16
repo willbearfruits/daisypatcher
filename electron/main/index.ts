@@ -45,6 +45,15 @@ const isDev = !app.isPackaged
 if (isDev && process.env.DP_CDP_PORT) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.DP_CDP_PORT)
 }
+/*
+ * Dev only: a separate userData so a dev instance can run beside the
+ * installed app. Without this the single-instance lock — which is right
+ * for users — makes `npm run dev` silently quit whenever the real app is
+ * open, and the dev server logs nothing about why.
+ */
+if (isDev && process.env.DP_USER_DATA) {
+  app.setPath('userData', process.env.DP_USER_DATA)
+}
 
 const FILE_FILTERS = [
   { name: 'Daisy Patch', extensions: ['dpatch', 'json'] },
