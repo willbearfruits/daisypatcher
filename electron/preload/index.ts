@@ -235,6 +235,23 @@ const api = {
   },
   /** Errors the main process caught instead of dying from. */
   onMainError: (cb: (msg: string) => void): (() => void) => onChannel('app:main-error', cb),
+  /**
+   * The window is about to close. Answer with `respondClose('close')` to
+   * let it, or `'cancel'` to keep it open. Not answering closes it anyway
+   * after a timeout, so a hung renderer cannot trap the user.
+   */
+  onBeforeClose: (cb: () => void): (() => void) => {
+    const listener = (): void => {
+      // Ack at once so main knows the renderer is alive; the decision
+      // comes when the user makes it, however long that takes.
+      ipcRenderer.send('app:close-ack')
+      cb()
+    }
+    ipcRenderer.on('app:before-close', listener)
+    return () => ipcRenderer.removeListener('app:before-close', listener)
+  },
+  respondClose: (decision: 'close' | 'cancel'): void =>
+    ipcRenderer.send('app:close-decision', decision),
   examples: {
     open: (): Promise<{ opened: boolean; error?: string }> => ipcRenderer.invoke('examples:open'),
     list: (): Promise<{ name: string; path: string; board?: string; description?: string }[]> =>

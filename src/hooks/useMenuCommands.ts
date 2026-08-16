@@ -23,6 +23,7 @@ import { OPEN_COMMAND_PALETTE_EVENT } from '@/components/layout/CommandPalette'
 import { TOGGLE_CODE_PANEL_EVENT } from '@/components/layout/CodePanel'
 import { TOGGLE_ASSISTANT_EVENT } from '@/components/layout/AssistantPanel'
 import { openAppModal } from '@/components/layout/AppModals'
+import { requestChoice } from '@/components/layout/ConfirmDialog'
 
 /** Fired for canvas-level requests the store cannot answer (zoom lives in Rete). */
 export const CANVAS_COMMAND_EVENT = 'dp:canvas-command'
@@ -38,6 +39,54 @@ function bridge(): MenuBridge | null {
 }
 
 export function useMenuCommands(): void {
+  /*
+   * Closing the window with unsaved work.
+   *
+   * Main asks; this answers. Three ways out, because two are not enough
+   * when one of them is "lose your work": Save (write, then close), Don't
+   * Save (close now), Cancel (stay). A clean patch — nothing dirty, no
+   * history — closes without a question, which is what makes the question
+   * mean something when it does appear.
+   *
+   * If the user picks Save and then cancels the save dialog, the window
+   * stays open: a cancelled save must never fall through to a close.
+   */
+  useEffect(() => {
+    const w = window as unknown as {
+      daisy?: {
+        onBeforeClose?: (cb: () => void) => () => void
+        respondClose?: (d: 'close' | 'cancel') => void
+      }
+    }
+    if (!w.daisy?.onBeforeClose || !w.daisy.respondClose) return
+    const respond = w.daisy.respondClose
+    return w.daisy.onBeforeClose(() => {
+      const st = useEditorStore.getState()
+      if (!st.isDirty && st.history.past.length === 0) {
+        respond('close')
+        return
+      }
+      void requestChoice({
+        title: 'Quit',
+        message: `Save changes to ${st.graph.meta.name || 'this patch'} before closing?`,
+        confirmLabel: 'Save',
+        altLabel: "Don't Save",
+        cancelLabel: 'Cancel'
+      }).then(async (choice) => {
+        if (choice === 'cancel') {
+          respond('cancel')
+          return
+        }
+        if (choice === 'alt') {
+          respond('close')
+          return
+        }
+        const r = await savePatch()
+        respond(r.saved ? 'close' : 'cancel')
+      })
+    })
+  }, [])
+
   // Main-process errors land on the status line, so a failed IPC call is
   // never a button that silently did nothing.
   useEffect(() => {

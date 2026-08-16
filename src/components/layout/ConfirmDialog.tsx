@@ -28,11 +28,18 @@ export interface ConfirmOptions {
   cancelLabel?: string
   /** Destructive action — confirm button renders in danger tones. */
   danger?: boolean
+  /**
+   * An optional third button between Cancel and Confirm. Used for the
+   * quit dialog's "Don't Save": two choices are not enough when one of them
+   * is "lose your work" — the person needs a way to save AND leave.
+   */
+  altLabel?: string
 }
 
 interface ConfirmDialogProps extends ConfirmOptions {
   onConfirm: () => void
   onCancel: () => void
+  onAlt?: () => void
 }
 
 export function ConfirmDialog({
@@ -41,8 +48,10 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   danger = false,
+  altLabel,
   onConfirm,
-  onCancel
+  onCancel,
+  onAlt
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement | null>(null)
   const confirmRef = useRef<HTMLButtonElement | null>(null)
@@ -107,6 +116,11 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
+          {altLabel && onAlt ? (
+            <button type="button" className={`${styles.btn} ${styles.btnDanger}`} onClick={onAlt}>
+              {altLabel}
+            </button>
+          ) : null}
           <button
             ref={confirmRef}
             type="button"
@@ -130,27 +144,34 @@ export function ConfirmDialog({
  * resolve `false` so callers fail safe.
  */
 
+export type ConfirmChoice = 'confirm' | 'alt' | 'cancel'
+
 interface ActiveRequest {
   opts: ConfirmOptions
-  resolve: (ok: boolean) => void
+  resolve: (choice: ConfirmChoice) => void
 }
 
 let hostListener: ((req: ActiveRequest | null) => void) | null = null
 let activeRequest: ActiveRequest | null = null
 
-export function requestConfirm(opts: ConfirmOptions): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
+/** Which button was pressed. `requestConfirm` collapses this to a boolean. */
+export function requestChoice(opts: ConfirmOptions): Promise<ConfirmChoice> {
+  return new Promise<ConfirmChoice>((resolve) => {
     // A second request while one is up cancels the first — overlapping
     // confirms have no sane stacking order in this app.
-    if (activeRequest) activeRequest.resolve(false)
+    if (activeRequest) activeRequest.resolve('cancel')
     activeRequest = { opts, resolve }
     if (hostListener) {
       hostListener(activeRequest)
     } else {
-      activeRequest.resolve(false)
+      activeRequest.resolve('cancel')
       activeRequest = null
     }
   })
+}
+
+export function requestConfirm(opts: ConfirmOptions): Promise<boolean> {
+  return requestChoice(opts).then((c) => c === 'confirm')
 }
 
 /** Mounted once in App.tsx; renders whatever `requestConfirm` queued. */
@@ -168,8 +189,8 @@ export function ConfirmHost() {
 
   if (!request) return null
 
-  const settle = (ok: boolean): void => {
-    request.resolve(ok)
+  const settle = (choice: ConfirmChoice): void => {
+    request.resolve(choice)
     if (activeRequest === request) activeRequest = null
     setRequest(null)
   }
@@ -177,8 +198,9 @@ export function ConfirmHost() {
   return (
     <ConfirmDialog
       {...request.opts}
-      onConfirm={() => settle(true)}
-      onCancel={() => settle(false)}
+      onConfirm={() => settle('confirm')}
+      onCancel={() => settle('cancel')}
+      onAlt={request.opts.altLabel ? () => settle('alt') : undefined}
     />
   )
 }

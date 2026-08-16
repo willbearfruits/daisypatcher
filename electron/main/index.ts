@@ -634,6 +634,60 @@ function createWindow(): void {
     console.warn('[main] renderer unresponsive')
   })
 
+  /*
+   * Closing with unsaved work.
+   *
+   * There was NOTHING here: Ctrl+Q, the title-bar X and File > Quit all
+   * dropped an unsaved patch on the floor without a word. The renderer is
+   * the only thing that knows whether the patch is dirty (and it owns the
+   * save dialog), so close is a two-step handshake: main asks over
+   * `app:before-close`, the renderer answers `app:close-decision` with
+   * 'close' | 'cancel' after showing its own confirm. If the renderer is
+   * gone or does not answer within a few seconds, close anyway — a hung
+   * page must not make the window unclosable.
+   */
+  let closeApproved = false
+  win.on('close', (ev) => {
+    if (closeApproved) return
+    if (win.webContents.isDestroyed() || win.webContents.isCrashed()) return
+    ev.preventDefault()
+    /*
+     * Two-phase: the renderer first ACKs that it received the question
+     * (`app:close-ack`, immediate), then later ANSWERS (`app:close-decision`,
+     * whenever the user decides). The timeout guards only the first — a
+     * hung renderer never acks and the window closes anyway. It must NOT
+     * guard the second: a person reading "Save changes?" for six seconds is
+     * not a hang, and closing under them (which a single timer did) throws
+     * away exactly the work the dialog exists to protect.
+     */
+    let acked = false
+    const onAck = (): void => {
+      acked = true
+    }
+    const onDecision = (_e: Electron.IpcMainEvent, decision: string): void => {
+      cleanup()
+      if (decision === 'close') {
+        closeApproved = true
+        win.close()
+      }
+      // 'cancel': leave the window open; the next close asks again.
+    }
+    const timer = setTimeout(() => {
+      if (acked) return // the renderer is alive and the user is deciding
+      cleanup()
+      closeApproved = true
+      win.close()
+    }, 3000)
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      ipcMain.removeListener('app:close-ack', onAck)
+      ipcMain.removeListener('app:close-decision', onDecision)
+    }
+    ipcMain.once('app:close-ack', onAck)
+    ipcMain.once('app:close-decision', onDecision)
+    win.webContents.send('app:before-close')
+  })
+
   win.on('ready-to-show', () => {
     win.show()
     // Pop DevTools open in dev so runtime errors (and main→renderer IPC
