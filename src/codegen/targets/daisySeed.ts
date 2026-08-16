@@ -31,6 +31,7 @@ import {
   safeName,
   targetKey,
   auditOutputDecls,
+  silenceUnusedOutputs,
   topoSort,
   validateGraph
 } from '../graphWalk'
@@ -207,6 +208,15 @@ export function generateDaisySeedProject(
     note('init', initSrc)
     const p = emitter.process(c)
     if (p) processLines.push(p)
+    // Outputs no cable reads: `(void)` them so -Wall stays quiet. Audio
+    // outputs feeding the codec are consumed by the output stage, not by a
+    // cable, so `audio_output` is exempt.
+    if (p && node.kind !== 'audio_output') {
+      const v = silenceUnusedOutputs(node, p, c.outputVar, (nid, sid) =>
+        connIdx.consumedOutputs.has(`${nid}|${sid}`)
+      )
+      if (v) processLines.push(v)
+    }
     note('process', p)
     const l = emitter.loop?.(c)
     if (l) loopLines.push(l)

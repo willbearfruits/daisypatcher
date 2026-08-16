@@ -116,6 +116,10 @@ static inline void render_block() {
         filter_svf_flt1_lp = filter_svf_flt1_lpS; filter_svf_flt1_hp = _hpV; filter_svf_flt1_bp = filter_svf_flt1_bpS; filter_svf_flt1_notch = _hpV + filter_svf_flt1_lpS;
     }
 
+    (void)filter_svf_flt1_hp;
+    (void)filter_svf_flt1_bp;
+    (void)filter_svf_flt1_notch;
+
     clock_clk1_phase += ((96.f) / 60.f) / (float)SAMPLE_RATE;
     if (clock_clk1_phase >= 1.f) clock_clk1_phase -= 1.f;
     float clock_clk1_out = (clock_clk1_phase < 0.1f) ? 1.f : 0.f;
@@ -128,6 +132,8 @@ static inline void render_block() {
     if (preset_recall_pre1_edge) dp_preset_apply((int)(1.f));
 #endif
     float preset_recall_pre1_changed = preset_recall_pre1_edge ? 1.f : 0.f;
+
+    (void)preset_recall_pre1_changed;
 
         float out_l = filter_svf_flt1_lp;
         float out_r = filter_svf_flt1_lp;

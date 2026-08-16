@@ -51,6 +51,10 @@ void AudioCallback(AudioHandle::InputBuffer in,
     float filter_svf_svf1_bp = filter_svf_svf1.Band();
     float filter_svf_svf1_notch = filter_svf_svf1.Notch();
 
+    (void)filter_svf_svf1_hp;
+    (void)filter_svf_svf1_bp;
+    (void)filter_svf_svf1_notch;
+
         float out_l = filter_svf_svf1_lp;
         float out_r = filter_svf_svf1_lp;
         out[0][i] = out_l;

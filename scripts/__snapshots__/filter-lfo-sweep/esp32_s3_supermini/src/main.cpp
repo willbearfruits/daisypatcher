@@ -73,6 +73,10 @@ static inline void render_block() {
         filter_svf_svf1_lp = filter_svf_svf1_lpS; filter_svf_svf1_hp = _hpV; filter_svf_svf1_bp = filter_svf_svf1_bpS; filter_svf_svf1_notch = _hpV + filter_svf_svf1_lpS;
     }
 
+    (void)filter_svf_svf1_hp;
+    (void)filter_svf_svf1_bp;
+    (void)filter_svf_svf1_notch;
+
         float out_l = filter_svf_svf1_lp;
         float out_r = filter_svf_svf1_lp;
         audio_out_buffer[i*2]     = (int16_t)(fmaxf(-1.f, fminf(1.f, out_l)) * 32767.f);

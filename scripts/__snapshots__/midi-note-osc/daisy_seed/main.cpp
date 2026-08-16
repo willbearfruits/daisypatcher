@@ -51,6 +51,8 @@ void AudioCallback(AudioHandle::InputBuffer in,
     float midi_in_note_midi1_gate = midi_latched_gate;
     float midi_in_note_midi1_velocity = midi_latched_vel;
 
+    (void)midi_in_note_midi1_velocity;
+
     oscillator_osc1.SetFreq(220.f * powf(2.f, midi_in_note_midi1_pitch));
     oscillator_osc1.SetAmp(0.5f * 1.f);
     float oscillator_osc1_out = oscillator_osc1.Process();

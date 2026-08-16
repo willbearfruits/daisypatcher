@@ -49,6 +49,8 @@ static inline void render_block() {
     float midi_in_note_midi1_gate = 0.f;
     float midi_in_note_midi1_velocity = 0.f;
 
+    (void)midi_in_note_midi1_velocity;
+
     {
         float _f = 220.f * powf(2.f, midi_in_note_midi1_pitch);
         oscillator_osc1_phase += _f / (float)SAMPLE_RATE;

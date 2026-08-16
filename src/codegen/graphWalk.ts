@@ -25,6 +25,8 @@ export function nodeVar(nodeId: string, kind: NodeKind): string {
 
 export interface ConnectionIndex {
   byTarget: Map<string, { nodeId: string; socketId: string }>
+  /** `nodeId|socketId` for every output at least one cable leaves from. */
+  consumedOutputs: Set<string>
 }
 
 export function targetKey(nodeId: string, socketId: string): string {
@@ -33,10 +35,13 @@ export function targetKey(nodeId: string, socketId: string): string {
 
 export function buildConnectionIndex(conns: Connection[]): ConnectionIndex {
   const byTarget = new Map<string, { nodeId: string; socketId: string }>()
+  /** `nodeId|socketId` of every output that at least one cable leaves from. */
+  const consumedOutputs = new Set<string>()
   for (const c of conns) {
     byTarget.set(targetKey(c.to.nodeId, c.to.socketId), c.from)
+    consumedOutputs.add(`${c.from.nodeId}|${c.from.socketId}`)
   }
-  return { byTarget }
+  return { byTarget, consumedOutputs }
 }
 
 /**
@@ -173,6 +178,36 @@ function declaredAtBlockScope(src: string): Set<string> {
  * the single one, and a naive `float\\s+<name>` check calls every one of
  * those a bug.
  */
+/**
+ * `(void)x;` for every output socket of `node` that no cable reads.
+ *
+ * Every output is declared whether or not it is used — that is the
+ * cross-target contract (`test:contract` insists on it, and it is what lets
+ * a cable be added later without changing the emitter). The cost is a
+ * `-Wunused-variable` per unused socket, which for a filter with four taps
+ * is three warnings on every build. Harmless, but they drown the warnings
+ * that matter, and a user whose toolchain sets `-Werror` gets a failed
+ * build for a socket they never touched. Emitted AFTER the node's own
+ * process block, so a `(void)` can never precede its declaration.
+ */
+export function silenceUnusedOutputs(
+  node: NodeInstance,
+  processSrc: string,
+  outputVar: (nodeId: string, socketId: string) => string,
+  isConsumed: (nodeId: string, socketId: string) => boolean
+): string {
+  const def = NODE_DEFINITIONS[node.kind]
+  if (!def) return ''
+  const declared = declaredAtBlockScope(processSrc)
+  const lines: string[] = []
+  for (const sock of def.outputs) {
+    if (isConsumed(node.id, sock.id)) continue
+    const v = outputVar(node.id, sock.id)
+    if (declared.has(v)) lines.push(`    (void)${v};`)
+  }
+  return lines.length ? lines.join('\n') + '\n' : ''
+}
+
 export function auditOutputDecls(
   node: NodeInstance,
   emitted: string,

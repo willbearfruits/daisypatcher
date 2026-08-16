@@ -126,6 +126,7 @@ export const timer: NodeEmitter = {
     let body: string
     if (mode === 'gateoff') {
       body =
+        `        (void)_rise;\n` +
         `        if (_t) { ${v}_held = true; ${v}_rem = 0; }\n` +
         `        else if (${v}_tprev) { ${v}_rem = _n; }\n` +
         `        else if (${v}_rem > 0) { ${v}_rem--; if (${v}_rem == 0) ${v}_held = false; }\n` +
@@ -143,7 +144,8 @@ export const timer: NodeEmitter = {
     return (
       `    static int ${v}_rem = 0;\n` +
       `    static bool ${v}_tprev = false;\n` +
-      `    static bool ${v}_held = false;\n` +
+      // `_held` is gate-off state; the other modes never touch it.
+      (mode === 'gateoff' ? `    static bool ${v}_held = false;\n` : '') +
       `    float ${out} = 0.f;\n` +
       `    {\n` +
       `        const int _n = (int)(((${msExpr}) / 1000.f) * (float)SAMPLE_RATE);\n` +
@@ -248,6 +250,7 @@ export const edge: NodeEmitter = {
     const mode = enumParam(ctx.node, 'mode', 'rising')
     const fire =
       mode === 'falling' ? '_fall' : mode === 'both' ? '(_rise || _fall)' : '_rise'
+    const unused = mode === 'falling' ? '_rise' : mode === 'rising' ? '_fall' : null
     return (
       `    static bool ${v}_prev = false;\n` +
       `    float ${out} = 0.f;\n` +
@@ -255,6 +258,7 @@ export const edge: NodeEmitter = {
       `        bool _v = (${inp}) >= 0.5f;\n` +
       `        bool _rise = _v && !${v}_prev;\n` +
       `        bool _fall = !_v && ${v}_prev;\n` +
+      (unused ? `        (void)${unused};\n` : '') +
       `        ${v}_prev = _v;\n` +
       `        ${out} = ${fire} ? 1.f : 0.f;\n` +
       `    }\n`
