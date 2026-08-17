@@ -454,7 +454,7 @@
           "y": 1300
         },
         "pins": {
-          "io": "D0"
+          "io": "D1"
         },
         "config": {
           "rotation": 0
@@ -469,7 +469,7 @@
           "y": 1265
         },
         "pins": {
-          "sda": "D3",
+          "sda": "D12",
           "scl": "D11"
         },
         "config": {
@@ -488,7 +488,7 @@
           "y": 1300
         },
         "pins": {
-          "anode": "D1"
+          "anode": "D2"
         },
         "config": {
           "rotation": 0,

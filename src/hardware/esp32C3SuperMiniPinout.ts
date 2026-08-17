@@ -4,12 +4,10 @@
  * Board: 22.5 x 18 mm, USB-C, two 8-pin headers at 2.54 mm pitch.
  * MCU: ESP32-C3 (single-core RISC-V, 4 MB flash, NO PSRAM).
  *
- * Sources cross-checked (all agree on the 16-pin layout below):
- *   - lastminuteengineers.com/esp32-c3-super-mini-pinout-reference
- *   - mischianti.org/esp32-c3-super-mini-high-resolution-pinout-...
- *   - espboards.dev/esp32/esp32-c3-super-mini
- * The layout is also geometrically consistent: 8 pins x 2.54 mm = 20.3 mm
- * along a 22.5 mm edge.
+ * 16 pins, 8 per side; the physical order is in `ESP32_C3_SM_PHYSICAL_LAYOUT`
+ * below and was checked against a board in hand (see the note there). The
+ * layout is geometrically consistent: 8 pins x 2.54 mm = 20.3 mm along a
+ * 22.5 mm edge.
  *
  * Only GPIO0-10 plus GPIO20/21 are bonded out. Notable constraints:
  *   - ADC is GPIO0-5 ONLY (ADC1 ch0-4 on GPIO0-4, ADC2 ch0 on GPIO5).
@@ -21,16 +19,20 @@
  *   - GPIO9 is the BOOT button.
  *   - GPIO20/21 are UART0 RX/TX.
  *   - I2S has no fixed pins: the C3 routes it through the GPIO matrix, so
- *     any free GPIO can carry BCLK/WS/DATA. Marked broadly below.
+ *     any free GPIO can carry BCLK/WS/DATA. The `i2s` hints below are the
+ *     PREFERRED pins for auto-assignment (they match the target profile's
+ *     defaults: SCK 4, WS 5, DATA 6/7, MCLK 3) and deliberately avoid the
+ *     ADC block and the strapping pins.
  */
 import type { PinCapabilities } from '@/types/hardware'
 import type { BoardGeometry } from './boardPinout'
+import { preferDedicated } from './pinPreference'
 
 export const ESP32_C3_SM_PINS: PinCapabilities[] = [
   // --- ADC-capable block, GPIO0..5 ---
-  { pin: 'GPIO0',  gpio: true, adc: true,  dac: false, pwm: true, i2s: 'sck', label: 'GPIO0 / ADC1_0' },
-  { pin: 'GPIO1',  gpio: true, adc: true,  dac: false, pwm: true, i2s: 'ws',  label: 'GPIO1 / ADC1_1' },
-  { pin: 'GPIO2',  gpio: true, adc: true,  dac: false, pwm: true, strapping: true, i2s: 'sd', label: 'GPIO2 (strap) / ADC1_2' },
+  { pin: 'GPIO0',  gpio: true, adc: true,  dac: false, pwm: true, label: 'GPIO0 / ADC1_0' },
+  { pin: 'GPIO1',  gpio: true, adc: true,  dac: false, pwm: true, label: 'GPIO1 / ADC1_1' },
+  { pin: 'GPIO2',  gpio: true, adc: true,  dac: false, pwm: true, strapping: true, label: 'GPIO2 (strap) / ADC1_2' },
   { pin: 'GPIO3',  gpio: true, adc: true,  dac: false, pwm: true, i2s: 'mclk', label: 'GPIO3 / ADC1_3' },
   { pin: 'GPIO4',  gpio: true, adc: true,  dac: false, pwm: true, spi: 'sck',  i2s: 'sck', label: 'GPIO4 / ADC1_4 / SPI_SCK' },
   { pin: 'GPIO5',  gpio: true, adc: true,  dac: false, pwm: true, spi: 'miso', i2s: 'ws',  label: 'GPIO5 / ADC2_0 / SPI_MISO' },
@@ -82,29 +84,42 @@ export interface Esp32C3SmPhysicalPinPosition {
 }
 
 /**
- * Physical layout: 8 pins per side, index 0 at the USB-C end.
- * Silkscreen order verified against the published pinout diagrams.
+ * Physical layout: 8 pins per side, index 0 at the USB-C end, board viewed
+ * from the top with the USB-C connector UP (the way the silhouette draws it
+ * and the way every vendor pinout card is printed).
+ *
+ * Read off the board / vendor card, 2026-08-17 (the first version of this
+ * table had the two columns MIRRORED and GPIO0–4 in the wrong order — a
+ * knob bound to "GPIO4" was wired to the pin the app drew as GPIO0):
+ *
+ *   LEFT  (top→bottom):  5  6  7  8  9  10  20  21
+ *   RIGHT (top→bottom):  5V GND 3V3  4  3  2  1  0
+ *
+ * So the bottom two corners are GPIO21 (left) and GPIO0 (right), and the
+ * power pins sit at the top RIGHT next to the USB shell. Some vendor cards
+ * also print XIAO-style D/A aliases (D0 = GPIO2 … D10 = GPIO10, A0 = GPIO0
+ * … A3 = GPIO5); the GPIO number is what the firmware uses.
  */
 export const ESP32_C3_SM_PHYSICAL_LAYOUT: Esp32C3SmPhysicalPinPosition[] = [
   // LEFT header, USB-C end first
-  { pin: '5V',     side: 'left', index: 0, label: '5V',    pinNumber: 1 },
-  { pin: 'GND',    side: 'left', index: 1, label: 'GND',   pinNumber: 2 },
-  { pin: '3V3',    side: 'left', index: 2, label: '3V3',   pinNumber: 3 },
-  { pin: 'GPIO0',  side: 'left', index: 3, label: 'GPIO0 / ADC1_0', pinNumber: 4 },
-  { pin: 'GPIO1',  side: 'left', index: 4, label: 'GPIO1 / ADC1_1', pinNumber: 5 },
-  { pin: 'GPIO2',  side: 'left', index: 5, label: 'GPIO2 / ADC1_2', pinNumber: 6 },
-  { pin: 'GPIO3',  side: 'left', index: 6, label: 'GPIO3 / ADC1_3', pinNumber: 7 },
-  { pin: 'GPIO4',  side: 'left', index: 7, label: 'GPIO4 / ADC1_4 / SPI_SCK', pinNumber: 8 },
+  { pin: 'GPIO5',  side: 'left', index: 0, label: 'GPIO5 / ADC2_0 / SPI_MISO', pinNumber: 1 },
+  { pin: 'GPIO6',  side: 'left', index: 1, label: 'GPIO6 / SPI_MOSI',          pinNumber: 2 },
+  { pin: 'GPIO7',  side: 'left', index: 2, label: 'GPIO7 / SPI_CS',            pinNumber: 3 },
+  { pin: 'GPIO8',  side: 'left', index: 3, label: 'GPIO8 / I2C_SDA / LED',     pinNumber: 4 },
+  { pin: 'GPIO9',  side: 'left', index: 4, label: 'GPIO9 / I2C_SCL / BOOT',    pinNumber: 5 },
+  { pin: 'GPIO10', side: 'left', index: 5, label: 'GPIO10',                    pinNumber: 6 },
+  { pin: 'GPIO20', side: 'left', index: 6, label: 'GPIO20 / UART_RX',          pinNumber: 7 },
+  { pin: 'GPIO21', side: 'left', index: 7, label: 'GPIO21 / UART_TX',          pinNumber: 8 },
 
   // RIGHT header, USB-C end first
-  { pin: 'GPIO5',  side: 'right', index: 0, label: 'GPIO5 / ADC2_0 / SPI_MISO', pinNumber: 9 },
-  { pin: 'GPIO6',  side: 'right', index: 1, label: 'GPIO6 / SPI_MOSI', pinNumber: 10 },
-  { pin: 'GPIO7',  side: 'right', index: 2, label: 'GPIO7 / SPI_CS',   pinNumber: 11 },
-  { pin: 'GPIO8',  side: 'right', index: 3, label: 'GPIO8 / I2C_SDA',  pinNumber: 12 },
-  { pin: 'GPIO9',  side: 'right', index: 4, label: 'GPIO9 / I2C_SCL',  pinNumber: 13 },
-  { pin: 'GPIO10', side: 'right', index: 5, label: 'GPIO10',           pinNumber: 14 },
-  { pin: 'GPIO21', side: 'right', index: 6, label: 'GPIO21 / UART_TX', pinNumber: 15 },
-  { pin: 'GPIO20', side: 'right', index: 7, label: 'GPIO20 / UART_RX', pinNumber: 16 }
+  { pin: '5V',     side: 'right', index: 0, label: '5V',    pinNumber: 9 },
+  { pin: 'GND',    side: 'right', index: 1, label: 'GND',   pinNumber: 10 },
+  { pin: '3V3',    side: 'right', index: 2, label: '3V3',   pinNumber: 11 },
+  { pin: 'GPIO4',  side: 'right', index: 3, label: 'GPIO4 / ADC1_4 / SPI_SCK', pinNumber: 12 },
+  { pin: 'GPIO3',  side: 'right', index: 4, label: 'GPIO3 / ADC1_3',           pinNumber: 13 },
+  { pin: 'GPIO2',  side: 'right', index: 5, label: 'GPIO2 / ADC1_2',           pinNumber: 14 },
+  { pin: 'GPIO1',  side: 'right', index: 6, label: 'GPIO1 / ADC1_1',           pinNumber: 15 },
+  { pin: 'GPIO0',  side: 'right', index: 7, label: 'GPIO0 / ADC1_0',           pinNumber: 16 }
 ]
 
 export const ESP32_C3_SM_PINS_IN_ORDER: string[] = ESP32_C3_SM_PHYSICAL_LAYOUT
@@ -118,7 +133,7 @@ export const ESP32_C3_SM_PINS_IN_ORDER: string[] = ESP32_C3_SM_PHYSICAL_LAYOUT
  */
 export function esp32C3SmPinsForRole(role: string, kind: string): string[] {
   const r = role.toLowerCase()
-  return ESP32_C3_SM_PINS.filter((cap) => {
+  return preferDedicated(ESP32_C3_SM_PINS.filter((cap) => {
     switch (kind) {
       case 'pot':
       case 'cv_jack':
@@ -158,7 +173,7 @@ export function esp32C3SmPinsForRole(role: string, kind: string): string[] {
       default:
         return cap.gpio
     }
-  }).map((c) => c.pin)
+  }), r).map((c) => c.pin)
 }
 
 /**

@@ -66,7 +66,8 @@ https://claude.ai/code/artifact/7ee30110-13fd-4f49-b944-d2a0c26d55a9
 - [ ] MIDI learn (emulator-first)
 - [ ] Recording emulator output to .wav
 - [ ] Silkscreen mode + drill-template export
-- [ ] ESP32-S3 SuperMini pinout confirmed against a physical board
+- [x] ESP32-S3 SuperMini pinout confirmed against a physical board (S3-Zero
+      layout, 2026-08-17); C3 SuperMini columns un-mirrored the same day
 - [ ] Code signing (Windows cert, Apple developer account) — unblocks the
       macOS updater and removes the SmartScreen / Gatekeeper prompts
 

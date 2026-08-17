@@ -94,13 +94,11 @@ export interface BoardGeometry {
   /**
    * Render the left column bottom-up (index 0 at the BOTTOM).
    *
-   * True for Daisy Seed and the S3 DevKitC. Both of those data files
-   * comment their left column as running top-to-bottom, yet the original
-   * renderer reversed it — so the Seed's pin 40 has always drawn at the
-   * bottom. That may well be a long-standing bug, but flipping it now
-   * would silently invert the mental map of every existing patch, so it
-   * is preserved per-board rather than "fixed". New boards declare their
-   * own truth.
+   * True for the Daisy Seed only: its data file lists the left column
+   * bottom-up and the renderer has always drawn it that way (verified
+   * against libDaisy's own pinout). Every other board lists both columns
+   * top→bottom and declares false — including the S3 DevKitC, whose left
+   * column was upside-down for as long as it inherited this flag.
    */
   leftColumnBottomUp: boolean
   /** Which silhouette artwork to draw. */
@@ -184,7 +182,14 @@ const ESP32_BOARD: BoardPinout = {
   pinCaps: ESP32_S3_PIN_CAPS,
   physicalLayout: ESP32_S3_PHYSICAL_LAYOUT as ReadonlyArray<Esp32PhysicalPinPosition> as BoardPhysicalPinPosition[],
   pinsInOrder: ESP32_S3_PINS_IN_ORDER,
-  geometry: { ...CLASSIC_GEOMETRY, silhouette: 'esp32_devkit' },
+  /*
+   * Same box as the Seed, but the DevKitC-1 table is written top→bottom
+   * for BOTH columns as Espressif's figure prints it (22 rows a side, USB
+   * at the bottom), so the left column is not reversed here. It used to
+   * inherit the Seed's bottom-up rule and drew 3V3 at the bottom and GND at
+   * the top — the whole left header upside-down.
+   */
+  geometry: { ...CLASSIC_GEOMETRY, leftColumnBottomUp: false, silhouette: 'esp32_devkit' },
   pinsForRole: esp32PinsForRole,
   adcChannelOf: esp32AdcChannelOf
 }
@@ -212,15 +217,11 @@ const ESP32_S3_SM_BOARD: BoardPinout = {
   pinsForRole: esp32S3SmPinsForRole,
   adcChannelOf: esp32S3SmAdcChannelOf,
   /*
-   * "ESP32-S3 SuperMini" is not a standardised board. No authoritative
-   * pinout exists, the two published sources contradict each other, and one
-   * lists GPIO26-32 as free when those are flash/PSRAM pins on every S3.
-   * The table shipped here is the conservative intersection: GPIOs safe on
-   * any ESP32-S3-WROOM-1.
-   *
-   * Correcting it is one data file — `esp32S3SuperMiniPinout.ts`.
+   * The ESP32-S3-Zero layout (2 x 9 header pins + pads), transcribed from a
+   * board in hand — see `esp32S3SuperMiniPinout.ts`. No `provisional`
+   * banner any more; if a "SuperMini" turns up with a different header,
+   * that is a new board id, not an edit to this one.
    */
-  provisional: 'pin order unverified — check against your board'
 }
 
 /**

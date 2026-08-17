@@ -1522,9 +1522,9 @@ function PinRow({
     if (cap?.label) return pillsFromLabel(cap.label, coord.pin)
     const up = coord.pin.toUpperCase()
     const cat: PillCategory =
-      up === 'VIN' || up === '3V3' || up === '3V3_A' || up === '3V3_D'
+      up === 'VIN' || up === '5V' || up.startsWith('3V3')
         ? 'power'
-        : up === 'AGND' || up === 'DGND'
+        : up === 'AGND' || up === 'DGND' || up.startsWith('GND')
           ? 'ground'
           : up.startsWith('AUDIO')
             ? 'audio'
@@ -1633,7 +1633,13 @@ function PinRow({
         letterSpacing="0.1em"
         dominantBaseline="middle"
       >
-        {coord.pin.replace(/^USB_ID$/, 'USB ID')}
+        {/*
+          * The pin ID for anything bindable (that is what the inspector and
+          * the wires call it); the silkscreen label for the rest — a board
+          * with four grounds has ids GND, GND_2, GND_3, GND_4 and the text
+          * on all four is "GND".
+          */}
+        {cap ? coord.pin.replace(/^USB_ID$/, 'USB ID') : coord.label}
       </text>
       {cap?.stm32Pin ? (
         <text

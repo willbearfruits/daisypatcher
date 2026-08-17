@@ -54,10 +54,10 @@
 |---|---|---|
 | **Daisy Seed** | onboard codec | The reference target. 94 of 95 kinds native. |
 | **ESP32-S3 DevKitC** | I²S DAC (PCM5102A / MAX98357A) | 91 native; `granulator` runs with a shorter buffer without PSRAM; `expression` and the I²S pass-through kinds are stubs. |
-| **ESP32-S3 SuperMini** | I²S DAC | As DevKitC. Pinout provisional — confirm against your board. |
+| **ESP32-S3 SuperMini** | I²S DAC | The ESP32-S3-Zero layout: 2 × 9 header pins plus the castellated/back pads, bindable from the inspector. As DevKitC otherwise. |
 | **ESP32-C3 SuperMini** | I²S DAC | As above, minus USB-MIDI (RISC-V has no TinyUSB device stack). |
 
-The palette greys out what the selected board cannot run, and says why.
+The palette greys out what the selected board cannot run, and says why. The pin cards each drawing was checked against are in [`docs/boards/`](docs/boards/).
 
 ## Install
 
@@ -158,7 +158,6 @@ Architecture, the checklist for adding a node kind, and every non-obvious gotcha
 
 - The Windows and macOS builds come off CI and are not code-signed; they are less travelled than Linux.
 - Presets capture the level you are looking at: nodes inside a subpatch are not part of a top-level preset, and only top-level parameters reach the device.
-- ESP32-S3 SuperMini pin table is provisional.
 - No MIDI learn, no recording of the emulator to `.wav`, no reverse import of hand-written firmware. See [`V0_5_PLAN.md`](./V0_5_PLAN.md) and [`V2_PLAN.md`](./V2_PLAN.md) for the direction.
 
 ## Contributing

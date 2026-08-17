@@ -403,15 +403,16 @@ function autoAssignPins(
     }
 
     /*
-     * Prefer a pin with no boot-strapping duty. On a C3 the first three
-     * GPIOs include GPIO2 (strap), so plain table order hands out a
-     * strapping pin before a safe one — it works, but it's a trap the
-     * user has to notice and undo. Fall back to the full list when
-     * nothing unencumbered is left.
+     * `pinsForRole` returns candidates in preference order — dedicated
+     * function first (the silkscreened SDA/SCL, UART RX, I2S pins), plain
+     * GPIO next, boot-strapping pins last (see `hardware/pinPreference.ts`).
+     * So the first available candidate is the right one. This used to skip
+     * strapping pins here as well, which on the C3 SuperMini rejected the
+     * board's own documented I2C pair (GPIO8/9 are both straps, held high
+     * by the bus pull-ups) in favour of two random GPIOs.
      */
     const candidates = pinout.pinsForRole(role, kind).filter((p) => availableFor(p, role))
-    const chosen =
-      candidates.find((p) => !pinout.pinCaps[p]?.strapping) ?? candidates[0]
+    const chosen = candidates[0]
     if (!chosen) continue
     assigned[role] = chosen
     takenByThisComponent.add(chosen)
@@ -932,9 +933,17 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     },
 
     resetGraph() {
+      /*
+       * A new patch keeps the current TARGET. `emptyHardwareLayout()` says
+       * daisy_seed, and handing that out as-is left `hardware.board` on the
+       * Seed while `target` stayed on the ESP32 — the hardware view drew a
+       * Seed, pins were assigned off the Seed table, and the ESP32 build
+       * then referenced D-pins. Since `applyTargetSwitch` short-circuits
+       * when the target already matches, nothing ever re-synced them.
+       */
       set({
         graph: emptyGraph(),
-        hardware: emptyHardwareLayout(),
+        hardware: { ...emptyHardwareLayout(), board: boardForTarget(get().target) },
         presets: [],
         activePresetId: null,
         subpatchStack: [],

@@ -495,9 +495,9 @@
           "y": 1300
         },
         "pins": {
-          "a": "GPIO0",
-          "b": "GPIO1",
-          "sw": "GPIO2"
+          "a": "GPIO1",
+          "b": "GPIO2",
+          "sw": "GPIO4"
         },
         "config": {
           "rotation": 0,
@@ -514,8 +514,8 @@
           "y": 1265
         },
         "pins": {
-          "sda": "GPIO3",
-          "scl": "GPIO4"
+          "sda": "GPIO8",
+          "scl": "GPIO9"
         },
         "config": {
           "rotation": 0,
@@ -533,9 +533,9 @@
           "y": 1260
         },
         "pins": {
-          "sck": "GPIO5",
-          "ws": "GPIO6",
-          "sd_out": "GPIO7"
+          "sck": "GPIO12",
+          "ws": "GPIO37",
+          "sd_out": "GPIO35"
         },
         "config": {
           "rotation": 0,

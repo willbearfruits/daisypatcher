@@ -70,6 +70,7 @@
  * render a small "D0 (TP)" chip off-board.
  */
 import type { PinCapabilities, SeedPin } from '@/types/hardware'
+import { preferDedicated } from './pinPreference'
 
 /**
  * Authoritative pin-capability table for the OG Seed (D0..D30) plus D31
@@ -371,7 +372,7 @@ export function pinsForRole(
     ] as unknown as SeedPin[]
   }
 
-  return DAISY_SEED_PINS.filter((cap) => {
+  return preferDedicated(DAISY_SEED_PINS.filter((cap) => {
     switch (kind) {
       case 'pot':
       case 'cv_jack':
@@ -395,8 +396,20 @@ export function pinsForRole(
       case 'gyroscope':
       case 'magnetometer':
       case 'tof':
-        if (r === 'sda')   return cap.i2c === 'sda'
-        if (r === 'scl')   return cap.i2c === 'scl'
+        /*
+         * I2C1 ONLY. Both Seed emitters (`emitters/visual.ts` for the OLED,
+         * `emitters/hardware.ts` for the sensor bus) init
+         * `I2CHandle::Config::Peripheral::I2C_1` with the bound pins, and
+         * libDaisy checks the pins against that peripheral's alternate-
+         * function table: I2C1_SCL is PB8 (D11) or PB6 (D13), I2C1_SDA is
+         * PB9 (D12) or PB7 (D14). The table also flags D3 (PC9 = I2C3_SDA)
+         * as `i2c: 'sda'`, and "first sda in the table" used to pair D3
+         * with D11 — an I2C3 SDA on an I2C1 bus, which libDaisy refuses at
+         * Init and the display simply stays dark. Every shipped Seed
+         * example was wired that way.
+         */
+        if (r === 'sda')   return cap.pin === 'D12' || cap.pin === 'D14'
+        if (r === 'scl')   return cap.pin === 'D11' || cap.pin === 'D13'
         if (r === 'int')   return cap.gpio
         if (r === 'xshut') return cap.gpio
         return !!cap.i2c
@@ -422,5 +435,27 @@ export function pinsForRole(
       default:
         return cap.gpio
     }
-  }).map((c) => c.pin as SeedPin)
+  })
+    /*
+     * Header pins before pads. D0 is a test pad on the underside and D31
+     * exists only on the Seed 2 — both are legitimate choices to make on
+     * purpose, but "first free pin" must never hand a button to a pad the
+     * user cannot reach without a soldering iron and a magnifier. Stable,
+     * so header order is otherwise unchanged.
+     */
+    .sort((a, b) => Number(isPadOnly(a.pin)) - Number(isPadOnly(b.pin))), r)
+    .map((c) => c.pin as SeedPin)
+}
+
+/*
+ * Lazy: `PHYSICAL_PIN_LAYOUT` is declared further down this file, and a
+ * module-level Set built from it here would be a temporal-dead-zone error
+ * at import time — the kind tsc does not see.
+ */
+let padOnly: ReadonlySet<string> | null = null
+function isPadOnly(pin: string): boolean {
+  if (!padOnly) {
+    padOnly = new Set(PHYSICAL_PIN_LAYOUT.filter((p) => p.side === 'bottom').map((p) => p.pin))
+  }
+  return padOnly.has(pin)
 }

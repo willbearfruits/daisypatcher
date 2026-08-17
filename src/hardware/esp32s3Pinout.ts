@@ -25,6 +25,7 @@
  *   - Default SPI (HSPI on Arduino): MOSI=11, MISO=13, SCK=12, CS=10.
  */
 import type { PinCapabilities, Esp32Pin } from '@/types/hardware'
+import { preferDedicated } from './pinPreference'
 
 /**
  * All "safe-to-use" GPIOs on the DevKitC-1. We skip the flash/PSRAM
@@ -64,8 +65,6 @@ export const ESP32_S3_PINS: PinCapabilities[] = [
   // --- GPIO 26..32 are SPI-flash / PSRAM on standard modules; skipped ---
 
   // --- Top-side general I/O, GPIO 33..48 ---
-  { pin: 'GPIO33', gpio: true,  adc: false, dac: false, pwm: true,  label: 'GPIO33' },
-  { pin: 'GPIO34', gpio: true,  adc: false, dac: false, pwm: true,  label: 'GPIO34' },
   { pin: 'GPIO35', gpio: true,  adc: false, dac: false, pwm: true,  i2s: 'sd',   label: 'GPIO35 / I2S_SD' },
   { pin: 'GPIO36', gpio: true,  adc: false, dac: false, pwm: true,  i2s: 'sck',  label: 'GPIO36 / I2S_SCK' },
   { pin: 'GPIO37', gpio: true,  adc: false, dac: false, pwm: true,  i2s: 'ws',   label: 'GPIO37 / I2S_WS' },
@@ -112,7 +111,7 @@ export function esp32AdcChannelOf(pin: string): number {
  * the USB end of the board.
  */
 export interface Esp32PhysicalPinPosition {
-  pin: Esp32Pin | 'VIN' | '3V3' | 'GND' | 'EN' | 'USB_DP' | 'USB_DM' | 'TX0' | 'RX0'
+  pin: Esp32Pin | 'VIN' | '5V' | '3V3' | '3V3_2' | 'GND' | 'GND_2' | 'GND_3' | 'GND_4' | 'EN'
   side: 'left' | 'right' | 'bottom'
   index: number
   label: string
@@ -120,54 +119,72 @@ export interface Esp32PhysicalPinPosition {
 }
 
 /**
- * Approximate DevKitC-1 layout. We render 20 rows per side (matches the
- * Seed's grid) so the renderer stays simple — power/boot pins collapse
- * onto the same rail graphic as on the Seed view.
+ * ESP32-S3-DevKitC-1 header layout — the official 2 × 22, transcribed from
+ * Espressif's pin-layout figure and the J1/J3 tables (user guide v1.1),
+ * checked 2026-08-17. Board drawn as the figure draws it: module and
+ * antenna at the TOP, the two USB-C ports at the BOTTOM. index 0 = top
+ * row in BOTH columns (`leftColumnBottomUp: false`, see the geometry
+ * below).
+ *
+ * The first version of this table compressed the board to 20 rows a side
+ * and drew the LEFT column upside-down (3V3 at the bottom, GND at the
+ * top) — a knob bound to "GPIO4" was drawn where GPIO14 is. Never trust a
+ * table that says "approximate" about a header.
+ *
+ *   J1 (left, top→bottom):  3V3 3V3 RST 4 5 6 7 15 16 17 18 8 3 46 9 10 11 12 13 14 5V GND
+ *   J3 (right, top→bottom): GND TX RX 1 2 42 41 40 39 38 37 36 35 0 45 48 47 21 20 19 GND GND
+ *
+ * Duplicate power pins get unique ids (`GND_2` …) with the silkscreen
+ * text as their label, so the coordinate map stays keyed by pin.
  */
 export const ESP32_S3_PHYSICAL_LAYOUT: Esp32PhysicalPinPosition[] = [
-  // LEFT header (silkscreen top-to-bottom, USB-end first)
-  { pin: '3V3',    side: 'left', index: 0,  label: '3V3'   },
-  { pin: 'EN',     side: 'left', index: 1,  label: 'EN'    },
-  { pin: 'GPIO4',  side: 'left', index: 2,  label: 'GPIO4'  },
-  { pin: 'GPIO5',  side: 'left', index: 3,  label: 'GPIO5'  },
-  { pin: 'GPIO6',  side: 'left', index: 4,  label: 'GPIO6'  },
-  { pin: 'GPIO7',  side: 'left', index: 5,  label: 'GPIO7'  },
-  { pin: 'GPIO15', side: 'left', index: 6,  label: 'GPIO15' },
-  { pin: 'GPIO16', side: 'left', index: 7,  label: 'GPIO16' },
-  { pin: 'GPIO17', side: 'left', index: 8,  label: 'GPIO17' },
-  { pin: 'GPIO18', side: 'left', index: 9,  label: 'GPIO18' },
-  { pin: 'GPIO8',  side: 'left', index: 10, label: 'GPIO8'  },
-  { pin: 'GPIO3',  side: 'left', index: 11, label: 'GPIO3'  },
-  { pin: 'GPIO46', side: 'left', index: 12, label: 'GPIO46' },
-  { pin: 'GPIO9',  side: 'left', index: 13, label: 'GPIO9'  },
-  { pin: 'GPIO10', side: 'left', index: 14, label: 'GPIO10' },
-  { pin: 'GPIO11', side: 'left', index: 15, label: 'GPIO11' },
-  { pin: 'GPIO12', side: 'left', index: 16, label: 'GPIO12' },
-  { pin: 'GPIO13', side: 'left', index: 17, label: 'GPIO13' },
-  { pin: 'GPIO14', side: 'left', index: 18, label: 'GPIO14' },
-  { pin: 'GND',    side: 'left', index: 19, label: 'GND'   },
+  // J1 — LEFT header, top→bottom
+  { pin: '3V3',    side: 'left', index: 0,  label: '3V3',    pinNumber: 1 },
+  { pin: '3V3_2',  side: 'left', index: 1,  label: '3V3',    pinNumber: 2 },
+  { pin: 'EN',     side: 'left', index: 2,  label: 'RST',    pinNumber: 3 },
+  { pin: 'GPIO4',  side: 'left', index: 3,  label: 'GPIO4',  pinNumber: 4 },
+  { pin: 'GPIO5',  side: 'left', index: 4,  label: 'GPIO5',  pinNumber: 5 },
+  { pin: 'GPIO6',  side: 'left', index: 5,  label: 'GPIO6',  pinNumber: 6 },
+  { pin: 'GPIO7',  side: 'left', index: 6,  label: 'GPIO7',  pinNumber: 7 },
+  { pin: 'GPIO15', side: 'left', index: 7,  label: 'GPIO15', pinNumber: 8 },
+  { pin: 'GPIO16', side: 'left', index: 8,  label: 'GPIO16', pinNumber: 9 },
+  { pin: 'GPIO17', side: 'left', index: 9,  label: 'GPIO17', pinNumber: 10 },
+  { pin: 'GPIO18', side: 'left', index: 10, label: 'GPIO18', pinNumber: 11 },
+  { pin: 'GPIO8',  side: 'left', index: 11, label: 'GPIO8',  pinNumber: 12 },
+  { pin: 'GPIO3',  side: 'left', index: 12, label: 'GPIO3',  pinNumber: 13 },
+  { pin: 'GPIO46', side: 'left', index: 13, label: 'GPIO46', pinNumber: 14 },
+  { pin: 'GPIO9',  side: 'left', index: 14, label: 'GPIO9',  pinNumber: 15 },
+  { pin: 'GPIO10', side: 'left', index: 15, label: 'GPIO10', pinNumber: 16 },
+  { pin: 'GPIO11', side: 'left', index: 16, label: 'GPIO11', pinNumber: 17 },
+  { pin: 'GPIO12', side: 'left', index: 17, label: 'GPIO12', pinNumber: 18 },
+  { pin: 'GPIO13', side: 'left', index: 18, label: 'GPIO13', pinNumber: 19 },
+  { pin: 'GPIO14', side: 'left', index: 19, label: 'GPIO14', pinNumber: 20 },
+  { pin: '5V',     side: 'left', index: 20, label: '5V',     pinNumber: 21 },
+  { pin: 'GND',    side: 'left', index: 21, label: 'GND',    pinNumber: 22 },
 
-  // RIGHT header
-  { pin: 'GND',    side: 'right', index: 0,  label: 'GND'    },
-  { pin: 'VIN',    side: 'right', index: 1,  label: 'VIN'    },
-  { pin: 'GPIO43', side: 'right', index: 2,  label: 'TX0'    },
-  { pin: 'GPIO44', side: 'right', index: 3,  label: 'RX0'    },
-  { pin: 'GPIO1',  side: 'right', index: 4,  label: 'GPIO1'  },
-  { pin: 'GPIO2',  side: 'right', index: 5,  label: 'GPIO2'  },
-  { pin: 'GPIO42', side: 'right', index: 6,  label: 'GPIO42' },
-  { pin: 'GPIO41', side: 'right', index: 7,  label: 'GPIO41' },
-  { pin: 'GPIO40', side: 'right', index: 8,  label: 'GPIO40' },
-  { pin: 'GPIO39', side: 'right', index: 9,  label: 'GPIO39' },
-  { pin: 'GPIO38', side: 'right', index: 10, label: 'GPIO38' },
-  { pin: 'GPIO37', side: 'right', index: 11, label: 'GPIO37' },
-  { pin: 'GPIO36', side: 'right', index: 12, label: 'GPIO36' },
-  { pin: 'GPIO35', side: 'right', index: 13, label: 'GPIO35' },
-  { pin: 'GPIO0',  side: 'right', index: 14, label: 'GPIO0'  },
-  { pin: 'GPIO45', side: 'right', index: 15, label: 'GPIO45' },
-  { pin: 'GPIO48', side: 'right', index: 16, label: 'GPIO48' },
-  { pin: 'GPIO47', side: 'right', index: 17, label: 'GPIO47' },
-  { pin: 'GPIO21', side: 'right', index: 18, label: 'GPIO21' },
-  { pin: 'GPIO20', side: 'right', index: 19, label: 'D+'     }
+  // J3 — RIGHT header, top→bottom
+  { pin: 'GND_2',  side: 'right', index: 0,  label: 'GND',    pinNumber: 23 },
+  { pin: 'GPIO43', side: 'right', index: 1,  label: 'TX',     pinNumber: 24 },
+  { pin: 'GPIO44', side: 'right', index: 2,  label: 'RX',     pinNumber: 25 },
+  { pin: 'GPIO1',  side: 'right', index: 3,  label: 'GPIO1',  pinNumber: 26 },
+  { pin: 'GPIO2',  side: 'right', index: 4,  label: 'GPIO2',  pinNumber: 27 },
+  { pin: 'GPIO42', side: 'right', index: 5,  label: 'GPIO42', pinNumber: 28 },
+  { pin: 'GPIO41', side: 'right', index: 6,  label: 'GPIO41', pinNumber: 29 },
+  { pin: 'GPIO40', side: 'right', index: 7,  label: 'GPIO40', pinNumber: 30 },
+  { pin: 'GPIO39', side: 'right', index: 8,  label: 'GPIO39', pinNumber: 31 },
+  { pin: 'GPIO38', side: 'right', index: 9,  label: 'GPIO38', pinNumber: 32 },
+  { pin: 'GPIO37', side: 'right', index: 10, label: 'GPIO37', pinNumber: 33 },
+  { pin: 'GPIO36', side: 'right', index: 11, label: 'GPIO36', pinNumber: 34 },
+  { pin: 'GPIO35', side: 'right', index: 12, label: 'GPIO35', pinNumber: 35 },
+  { pin: 'GPIO0',  side: 'right', index: 13, label: 'GPIO0',  pinNumber: 36 },
+  { pin: 'GPIO45', side: 'right', index: 14, label: 'GPIO45', pinNumber: 37 },
+  { pin: 'GPIO48', side: 'right', index: 15, label: 'GPIO48', pinNumber: 38 },
+  { pin: 'GPIO47', side: 'right', index: 16, label: 'GPIO47', pinNumber: 39 },
+  { pin: 'GPIO21', side: 'right', index: 17, label: 'GPIO21', pinNumber: 40 },
+  { pin: 'GPIO20', side: 'right', index: 18, label: 'D+',     pinNumber: 41 },
+  { pin: 'GPIO19', side: 'right', index: 19, label: 'D-',     pinNumber: 42 },
+  { pin: 'GND_3',  side: 'right', index: 20, label: 'GND',    pinNumber: 43 },
+  { pin: 'GND_4',  side: 'right', index: 21, label: 'GND',    pinNumber: 44 }
 ]
 
 /** Pins addressable from the inspector's pin-dropdown, in physical order. */
@@ -181,7 +198,7 @@ export const ESP32_S3_PINS_IN_ORDER: string[] = ESP32_S3_PHYSICAL_LAYOUT
  */
 export function esp32PinsForRole(role: string, kind: string): string[] {
   const r = role.toLowerCase()
-  return ESP32_S3_PINS.filter((cap) => {
+  return preferDedicated(ESP32_S3_PINS.filter((cap) => {
     switch (kind) {
       case 'pot':
       case 'cv_jack':
@@ -225,5 +242,5 @@ export function esp32PinsForRole(role: string, kind: string): string[] {
       default:
         return cap.gpio
     }
-  }).map((c) => c.pin)
+  }), r).map((c) => c.pin)
 }

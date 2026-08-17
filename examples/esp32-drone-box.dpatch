@@ -525,7 +525,7 @@
           "y": 1015
         },
         "pins": {
-          "wiper": "GPIO2"
+          "wiper": "GPIO3"
         },
         "config": {
           "rotation": 0,
@@ -541,7 +541,7 @@
           "y": 1015
         },
         "pins": {
-          "wiper": "GPIO3"
+          "wiper": "GPIO4"
         },
         "config": {
           "rotation": 0,
@@ -557,9 +557,9 @@
           "y": 985
         },
         "pins": {
-          "sck": "GPIO4",
-          "ws": "GPIO5",
-          "sd_out": "GPIO6"
+          "sck": "GPIO5",
+          "ws": "GPIO6",
+          "sd_out": "GPIO7"
         },
         "config": {
           "rotation": 0,

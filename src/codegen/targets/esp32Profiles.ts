@@ -109,36 +109,31 @@ const C3_SUPERMINI: Esp32Profile = {
 }
 
 /**
- * ESP32-S3 SuperMini.
+ * ESP32-S3 SuperMini — the ESP32-S3-Zero form factor (18 x 23.5 mm,
+ * ESP32-S3FH4R2). See `hardware/esp32S3SuperMiniPinout.ts` for the pin
+ * table, checked against a board in hand.
  *
- * PROVISIONAL — "ESP32-S3 SuperMini" is not a standardised board. Unlike
- * the C3 SuperMini (whose 16-pin layout is corroborated across several
- * independent references), no authoritative pinout for an S3 in this form
- * factor could be found: the two sources that publish one contradict each
- * other, and one lists GPIO26-32 as free when those are flash/PSRAM pins
- * on every S3.
- *
- * So the defaults below are the conservative intersection — GPIOs that are
- * safe on any ESP32-S3-WROOM-1 and are broken out on essentially every
- * board in this form factor. `hasPsram` is false deliberately: many of
- * these clones ship without it, and under-promising costs a stubbed
- * granulator whereas over-promising costs a link failure.
- *
- * VERIFY against the physical board before trusting the pin table in
- * `esp32S3SuperMiniPinout.ts`.
+ * `hasPsram` is false although the part HAS 2 MB QSPI PSRAM: the codegen's
+ * PSRAM block writes the DevKitC N8R8 settings (octal PSRAM, 8 MB flash),
+ * which would brick a 4 MB QSPI board's boot. Until that block is
+ * per-board the granulator runs from the heap with a shorter buffer,
+ * which the palette says.
  */
 const S3_SUPERMINI: Esp32Profile = {
   boardId: 'esp32_s3_supermini',
   label: 'S3 SuperMini',
   shortLabel: 'S3 SM',
-  description: 'ESP32-S3 SuperMini (provisional pinout — verify against your board)',
+  description: 'ESP32-S3 SuperMini / S3-Zero (18 header pins + pads, WS2812 on GPIO21)',
   pioBoard: PIO_ENV.esp32_s3_supermini,
   hasPsram: false,
   hasTinyUsbMidi: true,
   usbCdcOnBoot: true,
   defaults: {
+    // GPIO21 is the on-board WS2812 — a plain digitalWrite there lights
+    // nothing, but it is the only "LED pin" the board has.
     led: 21,
-    i2s: { sck: 4, ws: 5, sdOut: 6, sdIn: 7, mclk: 15 },
+    // All on the header; 15 was a pad.
+    i2s: { sck: 4, ws: 5, sdOut: 6, sdIn: 7, mclk: 13 },
     oled: { sda: 8, scl: 9 }
   }
 }

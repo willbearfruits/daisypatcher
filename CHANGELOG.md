@@ -11,6 +11,22 @@ Direction: MIDI learn, recording the emulator to `.wav`, tree-wide presets
 (nodes inside subpatches), Silkscreen mode + drill-template export. See
 `V0_5_PLAN.md` and `V2_PLAN.md`.
 
+## [0.5.5] - 2026-08-17
+
+**Pinout corrections — please re-check any ESP32 wiring made with an earlier build.** Three of the four board drawings were wrong; a knob you wired by following the Hardware view may be on the wrong pad.
+
+### Fixed
+- **ESP32-C3 SuperMini**: the two header columns were mirrored and GPIO0–4 ran in the wrong order. Correct, USB up: left `5 6 7 8 9 10 20 21`, right `5V GND 3V3 4 3 2 1 0`.
+- **ESP32-S3 SuperMini**: replaced a guessed 11-per-side table with the actual board (the ESP32-S3-Zero layout): left `5V GND 3V3 1 2 3 4 5 6`, right `TX RX 13 12 11 10 9 8 7`, plus GPIO14/15/16 castellations and the back-side pads GPIO17/18/38–42/45, all bindable from the inspector. GPIO21 (the on-board WS2812) and GPIO48 (not present) are gone from the table.
+- **ESP32-S3 DevKitC-1**: the left header was drawn upside-down (3V3 at the bottom, GND at the top) and both sides were squeezed to 20 rows. Now the official 22 + 22 from Espressif's figure, module at the top, USB at the bottom; GPIO19 (USB D-) and the extra grounds included; GPIO33/34 (not on the header) removed.
+- **Daisy Seed OLED / sensor auto-wiring** paired an I2C3 SDA (D3) with an I2C1 SCL (D11). The Seed emitters init I2C1, so libDaisy refused the pins and the display stayed dark — every shipped Seed example was wired that way. I2C candidates are now the I2C1 pins only (D12/D11, D14/D13).
+- Auto-assignment now reaches for the silkscreened bus pins first (SDA/SCL, UART RX, the I2S set), skips boot-strapping pins unless they *are* the dedicated pair (the C3's GPIO8/9), never offers the USB data lines, and never hands a button to the Seed's underside D0 test pad.
+- File → New on an ESP32 target left the hardware view on the Daisy Seed while the target stayed ESP32.
+- All seven example patches regenerated with the corrected assignments.
+
+### Added
+- `test:features` gains a `pinouts` group that pins the header order of all four boards exactly, and asserts the auto-assign preferences above.
+
 ## [0.5.4] - 2026-08-17
 
 ### Fixed

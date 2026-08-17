@@ -54,7 +54,8 @@ writeFileSync(
     `export { diffConnections } from '${p('src/editor/sync')}'`,
     `export { systemPrompt, userPrompt } from '${p('src/assistant/prompt')}'`,
     `export { parseDpatch, serializePatch, applyLoadedPatch } from '${p('src/state/patchFile')}'`,
-    `export { useEditorStore, rootGraphOf } from '${p('src/state/store')}'`
+    `export { useEditorStore, rootGraphOf } from '${p('src/state/store')}'`,
+    `export { getBoardPinout } from '${p('src/hardware/boardPinout')}'`
   ].join('\n'),
   'utf8'
 )
@@ -73,7 +74,7 @@ await esbuild.build({
 const M = await import(pathToFileURL(BUNDLE).href)
 const { NODE_DEFINITIONS, WORKLET_REGISTRY, generateProject, flattenGraph, captureFrom } = M
 const { parseEditPlan, validatePlan, describePlan, systemPrompt, userPrompt, diffConnections } = M
-const { parseDpatch, serializePatch, applyLoadedPatch, useEditorStore, rootGraphOf } = M
+const { parseDpatch, serializePatch, applyLoadedPatch, useEditorStore, rootGraphOf, getBoardPinout } = M
 
 const { renderGraph } = await import(pathToFileURL(path.join(ROOT, 'scripts/lib/renderEmulator.mjs')).href)
 
@@ -540,6 +541,77 @@ if (want('roundtrip')) {
   const badLayout = parseDpatch({ dpatch: 2, graph: v1, hardware: { board: 'daisy_seed', components: [], meta: { name: 'x' } }, layout: { paletteW: 'wide', gridSize: -5, daisyFlashMode: 'floppy' } })
   chk('malformed layout fields are dropped individually', badLayout !== null && badLayout.layout === undefined)
   S.getState().resetGraph()
+}
+
+/* =====================================================================
+ * Board pinouts — the physical truth the hardware view draws
+ * ===================================================================== */
+if (want('pinouts')) {
+  g('pinouts')
+  /*
+   * Transcribed from boards in hand on 2026-08-17, after both SuperMini
+   * tables shipped wrong (C3: columns mirrored, GPIO0–4 reversed; S3: a
+   * guessed 11-per-side layout for a board that has 9). A pin drawn on
+   * the wrong side is a wire soldered to the wrong pad, so the header
+   * order is pinned here exactly, not just counted.
+   */
+  const col = (id, side) => getBoardPinout(id).physicalLayout
+    .filter((p) => p.side === side).sort((a, b) => a.index - b.index).map((p) => p.pin)
+
+  const c3L = col('esp32_c3_supermini', 'left'), c3R = col('esp32_c3_supermini', 'right')
+  chk('C3 SuperMini: 8 + 8 header pins', c3L.length === 8 && c3R.length === 8)
+  chk('C3 SuperMini: left column, USB end first, is 5 6 7 8 9 10 20 21',
+    c3L.join(' ') === 'GPIO5 GPIO6 GPIO7 GPIO8 GPIO9 GPIO10 GPIO20 GPIO21', c3L.join(' '))
+  chk('C3 SuperMini: right column is 5V GND 3V3 4 3 2 1 0',
+    c3R.join(' ') === '5V GND 3V3 GPIO4 GPIO3 GPIO2 GPIO1 GPIO0', c3R.join(' '))
+
+  const s3L = col('esp32_s3_supermini', 'left'), s3R = col('esp32_s3_supermini', 'right'), s3B = col('esp32_s3_supermini', 'bottom')
+  chk('S3 SuperMini (S3-Zero): 9 + 9 header pins', s3L.length === 9 && s3R.length === 9, `${s3L.length}+${s3R.length}`)
+  chk('S3 SuperMini: left column is 5V GND 3V3 1 2 3 4 5 6',
+    s3L.join(' ') === '5V GND 3V3 GPIO1 GPIO2 GPIO3 GPIO4 GPIO5 GPIO6', s3L.join(' '))
+  chk('S3 SuperMini: right column is TX RX 13 12 11 10 9 8 7',
+    s3R.join(' ') === 'GPIO43 GPIO44 GPIO13 GPIO12 GPIO11 GPIO10 GPIO9 GPIO8 GPIO7', s3R.join(' '))
+  chk('S3 SuperMini: the 11 pads are listed off-header, GPIO21 (RGB LED) and 19/20 (USB) are not',
+    s3B.length === 11 && !s3B.includes('GPIO21') && !getBoardPinout('esp32_s3_supermini').pinCaps['GPIO21'] && !getBoardPinout('esp32_s3_supermini').pinCaps['GPIO19'])
+
+  for (const id of ['daisy_seed', 'esp32_s3_devkitc', 'esp32_c3_supermini', 'esp32_s3_supermini']) {
+    const p = getBoardPinout(id)
+    const header = new Set(p.physicalLayout.filter((x) => x.side !== 'bottom').map((x) => x.pin))
+    const caps = Object.keys(p.pinCaps)
+    chk(`${id}: every capability pin is on the header or an explicit pad`,
+      caps.every((c) => header.has(c) || p.physicalLayout.some((x) => x.pin === c)),
+      caps.filter((c) => !p.physicalLayout.some((x) => x.pin === c)).join(','))
+    const gpioOnHeader = p.physicalLayout.filter((x) => x.pin.startsWith('GPIO') || /^D\d+$/.test(x.pin)).map((x) => x.pin)
+    chk(`${id}: every drawn GPIO has a capability row`, gpioOnHeader.every((x) => p.pinCaps[x]),
+      gpioOnHeader.filter((x) => !p.pinCaps[x]).join(','))
+    chk(`${id}: no pin drawn twice`, new Set(p.physicalLayout.map((x) => x.pin)).size === p.physicalLayout.length)
+  }
+
+  // Auto-assignment reaches for the silkscreened bus pins first.
+  chk('C3 SuperMini: first sda/scl candidates are GPIO8/GPIO9',
+    getBoardPinout('esp32_c3_supermini').pinsForRole('sda', 'oled_ssd1306')[0] === 'GPIO8' &&
+    getBoardPinout('esp32_c3_supermini').pinsForRole('scl', 'oled_ssd1306')[0] === 'GPIO9')
+  chk('S3 SuperMini: first sda/scl candidates are GPIO8/GPIO9, first UART rx is GPIO44',
+    getBoardPinout('esp32_s3_supermini').pinsForRole('sda', 'oled_ssd1306')[0] === 'GPIO8' &&
+    getBoardPinout('esp32_s3_supermini').pinsForRole('scl', 'oled_ssd1306')[0] === 'GPIO9' &&
+    getBoardPinout('esp32_s3_supermini').pinsForRole('rx', 'midi_jack')[0] === 'GPIO44')
+  const seedSda = getBoardPinout('daisy_seed').pinsForRole('sda', 'oled_ssd1306')
+  const seedScl = getBoardPinout('daisy_seed').pinsForRole('scl', 'oled_ssd1306')
+  chk('Seed: I2C candidates are I2C1 pins only (the emitter inits I2C_1)',
+    seedSda.every((x) => x === 'D12' || x === 'D14') && seedScl.every((x) => x === 'D11' || x === 'D13') && seedSda[0] === 'D12' && seedScl[0] === 'D11',
+    `sda ${seedSda.join(',')} scl ${seedScl.join(',')}`)
+  chk('DevKitC: USB D-/D+ (GPIO19/20) are never offered for a knob or a button',
+    !getBoardPinout('esp32_s3_devkitc').pinsForRole('wiper', 'pot').some((x) => x === 'GPIO19' || x === 'GPIO20') &&
+    !getBoardPinout('esp32_s3_devkitc').pinsForRole('io', 'button').some((x) => x === 'GPIO19' || x === 'GPIO20'))
+  const dkL = col('esp32_s3_devkitc', 'left'), dkR = col('esp32_s3_devkitc', 'right')
+  chk('DevKitC: 22 + 22, J1 top→bottom is 3V3 3V3 RST 4 5 6 7 15 16 17 18 8 3 46 9 10 11 12 13 14 5V GND',
+    dkL.length === 22 && dkL.join(' ') === '3V3 3V3_2 EN GPIO4 GPIO5 GPIO6 GPIO7 GPIO15 GPIO16 GPIO17 GPIO18 GPIO8 GPIO3 GPIO46 GPIO9 GPIO10 GPIO11 GPIO12 GPIO13 GPIO14 5V GND', dkL.join(' '))
+  chk('DevKitC: J3 top→bottom is GND TX RX 1 2 42 41 40 39 38 37 36 35 0 45 48 47 21 20 19 GND GND',
+    dkR.length === 22 && dkR.join(' ') === 'GND_2 GPIO43 GPIO44 GPIO1 GPIO2 GPIO42 GPIO41 GPIO40 GPIO39 GPIO38 GPIO37 GPIO36 GPIO35 GPIO0 GPIO45 GPIO48 GPIO47 GPIO21 GPIO20 GPIO19 GND_3 GND_4', dkR.join(' '))
+  chk('DevKitC: left column is drawn top-down (index 0 at the top), like the figure',
+    getBoardPinout('esp32_s3_devkitc').geometry.leftColumnBottomUp === false)
+  const seedBtn = getBoardPinout('daisy_seed').pinsForRole('io', 'button')
+  chk('Seed: a button is never auto-assigned to the D0 underside pad first', seedBtn[0] !== 'D0' && seedBtn.includes('D0'))
 }
 
 /* =====================================================================
