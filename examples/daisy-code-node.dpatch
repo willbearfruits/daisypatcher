@@ -234,8 +234,8 @@
         "kind": "pot",
         "label": "Drive",
         "position": {
-          "x": 120,
-          "y": 600
+          "x": 440,
+          "y": 1300
         },
         "pins": {
           "wiper": "D15"
@@ -250,8 +250,8 @@
         "kind": "pot",
         "label": "Fold",
         "position": {
-          "x": 220,
-          "y": 600
+          "x": 505,
+          "y": 1300
         },
         "pins": {
           "wiper": "D16"
@@ -266,8 +266,8 @@
         "kind": "pot",
         "label": "Bits",
         "position": {
-          "x": 320,
-          "y": 600
+          "x": 570,
+          "y": 1300
         },
         "pins": {
           "wiper": "D17"
@@ -282,8 +282,8 @@
         "kind": "pot",
         "label": "Tone",
         "position": {
-          "x": 420,
-          "y": 600
+          "x": 635,
+          "y": 1300
         },
         "pins": {
           "wiper": "D18"

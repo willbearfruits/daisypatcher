@@ -296,13 +296,17 @@ function daisySampler() {
   q.wire(kPitch, 'out', oled, 'c')
   q.wire(env, 'out', oled, 'd')
 
-  q.place('pot', 'Grain', kSize, { x: 120, y: 620 })
-  q.place('pot', 'Density', kDens, { x: 220, y: 620 })
-  q.place('pot', 'Pitch', kPitch, { x: 320, y: 620 })
-  q.place('pot', 'Cutoff', kCut, { x: 420, y: 620 })
-  q.place('gate_jack', 'Capture', capture, { x: 120, y: 740 })
-  q.place('led', 'Level', led, { x: 520, y: 620 })
-  q.place('oled_ssd1306', 'Display', oled, { x: 260, y: 460 })
+  // Below the board, not beside it: on the Seed the pin-label columns fill
+  // the space either side, and a part dropped there sits on top of the
+  // text. Left group under the left (ADC) column, display and LED under
+  // the right column where their pins are.
+  q.place('pot', 'Grain', kSize, { x: 440, y: 1300 })
+  q.place('pot', 'Density', kDens, { x: 505, y: 1300 })
+  q.place('pot', 'Pitch', kPitch, { x: 570, y: 1300 })
+  q.place('pot', 'Cutoff', kCut, { x: 635, y: 1300 })
+  q.place('gate_jack', 'Capture', capture, { x: 720, y: 1300 })
+  q.place('oled_ssd1306', 'Display', oled, { x: 880, y: 1265 })
+  q.place('led', 'Level', led, { x: 1010, y: 1300 })
   return q
 }
 
@@ -640,12 +644,12 @@ function daisyTracker() {
     { x: -620, y: 300 }
   )
 
-  q.place('slider', 'Trk 1', f1, { x: 120, y: 560 })
-  q.place('slider', 'Trk 2', f2, { x: 200, y: 560 })
-  q.place('slider', 'Trk 3', f3, { x: 280, y: 560 })
-  q.place('slider', 'Trk 4', f4, { x: 360, y: 560 })
-  q.place('encoder', 'Nav', enc, { x: 480, y: 560 })
-  q.place('oled_ssd1306', 'Display', oled, { x: 240, y: 400 })
+  q.place('slider', 'Trk 1', f1, { x: 440, y: 1270 })
+  q.place('slider', 'Trk 2', f2, { x: 510, y: 1270 })
+  q.place('slider', 'Trk 3', f3, { x: 580, y: 1270 })
+  q.place('slider', 'Trk 4', f4, { x: 650, y: 1270 })
+  q.place('encoder', 'Nav', enc, { x: 750, y: 1300 })
+  q.place('oled_ssd1306', 'Display', oled, { x: 880, y: 1265 })
   return q
 }
 
@@ -922,10 +926,10 @@ out = held;`
   const kCut = q.node('knob_in', { channel: '4', min: 200, max: 9000, value: 0.5 }, { x: -720, y: 520 })
   q.wire(kCut, 'out', filt, 'cv_cutoff')
 
-  q.place('pot', 'Drive', kDrive, { x: 120, y: 600 })
-  q.place('pot', 'Fold', kFold, { x: 220, y: 600 })
-  q.place('pot', 'Bits', kBits, { x: 320, y: 600 })
-  q.place('pot', 'Tone', kCut, { x: 420, y: 600 })
+  q.place('pot', 'Drive', kDrive, { x: 440, y: 1300 })
+  q.place('pot', 'Fold', kFold, { x: 505, y: 1300 })
+  q.place('pot', 'Bits', kBits, { x: 570, y: 1300 })
+  q.place('pot', 'Tone', kCut, { x: 635, y: 1300 })
   return q
 }
 
@@ -1018,10 +1022,10 @@ function daisyStateBox() {
   const led = q.node('led', {}, { x: -60, y: 200 })
   q.wire(state, 'state', led, 'in')
 
-  q.place('button', 'MODE', btn, { x: 40, y: 250 })
-  q.place('pot', 'TONE', kTone, { x: 40, y: 60 })
-  q.place('pot', 'SPACE', kSpace, { x: 130, y: 60 })
-  q.place('led', 'MODE', led, { x: 130, y: 250 })
+  q.place('button', 'MODE', btn, { x: 440, y: 1300 })
+  q.place('pot', 'TONE', kTone, { x: 520, y: 1300 })
+  q.place('pot', 'SPACE', kSpace, { x: 585, y: 1300 })
+  q.place('led', 'MODE', led, { x: 680, y: 1300 })
 
   return q
 }

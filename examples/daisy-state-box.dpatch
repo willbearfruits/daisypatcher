@@ -470,8 +470,8 @@
         "kind": "button",
         "label": "MODE",
         "position": {
-          "x": 40,
-          "y": 250
+          "x": 440,
+          "y": 1300
         },
         "pins": {
           "io": "D0"
@@ -485,8 +485,8 @@
         "kind": "pot",
         "label": "TONE",
         "position": {
-          "x": 40,
-          "y": 60
+          "x": 520,
+          "y": 1300
         },
         "pins": {
           "wiper": "D15"
@@ -501,8 +501,8 @@
         "kind": "pot",
         "label": "SPACE",
         "position": {
-          "x": 130,
-          "y": 60
+          "x": 585,
+          "y": 1300
         },
         "pins": {
           "wiper": "D16"
@@ -517,8 +517,8 @@
         "kind": "led",
         "label": "MODE",
         "position": {
-          "x": 130,
-          "y": 250
+          "x": 680,
+          "y": 1300
         },
         "pins": {
           "anode": "D1"

@@ -27,11 +27,9 @@
 
 > **Beta.** This is a work in progress that already does the whole loop — patch, listen, build, flash — on real hardware, but it has been used by a small number of people on a small number of machines. Expect rough edges. Every one you report gets looked at.
 
-<!-- Screenshot lands here once docs/img/patch-view.png exists:
 <p align="center">
-  <img src="docs/img/patch-view.png" alt="The Patch view: a node graph with a scope and an OLED node, cables colour-coded by signal kind" width="900">
+  <img src="docs/img/patch-view.png" alt="The Patch view: the sampler example — audio in, freeze, granulator, filter, reverb; four knobs, an OLED node with its live display, cables colour-coded by signal kind" width="900">
 </p>
--->
 
 ## What it does
 
@@ -44,6 +42,11 @@
 - **Samples** compiled into flash.
 - **Build and flash** from inside the app: libDaisy/DaisySP for the Seed (installed on first run), PlatformIO for the ESP32s. Serial monitor included.
 - **An assistant** that edits the graph — never writes code — with every proposed edit validated against the node catalog before it can touch your patch. Ollama by default; cloud providers if you bring a key.
+
+<p align="center">
+  <img src="docs/img/hardware-view.png" alt="The Hardware view: a Daisy Seed drawn to scale, every pin labelled, four pots, a gate jack, an OLED and an LED wired to their pins" width="49%">
+  <img src="docs/img/perform-view.png" alt="The Perform view: the same patch as the finished box — four knobs, a jack, the OLED and an LED on a powder-coated enclosure" width="49%">
+</p>
 
 ## Boards
 

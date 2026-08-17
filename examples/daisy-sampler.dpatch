@@ -164,7 +164,7 @@
           "y": 220
         },
         "params": {
-          "bindingId": "hw_led_6",
+          "bindingId": "hw_led_7",
           "threshold": 0.5,
           "mode": "pwm"
         }
@@ -177,7 +177,7 @@
           "y": 300
         },
         "params": {
-          "bindingId": "hw_oled_ssd1306_7",
+          "bindingId": "hw_oled_ssd1306_6",
           "elements": "[{\"id\":\"el_1433862048\",\"kind\":\"text\",\"x\":0,\"y\":0,\"text\":\"SAMPLER\",\"size\":1},{\"id\":\"el_126013596\",\"kind\":\"value\",\"x\":0,\"y\":14,\"binding\":\"a\",\"decimals\":0,\"unit\":\"ms\"},{\"id\":\"el_2083421856\",\"kind\":\"value\",\"x\":64,\"y\":14,\"binding\":\"b\",\"decimals\":1,\"unit\":\"/s\"},{\"id\":\"el_593145635\",\"kind\":\"value\",\"x\":0,\"y\":26,\"binding\":\"c\",\"decimals\":1,\"unit\":\"st\"},{\"id\":\"el_1695254287\",\"kind\":\"meter\",\"x\":0,\"y\":40,\"width\":128,\"height\":10,\"binding\":\"d\"},{\"id\":\"el_95611364\",\"kind\":\"line\",\"x\":0,\"y\":11,\"x2\":127,\"y2\":11}]"
         }
       }
@@ -386,8 +386,8 @@
         "kind": "pot",
         "label": "Grain",
         "position": {
-          "x": 120,
-          "y": 620
+          "x": 440,
+          "y": 1300
         },
         "pins": {
           "wiper": "D15"
@@ -402,8 +402,8 @@
         "kind": "pot",
         "label": "Density",
         "position": {
-          "x": 220,
-          "y": 620
+          "x": 505,
+          "y": 1300
         },
         "pins": {
           "wiper": "D16"
@@ -418,8 +418,8 @@
         "kind": "pot",
         "label": "Pitch",
         "position": {
-          "x": 320,
-          "y": 620
+          "x": 570,
+          "y": 1300
         },
         "pins": {
           "wiper": "D17"
@@ -434,8 +434,8 @@
         "kind": "pot",
         "label": "Cutoff",
         "position": {
-          "x": 420,
-          "y": 620
+          "x": 635,
+          "y": 1300
         },
         "pins": {
           "wiper": "D18"
@@ -450,8 +450,8 @@
         "kind": "gate_jack",
         "label": "Capture",
         "position": {
-          "x": 120,
-          "y": 740
+          "x": 720,
+          "y": 1300
         },
         "pins": {
           "io": "D0"
@@ -461,29 +461,12 @@
         }
       },
       {
-        "id": "hw_led_6",
-        "kind": "led",
-        "label": "Level",
-        "position": {
-          "x": 520,
-          "y": 620
-        },
-        "pins": {
-          "anode": "D1"
-        },
-        "config": {
-          "rotation": 0,
-          "color": "white",
-          "pwm": false
-        }
-      },
-      {
-        "id": "hw_oled_ssd1306_7",
+        "id": "hw_oled_ssd1306_6",
         "kind": "oled_ssd1306",
         "label": "Display",
         "position": {
-          "x": 260,
-          "y": 460
+          "x": 880,
+          "y": 1265
         },
         "pins": {
           "sda": "D3",
@@ -494,6 +477,23 @@
           "width": 128,
           "height": 64,
           "address": "0x3C"
+        }
+      },
+      {
+        "id": "hw_led_7",
+        "kind": "led",
+        "label": "Level",
+        "position": {
+          "x": 1010,
+          "y": 1300
+        },
+        "pins": {
+          "anode": "D1"
+        },
+        "config": {
+          "rotation": 0,
+          "color": "white",
+          "pwm": false
         }
       }
     ],

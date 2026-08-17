@@ -646,8 +646,8 @@
         "kind": "slider",
         "label": "Trk 1",
         "position": {
-          "x": 120,
-          "y": 560
+          "x": 440,
+          "y": 1270
         },
         "pins": {
           "wiper": "D15"
@@ -663,8 +663,8 @@
         "kind": "slider",
         "label": "Trk 2",
         "position": {
-          "x": 200,
-          "y": 560
+          "x": 510,
+          "y": 1270
         },
         "pins": {
           "wiper": "D16"
@@ -680,8 +680,8 @@
         "kind": "slider",
         "label": "Trk 3",
         "position": {
-          "x": 280,
-          "y": 560
+          "x": 580,
+          "y": 1270
         },
         "pins": {
           "wiper": "D17"
@@ -697,8 +697,8 @@
         "kind": "slider",
         "label": "Trk 4",
         "position": {
-          "x": 360,
-          "y": 560
+          "x": 650,
+          "y": 1270
         },
         "pins": {
           "wiper": "D18"
@@ -714,8 +714,8 @@
         "kind": "encoder",
         "label": "Nav",
         "position": {
-          "x": 480,
-          "y": 560
+          "x": 750,
+          "y": 1300
         },
         "pins": {
           "a": "D0",
@@ -733,8 +733,8 @@
         "kind": "oled_ssd1306",
         "label": "Display",
         "position": {
-          "x": 240,
-          "y": 400
+          "x": 880,
+          "y": 1265
         },
         "pins": {
           "sda": "D3",

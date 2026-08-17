@@ -187,7 +187,8 @@
   figure img { display: block; width: 100%; height: auto; border-radius: var(--r-lg); border: 1px solid var(--border-strong); box-shadow: 0 30px 80px -40px rgba(0,0,0,.9); }
   figure figcaption { margin-top: 10px; font-family: var(--mono); font-size: 0.72rem; color: var(--dim); letter-spacing: .04em; }
   figure.missing { display: none; }
-  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 30px; }
+  figure.wide { margin-top: 34px; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
   .shots:not(:has(figure:not(.missing))) { display: none; }
   @media (max-width: 820px) { .shots { grid-template-columns: 1fr; } }
 
@@ -372,6 +373,7 @@
         <div class="step" style="--c: var(--audio)"><span class="n">05</span><h3>Flash</h3><p>DFU or serial, from the same button. Serial monitor for what comes back. Presets and samples ride along in the firmware.</p></div>
       </div>
 
+      <figure class="wide"><img src="img/patch-view.png" alt="The Patch view: the sampler example — audio in, freeze, granulator, filter, reverb; four knobs and an OLED node with its live display; cables colour-coded by signal kind" loading="lazy" onerror="this.parentElement.classList.add('missing')"><figcaption>Patch — the sampler example, playing.</figcaption></figure>
       <div class="shots">
         <figure><img src="img/hardware-view.png" alt="The Hardware view: a Daisy Seed drawn to scale with pots, an OLED and jacks bound to pins" loading="lazy" onerror="this.parentElement.classList.add('missing')"><figcaption>Hardware — the board, the pins, the parts.</figcaption></figure>
         <figure><img src="img/perform-view.png" alt="The Perform view: the finished enclosure with knobs, LEDs and an OLED, playable" loading="lazy" onerror="this.parentElement.classList.add('missing')"><figcaption>Perform — the box you would hold.</figcaption></figure>
