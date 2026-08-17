@@ -94,6 +94,20 @@ export function initAutoUpdater(win: BrowserWindow): void {
    */
   if (process.platform === 'darwin') return
 
+  /*
+   * electron-updater's default logger is `console`, and on an HTTP error
+   * it prints the whole response — headers, cookies, a stack — to stderr.
+   * A missing release (a 404, which every install sees until the first
+   * one is published) is not a thirty-line event. First line only.
+   */
+  const firstLine = (m: unknown): string => String(m).split('\n')[0].slice(0, 200)
+  autoUpdater.logger = {
+    info: () => undefined,
+    debug: () => undefined,
+    warn: (m: unknown) => console.warn('[updater]', firstLine(m)),
+    error: (m: unknown) => console.error('[updater]', firstLine(m))
+  }
+
   // No surprise downloads — we prompt the user explicitly before pulling
   // bytes so people on metered connections don't get ambushed. Install on
   // quit is safe because it only fires AFTER a successful download that
