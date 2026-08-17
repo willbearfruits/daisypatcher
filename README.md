@@ -27,9 +27,11 @@
 
 > **Beta.** This is a work in progress that already does the whole loop — patch, listen, build, flash — on real hardware, but it has been used by a small number of people on a small number of machines. Expect rough edges. Every one you report gets looked at.
 
+<!-- Screenshot lands here once docs/img/patch-view.png exists:
 <p align="center">
   <img src="docs/img/patch-view.png" alt="The Patch view: a node graph with a scope and an OLED node, cables colour-coded by signal kind" width="900">
 </p>
+-->
 
 ## What it does
 
