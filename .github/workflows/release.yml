@@ -21,28 +21,49 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      os:
+        description: 'Which platform to (re)build — the version comes from package.json, so a manual run appends to that version''s draft release'
+        type: choice
+        default: all
+        options: [all, linux, windows, mac]
 
 permissions:
   contents: write
 
 jobs:
+  # Decide which platforms to build. A tag builds all three; a manual run
+  # can pick ONE (e.g. after a Windows-only fix) without re-uploading the
+  # other two to the draft. Job-level `if` cannot see `matrix`, hence the
+  # planning job.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        run: |
+          linux='{"os":"ubuntu-latest","key":"linux","name":"Linux (AppImage x64 + arm64)","args":"--linux"}'
+          windows='{"os":"windows-latest","key":"windows","name":"Windows (NSIS + portable)","args":"--win"}'
+          mac='{"os":"macos-latest","key":"mac","name":"macOS (dmg x64 + arm64, unsigned)","args":"--mac"}'
+          case "${{ github.event_name == 'workflow_dispatch' && inputs.os || 'all' }}" in
+            linux)   m="[$linux]" ;;
+            windows) m="[$windows]" ;;
+            mac)     m="[$mac]" ;;
+            *)       m="[$linux,$windows,$mac]" ;;
+          esac
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            name: Linux (AppImage x64 + arm64)
-            args: --linux
-          - os: windows-latest
-            name: Windows (NSIS + portable)
-            args: --win
-          - os: macos-latest
-            name: macOS (dmg x64 + arm64, unsigned)
-            args: --mac
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
