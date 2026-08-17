@@ -1,0 +1,13 @@
+# Line endings. The codegen snapshots are compared byte-for-byte against
+# generated text, the emitted C++ is compiled by tools that care, and the
+# examples are hashed by content — none of it may change on checkout.
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.ico binary
+*.icns binary
+*.wav binary
+*.mp3 binary
+*.flac binary
+*.ogg binary

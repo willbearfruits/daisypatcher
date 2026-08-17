@@ -210,7 +210,11 @@ for (const name of fixtureNames) {
 
     for (const f of generatedFiles) {
       if (!storedFiles.includes(f)) continue
-      const expected = readFileSync(path.join(snapDir, f), 'utf8')
+      // Normalise line endings: a Windows checkout with autocrlf turns the
+      // stored snapshot into CRLF while the generator emits LF, and every
+      // file "differed at line 1". `.gitattributes` pins LF too; this is
+      // the belt to that suspenders.
+      const expected = readFileSync(path.join(snapDir, f), 'utf8').replace(/\r\n/g, '\n')
       const actual = proj.files[f]
       if (expected !== actual) {
         problems.push(`  ${f} differs:\n${diffSummary(expected, actual)}`)
