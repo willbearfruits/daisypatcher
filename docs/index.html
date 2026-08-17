@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daisypatcher</title>
+<meta name="description" content="A visual patcher for the Daisy Seed and ESP32-S3/C3. Drop DSP nodes on a canvas, hear the patch in the app, lay out the knobs and jacks, flash the board.">
+<meta property="og:title" content="Daisypatcher">
+<meta property="og:description" content="Patch it. Hear it. Flash it. A visual patcher for the Daisy Seed and ESP32-S3/C3 — beta.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://willbearfruits.github.io/daisypatcher/">
+<meta property="og:image" content="https://willbearfruits.github.io/daisypatcher/img/patch-view.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  /* Signal Lab — the app's own palette. One deliberate dark world; every
+     colour is painted explicitly so the page holds on any host ground. */
+  :root {
+    --bg: #07090c;
+    --bg-grid: rgba(255,255,255,0.028);
+    --surface: #0d1117;
+    --surface-2: #141b24;
+    --sunken: #05070a;
+    --border: #1a2230;
+    --border-strong: #2a3545;
+    --text: #e6edf3;
+    --muted: #8b95a4;
+    --dim: #5a6472;
+    --audio: #22d3ee;
+    --cv: #f472b6;
+    --gate: #fbbf24;
+    --clock: #a3e635;
+    --danger: #f87171;
+    --sans: 'Inter', 'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Berkeley Mono', 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --r-sm: 4px; --r-md: 8px; --r-lg: 14px;
+    --ease: cubic-bezier(.2,.7,.2,1);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 24px 24px, 24px 24px;
+    background-attachment: fixed;
+  }
+  a { color: var(--audio); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  code, kbd, .mono { font-family: var(--mono); font-size: 0.92em; }
+  kbd {
+    padding: 1px 6px; border: 1px solid var(--border-strong); border-bottom-width: 2px;
+    border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); font-size: 0.8em;
+  }
+  h1, h2, h3 { margin: 0; line-height: 1.15; letter-spacing: -0.01em; text-wrap: balance; }
+  h2 { font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.2rem); font-weight: 600; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p { margin: 0; }
+  .wrap { width: min(1120px, calc(100% - 48px)); margin: 0 auto; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--dim);
+  }
+  .eyebrow.audio { color: var(--audio); }
+  .eyebrow.cv { color: var(--cv); }
+  .eyebrow.gate { color: var(--gate); }
+  .eyebrow.clock { color: var(--clock); }
+
+  /* ---- top bar echoes the app's chrome ---- */
+  .top {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .top .wrap { display: flex; align-items: center; gap: 18px; height: 52px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.18em; text-transform: uppercase; }
+  .brand:hover { text-decoration: none; }
+  .brand img { width: 22px; height: 22px; border-radius: 5px; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--audio); box-shadow: 0 0 10px var(--audio); }
+  .top nav { margin-left: auto; display: flex; gap: 22px; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .top nav a { color: var(--muted); }
+  .top nav a:hover { color: var(--text); text-decoration: none; }
+  .pill {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--gate) 40%, var(--border));
+    color: var(--gate); background: color-mix(in srgb, var(--gate) 8%, transparent);
+  }
+  @media (max-width: 720px) { .top nav a:not(.keep) { display: none; } .top nav { gap: 14px; } .top .wrap { gap: 12px; } .brand { letter-spacing: 0.12em; } }
+
+  /* ---- hero ---- */
+  .hero { padding: 72px 0 40px; }
+  .hero .wrap { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
+  @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } .hero { padding-top: 40px; } }
+  .hero h1 {
+    font-size: clamp(2.4rem, 1.4rem + 4.2vw, 4.4rem); font-weight: 650; letter-spacing: -0.03em; line-height: 1.02;
+  }
+  .hero h1 .a { color: var(--audio); }
+  .hero h1 .c { color: var(--cv); }
+  .hero h1 .g { color: var(--gate); }
+  .hero .lead { margin-top: 20px; font-size: 1.12rem; color: var(--muted); max-width: 52ch; }
+  .hero .lead strong { color: var(--text); font-weight: 600; }
+  .cta { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 12px 18px; border-radius: var(--r-md); border: 1px solid var(--border-strong);
+    color: var(--text); background: var(--surface); transition: border-color .15s var(--ease), background .15s var(--ease), transform .15s var(--ease);
+  }
+  .btn:hover { text-decoration: none; border-color: var(--audio); transform: translateY(-1px); }
+  .btn.primary { background: var(--audio); color: #06202a; border-color: var(--audio); font-weight: 600; }
+  .btn.primary:hover { background: #4be0f5; }
+  .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+  .cta .note { width: 100%; font-family: var(--mono); font-size: 0.72rem; color: var(--dim); letter-spacing: 0.04em; }
+  .cta .note a { color: var(--muted); }
+
+  /* the hero graphic: a small live patch */
+  .patch {
+    position: relative; aspect-ratio: 5 / 4; border-radius: var(--r-lg);
+    background: radial-gradient(120% 90% at 30% 10%, #0f1620 0%, var(--sunken) 70%);
+    border: 1px solid var(--border-strong); overflow: hidden;
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .patch svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .patch .cable { fill: none; stroke-width: 2.2; stroke-linecap: round; opacity: .95; }
+  .patch .flow { stroke-dasharray: 3 9; stroke-width: 2.6; opacity: .9; animation: flow 1.6s linear infinite; }
+  .patch .cable.audio { stroke: var(--audio); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--audio) 60%, transparent)); }
+  .patch .cable.cv { stroke: var(--cv); }
+  .patch .cable.gate { stroke: var(--gate); }
+  .patch .cable.clock { stroke: var(--clock); }
+  .patch .flow.audio { stroke: var(--audio); }
+  .patch .flow.cv { stroke: var(--cv); }
+  .patch .flow.gate { stroke: var(--gate); animation-duration: 0.9s; }
+  .patch .flow.clock { stroke: var(--clock); animation-duration: 0.6s; }
+  @keyframes flow { to { stroke-dashoffset: -24; } }
+  .patch .node { fill: #10161e; stroke: var(--border-strong); stroke-width: 1; }
+  .patch .head { fill: #172130; }
+  .patch .label { font-family: var(--mono); font-size: 7.6px; fill: var(--text); letter-spacing: .06em; }
+  .patch .sub { font-family: var(--mono); font-size: 6.2px; fill: var(--dim); }
+  .patch .sock { stroke-width: 1.4; fill: var(--sunken); }
+  .patch .sock.audio { stroke: var(--audio); } .patch .sock.cv { stroke: var(--cv); }
+  .patch .sock.gate { stroke: var(--gate); } .patch .sock.clock { stroke: var(--clock); }
+  .patch .grid { stroke: rgba(255,255,255,.035); stroke-width: 1; }
+  .patch canvas { position: absolute; }
+  .patch .scope { left: 62.6%; top: 33.6%; width: 30.8%; height: 15.2%; }
+  .patch .led { position: absolute; left: 87.4%; top: 61.9%; width: 2.6%; aspect-ratio: 1; border-radius: 50%; background: var(--gate); box-shadow: 0 0 10px var(--gate); animation: blink 1.2s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .18; box-shadow: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .patch .flow { animation: none; stroke-dasharray: none; opacity: 0; }
+    .patch .led { animation: none; }
+    .btn:hover { transform: none; }
+  }
+
+  /* ---- sections ---- */
+  section { padding: 64px 0; border-top: 1px solid var(--border); }
+  section .head { display: grid; gap: 10px; max-width: 62ch; margin-bottom: 34px; }
+  section .head p { color: var(--muted); font-size: 1.02rem; }
+
+  .loop { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  @media (max-width: 900px) { .loop { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .loop { grid-template-columns: 1fr; } }
+  .step {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: 16px 16px 18px; display: grid; gap: 8px; align-content: start; position: relative;
+  }
+  .step .n { font-family: var(--mono); font-size: 0.7rem; letter-spacing: .12em; color: var(--dim); }
+  .step h3 { font-size: 1rem; }
+  .step p { color: var(--muted); font-size: 0.92rem; }
+  .step::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px; border-radius: 2px; background: var(--c, var(--audio)); }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 24px; display: grid; gap: 12px; align-content: start; }
+  .card p { color: var(--muted); }
+  .card p strong { color: var(--text); font-weight: 600; }
+  .card ul { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 6px; }
+  .card li::marker { color: var(--dim); }
+
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; height: auto; border-radius: var(--r-lg); border: 1px solid var(--border-strong); box-shadow: 0 30px 80px -40px rgba(0,0,0,.9); }
+  figure figcaption { margin-top: 10px; font-family: var(--mono); font-size: 0.72rem; color: var(--dim); letter-spacing: .04em; }
+  figure.missing { display: none; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 30px; }
+  .shots:not(:has(figure:not(.missing))) { display: none; }
+  @media (max-width: 820px) { .shots { grid-template-columns: 1fr; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-family: var(--mono); font-size: 0.7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); font-weight: 500; background: var(--sunken); }
+  td { color: var(--muted); }
+  td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+  td code { color: var(--text); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 820px) { .dl { grid-template-columns: 1fr; } }
+  .dl .card { gap: 10px; }
+  .dl .card .small { font-family: var(--mono); font-size: 0.74rem; color: var(--dim); }
+  .dl .card .btn { justify-self: start; margin-top: 4px; }
+
+  .checks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  @media (max-width: 900px) { .checks { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .checks { grid-template-columns: 1fr; } }
+  .check { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+  .check .k { font-family: var(--mono); font-size: 0.72rem; color: var(--audio); letter-spacing: .06em; }
+  .check p { color: var(--muted); font-size: 0.9rem; }
+
+  .privacy { border-left: 2px solid var(--cv); padding-left: 18px; color: var(--muted); max-width: 70ch; display: grid; gap: 8px; }
+  .privacy strong { color: var(--text); }
+
+  footer { border-top: 1px solid var(--border); padding: 36px 0 48px; color: var(--dim); font-size: 0.9rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+  footer a { color: var(--muted); }
+  footer .sp { flex: 1; }
+  :focus-visible { outline: 2px solid var(--audio); outline-offset: 2px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <img src="icon.svg" alt="" width="22" height="22">
+      Daisypatcher
+    </a>
+    <span class="pill">beta</span>
+    <nav>
+      <a href="#loop">The loop</a>
+      <a href="#boards">Boards</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/willbearfruits/daisypatcher/blob/main/docs/USER_GUIDE.md">Guide</a>
+      <a href="https://github.com/willbearfruits/daisypatcher" class="keep">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" style="border-top:0">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow audio">Daisy Seed · ESP32-S3 · ESP32-C3</p>
+        <h1 style="margin-top:14px">Patch it.<br><span class="a">Hear it.</span> <span class="c">Flash it.</span></h1>
+        <p class="lead">A visual patcher where <strong>the patch is the firmware</strong>. Drop DSP nodes on a canvas and hear them now; lay the knobs, jacks and OLED out on your board; press Build. What plays at your desk is what the device plays — every node is checked for that.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/willbearfruits/daisypatcher/releases/latest">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            Download
+          </a>
+          <a class="btn" href="https://github.com/willbearfruits/daisypatcher/blob/main/docs/USER_GUIDE.md">Read the guide</a>
+          <a class="btn" href="https://github.com/willbearfruits/daisypatcher">Source</a>
+          <p class="note">Linux · Windows · macOS. Free, <a href="https://github.com/willbearfruits/daisypatcher/blob/main/LICENSE">AGPL-3.0</a>. Work in progress — <a href="https://github.com/willbearfruits/daisypatcher/issues/new">every rough edge you report gets looked at</a>.</p>
+        </div>
+      </div>
+
+      <div class="patch" aria-label="A small live patch: clock into a step sequencer into an oscillator, filter swept by an LFO, out to a scope, an LED on the gate">
+        <svg viewBox="0 0 500 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <pattern id="g" width="20" height="20" patternUnits="userSpaceOnUse"><path class="grid" fill="none" d="M20 0H0V20"/></pattern>
+          </defs>
+          <rect width="500" height="400" fill="url(#g)"/>
+
+          <!-- cables (drawn first, under nodes). All curves leave a right-side output and enter a left-side input. -->
+          <!-- clock -> seq -->
+          <path class="cable clock" d="M96 90 C 130 90, 120 122, 156 122"/>
+          <path class="flow clock"  d="M96 90 C 130 90, 120 122, 156 122"/>
+          <!-- seq pitch -> osc pitch (cv) -->
+          <path class="cable cv" d="M236 128 C 270 128, 262 100, 296 100"/>
+          <path class="flow cv"  d="M236 128 C 270 128, 262 100, 296 100"/>
+          <!-- seq gate -> env gate -->
+          <path class="cable gate" d="M236 142 C 280 142, 250 258, 296 258"/>
+          <path class="flow gate"  d="M236 142 C 280 142, 250 258, 296 258"/>
+          <!-- lfo -> filter cv_cutoff -->
+          <path class="cable cv" d="M96 300 C 150 300, 140 214, 296 214"/>
+          <path class="flow cv"  d="M96 300 C 150 300, 140 214, 296 214"/>
+          <!-- osc -> filter in (audio) -->
+          <path class="cable audio" d="M376 100 C 400 100, 270 200, 296 200"/>
+          <path class="flow audio"  d="M376 100 C 400 100, 270 200, 296 200"/>
+          <!-- env -> vca cv -->
+          <path class="cable cv" d="M376 258 C 400 258, 372 322, 396 322"/>
+          <path class="flow cv"  d="M376 258 C 400 258, 372 322, 396 322"/>
+          <!-- filter -> vca in (audio) -->
+          <path class="cable audio" d="M376 208 C 420 208, 356 308, 396 308"/>
+          <path class="flow audio"  d="M376 208 C 420 208, 356 308, 396 308"/>
+          <!-- vca -> out (audio) -->
+          <path class="cable audio" d="M456 315 C 480 315, 470 370, 336 370 C 300 370, 310 340, 296 340" opacity=".55"/>
+          <!-- seq gate -> led -->
+          <path class="cable gate" d="M236 142 C 470 142, 400 248, 434 248" opacity=".7"/>
+
+          <!-- nodes -->
+          <g transform="translate(36 70)">
+            <rect class="node" width="60" height="40" rx="5"/><rect class="head" width="60" height="14" rx="5"/><rect class="head" y="8" width="60" height="6"/>
+            <text class="label" x="6" y="10">CLOCK</text><text class="sub" x="6" y="30">120 bpm</text>
+            <circle class="sock clock" cx="60" cy="20" r="3.2"/>
+          </g>
+          <g transform="translate(156 108)">
+            <rect class="node" width="80" height="48" rx="5"/><rect class="head" width="80" height="14" rx="5"/><rect class="head" y="8" width="80" height="6"/>
+            <text class="label" x="6" y="10">STEP SEQ</text><text class="sub" x="6" y="30">8 steps · C minor</text>
+            <circle class="sock clock" cx="0" cy="14" r="3.2"/>
+            <circle class="sock cv" cx="80" cy="20" r="3.2"/><circle class="sock gate" cx="80" cy="34" r="3.2"/>
+          </g>
+          <g transform="translate(296 82)">
+            <rect class="node" width="80" height="40" rx="5"/><rect class="head" width="80" height="14" rx="5"/><rect class="head" y="8" width="80" height="6"/>
+            <text class="label" x="6" y="10">OSCILLATOR</text><text class="sub" x="6" y="30">saw · 110 Hz</text>
+            <circle class="sock cv" cx="0" cy="18" r="3.2"/><circle class="sock audio" cx="80" cy="18" r="3.2"/>
+          </g>
+          <g transform="translate(36 282)">
+            <rect class="node" width="60" height="36" rx="5"/><rect class="head" width="60" height="14" rx="5"/><rect class="head" y="8" width="60" height="6"/>
+            <text class="label" x="6" y="10">LFO</text><text class="sub" x="6" y="28">0.3 Hz</text>
+            <circle class="sock cv" cx="60" cy="18" r="3.2"/>
+          </g>
+          <g transform="translate(296 186)">
+            <rect class="node" width="80" height="44" rx="5"/><rect class="head" width="80" height="14" rx="5"/><rect class="head" y="8" width="80" height="6"/>
+            <text class="label" x="6" y="10">FILTER SVF</text><text class="sub" x="6" y="30">lp · res 0.4</text>
+            <circle class="sock audio" cx="0" cy="14" r="3.2"/><circle class="sock cv" cx="0" cy="28" r="3.2"/><circle class="sock audio" cx="80" cy="22" r="3.2"/>
+          </g>
+          <g transform="translate(296 240)">
+            <rect class="node" width="80" height="36" rx="5"/><rect class="head" width="80" height="14" rx="5"/><rect class="head" y="8" width="80" height="6"/>
+            <text class="label" x="6" y="10">ADSR</text><text class="sub" x="6" y="28">2 · 180 · .6 · 400</text>
+            <circle class="sock gate" cx="0" cy="18" r="3.2"/><circle class="sock cv" cx="80" cy="18" r="3.2"/>
+          </g>
+          <g transform="translate(396 296)">
+            <rect class="node" width="60" height="36" rx="5"/><rect class="head" width="60" height="14" rx="5"/><rect class="head" y="8" width="60" height="6"/>
+            <text class="label" x="6" y="10">VCA</text>
+            <circle class="sock audio" cx="0" cy="12" r="3.2"/><circle class="sock cv" cx="0" cy="26" r="3.2"/><circle class="sock audio" cx="60" cy="19" r="3.2"/>
+          </g>
+          <g transform="translate(296 326)">
+            <rect class="node" width="60" height="30" rx="5"/><rect class="head" width="60" height="14" rx="5"/><rect class="head" y="8" width="60" height="6"/>
+            <text class="label" x="6" y="10">OUTPUT</text>
+            <circle class="sock audio" cx="0" cy="14" r="3.2"/>
+          </g>
+          <!-- scope node: canvas overlays its body -->
+          <g transform="translate(296 128)">
+            <rect class="node" width="180" height="50" rx="5"/><rect class="head" width="180" height="14" rx="5"/><rect class="head" y="8" width="180" height="6"/>
+            <text class="label" x="6" y="10">SCOPE</text>
+            <circle class="sock audio" cx="0" cy="34" r="3.2"/>
+          </g>
+          <path class="cable audio" d="M376 208 C 420 208, 250 162, 296 162" opacity=".55"/>
+          <!-- led node -->
+          <g transform="translate(434 234)">
+            <rect class="node" width="42" height="28" rx="5"/><rect class="head" width="42" height="14" rx="5"/><rect class="head" y="8" width="42" height="6"/>
+            <text class="label" x="6" y="10">LED</text>
+            <circle class="sock gate" cx="0" cy="14" r="3.2"/>
+          </g>
+        </svg>
+        <canvas class="scope" width="300" height="72" aria-hidden="true"></canvas>
+        <span class="led" aria-hidden="true"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="loop">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow clock">The loop</p>
+        <h2>Five steps, one window, no exporting.</h2>
+        <p>Nothing here needs a second tool. The compilers are the only thing not in the box, and the app installs the libraries and tells you exactly which compiler is missing and how to get it.</p>
+      </div>
+      <div class="loop">
+        <div class="step" style="--c: var(--audio)"><span class="n">01</span><h3>Patch</h3><p>95 node kinds — oscillators to granulators, sequencers to state machines, an OLED with an in-node display designer, a Code node for the rest.</p></div>
+        <div class="step" style="--c: var(--cv)"><span class="n">02</span><h3>Listen</h3><p>Every node has a WebAudio twin. Press Space, turn a knob, hear it. Scope, VU and spectrum draw live inside the node.</p></div>
+        <div class="step" style="--c: var(--gate)"><span class="n">03</span><h3>Wire</h3><p>Your board, drawn to scale. Drop a pot on a pin; a knob node appears in the patch, already bound. Delete either; both go.</p></div>
+        <div class="step" style="--c: var(--clock)"><span class="n">04</span><h3>Build</h3><p>libDaisy/DaisySP for the Seed, PlatformIO for the ESP32s. Live build log, generated code view with per-node provenance.</p></div>
+        <div class="step" style="--c: var(--audio)"><span class="n">05</span><h3>Flash</h3><p>DFU or serial, from the same button. Serial monitor for what comes back. Presets and samples ride along in the firmware.</p></div>
+      </div>
+
+      <div class="shots">
+        <figure><img src="img/hardware-view.png" alt="The Hardware view: a Daisy Seed drawn to scale with pots, an OLED and jacks bound to pins" loading="lazy" onerror="this.parentElement.classList.add('missing')"><figcaption>Hardware — the board, the pins, the parts.</figcaption></figure>
+        <figure><img src="img/perform-view.png" alt="The Perform view: the finished enclosure with knobs, LEDs and an OLED, playable" loading="lazy" onerror="this.parentElement.classList.add('missing')"><figcaption>Perform — the box you would hold.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="parity">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow audio">Parity</p>
+        <h2>The preview is the thing you are previewing.</h2>
+        <p>An emulator that sounds different from the device is worse than no emulator: you tune against it and then blame the oscillator. So the two halves are compared, not assumed.</p>
+      </div>
+      <div class="two">
+        <div class="card">
+          <p class="eyebrow">In the app</p>
+          <h3>One worklet per node</h3>
+          <p>Faithful ports of the DaisySP modules — including the parts where a setter quietly rescales its argument. Sixteen divergences were found and fixed this way; several were audible bugs on hardware (a phaser that clipped, a tone knob that did nothing once flashed).</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">On the device</p>
+          <h3>One emitter per node, per board</h3>
+          <p>The same patch is compiled with the real toolchain, run on the host against a stubbed board, and its waveform is compared with the emulator's — level and shape, every gate input driven, reset and clock both. Structural nodes (subpatch, poly) are flattened before either side sees them, so nesting is bit-identical to the flat patch.</p>
+        </div>
+      </div>
+      <div class="checks" style="margin-top:14px">
+        <div class="check"><span class="k">test:codegen</span><p>Every example × every board, generated C++ diffed against a checked-in copy.</p></div>
+        <div class="check"><span class="k">test:contract</span><p>A kind that claims a board must have a real emitter there; every declared output produced at block scope; boards agree.</p></div>
+        <div class="check"><span class="k">test:features</span><p>Does the feature work: voices expand, presets reach the firmware, samples land in flash, save→load is a fixed point, the assistant refuses bad edits.</p></div>
+        <div class="check"><span class="k">test:compile</span><p>Per-node <code>make</code> / <code>pio run</code> for all four boards.</p></div>
+        <div class="check"><span class="k">test:audio</span><p>The one that listens.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="boards">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow gate">Boards</p>
+        <h2>One graph, four boards.</h2>
+        <p>The palette greys out what the selected board cannot run, and says why. Switching board keeps your components and flags any pin that does not exist on the new one.</p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Board</th><th>Audio</th><th>Native kinds</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Daisy Seed</td><td>onboard codec</td><td class="num">94 / 95</td><td>The reference target. First run clones and builds libDaisy + DaisySP.</td></tr>
+            <tr><td>ESP32-S3 DevKitC</td><td>I²S DAC — PCM5102A, MAX98357A</td><td class="num">91 / 95</td><td><code>granulator</code> runs with a shorter buffer without PSRAM; <code>expression</code> and the I²S pass-through kinds are stubs.</td></tr>
+            <tr><td>ESP32-S3 SuperMini</td><td>I²S DAC</td><td class="num">91 / 95</td><td>As DevKitC. Pinout provisional — confirm against your board.</td></tr>
+            <tr><td>ESP32-C3 SuperMini</td><td>I²S DAC</td><td class="num">88 / 95</td><td>As above, minus USB-MIDI: RISC-V has no TinyUSB device stack.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow cv">Download</p>
+        <h2>Beta builds, straight off CI.</h2>
+        <p>Unsigned everywhere for now — the OS will ask once. Linux is the most travelled. Compilers are not bundled; the app tells you what it needs, per board, and where to get it.</p>
+      </div>
+      <div class="dl">
+        <div class="card">
+          <h3>Linux</h3>
+          <p>AppImage, x64 and arm64. <code>chmod +x</code>, run.</p>
+          <p class="small">Seed flashing needs a udev rule — it is in the guide and in the flash log when it fails.</p>
+          <a class="btn" href="https://github.com/willbearfruits/daisypatcher/releases/latest">AppImage</a>
+        </div>
+        <div class="card">
+          <h3>Windows</h3>
+          <p>NSIS installer or portable exe, x64.</p>
+          <p class="small">SmartScreen: <em>More info → Run anyway</em>. The Daisy Toolchain installer brings gcc, make and dfu-util.</p>
+          <a class="btn" href="https://github.com/willbearfruits/daisypatcher/releases/latest">Installer</a>
+        </div>
+        <div class="card">
+          <h3>macOS</h3>
+          <p>dmg, Intel and Apple Silicon.</p>
+          <p class="small">Unsigned: right-click → Open the first time. Auto-update is off on macOS until builds are signed.</p>
+          <a class="btn" href="https://github.com/willbearfruits/daisypatcher/releases/latest">DMG</a>
+        </div>
+      </div>
+      <p style="margin-top:22px;color:var(--muted)">Or run from source: <code>git clone https://github.com/willbearfruits/daisypatcher && cd daisypatcher && npm install && npm run dev</code> — Node 22+.</p>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow cv">Your data</p>
+        <h2>Nothing phones home.</h2>
+      </div>
+      <div class="privacy">
+        <p><strong>No telemetry.</strong> The app talks to the network for three things only: the one-time SDK clone from GitHub, the update check against GitHub Releases (Linux and Windows), and — if you use it — the assistant.</p>
+        <p><strong>The assistant is opt-in</strong> and off until you open it. When you send it a request, the current patch (node kinds, parameters, connections — not your samples, not your files) and your message go to the provider you picked. <strong>Ollama</strong>, the default, is local: nothing leaves your machine. <strong>Anthropic</strong> or <strong>OpenAI</strong> means their API over HTTPS; your key lives in the app's config folder, readable only by your user, and never enters the window.</p>
+        <p>Patches are files you own. <code>.dpatch</code> is plain JSON.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Daisypatcher · <a href="https://github.com/willbearfruits/daisypatcher/blob/main/LICENSE">AGPL-3.0-or-later</a></span>
+    <a href="https://github.com/willbearfruits/daisypatcher/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/willbearfruits/daisypatcher/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/willbearfruits/daisypatcher/issues">Issues</a>
+    <span class="sp"></span>
+    <span>Not affiliated with Electro-Smith or Espressif. Daisy is a trademark of Electro-Smith.</span>
+  </div>
+</footer>
+
+<script>
+  // The scope in the hero: a filtered saw with a slow LFO on the cutoff,
+  // drawn on a canvas overlaid on the SCOPE node. Purely decorative;
+  // frozen under reduced-motion.
+  (function () {
+    var c = document.querySelector('.patch .scope');
+    if (!c) return;
+    var ctx = c.getContext('2d');
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var t = 0;
+    function frame() {
+      var w = c.width, h = c.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+      var lfo = 0.5 + 0.5 * Math.sin(t * 0.9);
+      var harm = 2 + Math.round(lfo * 9);
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = 'rgba(34,211,238,0.6)';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      for (var x = 0; x < w; x++) {
+        var ph = (x / w) * Math.PI * 2 * 3 + t * 6;
+        var y = 0;
+        for (var k = 1; k <= harm; k++) y += Math.sin(ph * k) / k;
+        y *= 0.55;
+        var py = h / 2 - y * (h * 0.36);
+        if (x === 0) ctx.moveTo(x, py); else ctx.lineTo(x, py);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      if (!reduce) { t += 0.016; requestAnimationFrame(frame); }
+    }
+    frame();
+  })();
+</script>
+</body>
+</html>

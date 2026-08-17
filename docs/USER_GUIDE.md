@@ -115,6 +115,8 @@ It never writes code. It edits the graph, so everything it makes can be heard in
 
 Provider and model are under **settings** in the panel. **Ollama** (local, no key) is the default; it needs a model pulled first — the panel tells you which. Anthropic and OpenAI keys are stored in your config folder, readable only by you, and never enter the app window.
 
+**What is sent.** When you send a request, the current patch — node kinds, parameters and connections; not your samples, not your files — and your message go to the provider you chose. With Ollama that stays on your machine. With a cloud provider it goes to their API over HTTPS. Nothing is sent until you press Send, and nothing else in the app talks to the network except the update check and the one-time SDK download.
+
 ## Files
 
 - **`.dpatch`** is the patch: nodes, cables, hardware layout, presets, and window layout. It is JSON; you can read it.

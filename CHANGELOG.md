@@ -7,9 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Planned for v0.5: MIDI learn, Silkscreen mode + drill-template export, patch
-bank / snapshots, recording emulator output to .wav, ESP32 I2S MCLK
-pin-config fix. See `V0_5_PLAN.md`.
+Direction: MIDI learn, recording the emulator to `.wav`, tree-wide presets
+(nodes inside subpatches), Silkscreen mode + drill-template export. See
+`V0_5_PLAN.md` and `V2_PLAN.md`.
+
+## [0.5.3] - 2026-08-17
+
+First public beta.
+
+### Added
+- **CI and releases.** GitHub Actions runs the full gate (typecheck, codegen snapshots, cross-target contract, feature tests, production build) on every push; a `v*` tag builds Linux AppImage (x64, arm64), Windows NSIS + portable, and an unsigned macOS dmg (Intel, Apple Silicon), and publishes them to a draft release with the updater manifests.
+- **`.dpatch` round-trip test** in `test:features`: a state with a subpatch, poly, hardware + perform placement, presets, a collapsed node and non-default canvas prefs is serialised the way Save does, parsed and applied the way Open does, and deep-compared; save→load→save must be a fixed point.
+- **Crash screen.** A render error anywhere in the window now lands on a screen whose first button is *Save patch as…* against the intact store, then *Reload* and *Report this* (pre-fills an issue with the error).
+- **Window position and size persist** across launches, and are only restored if they still land on a connected display.
+- **First-run guidance.** Every "not found on PATH" message now says how to install the tool on your OS (apt / brew / xcode-select / Daisy Toolchain + Zadig). The SDK installer checks for git, `arm-none-eabi-gcc` and `make` *before* cloning 50 MB.
+- macOS/Linux GUI launches get the usual tool directories appended to PATH (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.platformio/penv/bin`), so an app opened from Finder or a launcher stops reporting every tool missing.
+- A real app icon; `package.json` metadata (homepage, repository, bugs, keywords); `CONTRIBUTING.md`; a landing page for GitHub Pages.
+
+### Fixed
+- Canvas preferences (`gridShow`, `gridSnap`, `gridSize`, `marqueeSelect`) and the code panel height were written by every save and dropped by every load — snap-to-grid came back on each reopen.
+- Presets captured inside a subpatch, or captured before nodes were grouped into one, were emptied on reopen: pruning compared against the root graph only. Presets now prune against every node id in the tree.
+- `npm ci` failed on a clean checkout (electron-vite 2 declared a peer on vite ≤5 while the project is on vite 6). electron-vite bumped to 3.1.
+
+### Changed
+- `npm run test` now includes `test:features`.
+- The auto-updater is disabled on macOS: builds are unsigned and Squirrel refuses to install an unsigned bundle, so rather than fail after downloading it does not offer.
+
+## [0.5.2] - 2026-08-16
+
+### Added
+- **In-app user guide** under Help → Daisypatcher Guide (F1): getting started, the three views, build and flash, presets, samples, subpatches and poly, the logic layer, the Code node, the assistant, files, shortcuts, troubleshooting. Rendered by a small fixed-grammar Markdown renderer (no HTML pass-through — the CSP would not allow it and neither should a guide).
+- Help menu links that go somewhere: libDaisy docs, DaisySP reference, the Daisy wiki, Report an Issue.
+
+### Fixed
+- Menu items could not be activated from the keyboard (Enter on a highlighted item was reported by GTK as an accelerator and refused).
+- Opening an external link could take the whole app down when the desktop's `kde-open` crashed. Links now open through a detached process (`gio open` first on Linux) so a broken opener cannot reach Electron.
+
+## [0.5.1] - 2026-08-16
+
+### Fixed
+- Opening a patch while another was open left the first patch's cables frozen on screen, pointing at nodes that no longer existed. The editor diffed connections by id alone, and every bundled example reused `c1…cN`; the diff now compares both endpoints too.
+
+## [0.5.0] - 2026-08-16
+
+The v0.5 milestone: **feels like an instrument, ships like a product.**
+
+### Added
+- **Subpatches**, flattened at the boundary — nothing downstream knows nesting exists. Collapse a selection (Ctrl+G), double-click to go inside, Esc to come out; the whole patch keeps playing while you are in.
+- **Polyphony**: `poly` runs a body N times and sums the voices; `voice_id` gives each copy its number so voices can detune.
+- **Presets**, capture / recall / morph, and on the device: they compile into the same mutable param globals the menu system uses, fired by a patchable `preset_recall`.
+- **Samples** compiled into flash as `static const int16_t`; content-addressed library; decoded in the renderer so one codec set covers every container; 30 s cap enforced at import.
+- **Logic layer** — `logic`, `toggle`, `counter`, `timer` (delay / pulse / gate-off = debounce), `state_machine`, `select`, `edge`. State is a signal.
+- **Code node**: a small C-shaped language, parsed once, compiled to C++ for the device and to a closure tree for the emulator, so the two cannot drift.
+- **Assistant** that edits the graph and never writes code — a closed set of operations validated against the node catalog before anything is applied, all-or-nothing, one undo entry. Ollama by default; Anthropic / OpenAI with a key kept in the main process.
+- **Application menu** (File / Edit / View / Transport / Help), Open Recent, Open Example…, Preferences, Keyboard Shortcuts, About; the assistant and the generated-code view have top-bar buttons and menu entries.
+- Open a `.dpatch` from the OS: double-click, command line, drag onto the window.
+- Ask before closing with unsaved work: Save / Don't Save / Cancel. Live window title with a dirty marker.
+- Generated-code view with per-node provenance highlighting; Perform surface arrangement separate from panel position; canvas marquee select, grid and snap.
+- Bundled example patches (`File → Open Example…`).
+- Test layers: `test:contract` (cross-target emitter contract, 90 kinds × 4 boards), `test:audio` (emulator vs host-compiled firmware, waveform compared, every gate input driven), `test:features` (behavioural).
+
+### Fixed
+- Sixteen emulator/firmware divergences, most from one cause: DaisySP setters rescale their arguments (`SetDecay` is `x*0.1-0.1`), so ports that stored what the caller passed modelled a different instrument. Real device defects this surfaced: phaser clipped at 1.59 on hardware; `overdrive.tone` was never emitted; `karplus` was excited by one sample instead of a noise burst; `dust` fired one sample; `stereo_widener` had no mid/side stage on Daisy; `formant` ran three different filters on three targets; `euclidean` / `step_seq` treated reset and clock as mutually exclusive in the app but not on the device; `arp` never restarted on a new gate.
+- Ctrl+Shift+K (assistant) was unreachable — shadowed by the Ctrl+K palette.
+- Ctrl+S opened the Save dialog every time even with a file open.
+- Open… had no discard-unsaved-changes guard; opening a patch left the camera wherever it was.
+- The top bar overlapped at the default window width; minimum width raised to what the layout can honour.
+- A dead GPU process, a crashed renderer, or an unhandled main-process error each took the app and any unsaved patch with it.
+- Hardware components loaded from older files with `config: {}` showed an OLED as 0×0; defaults are backfilled on load.
+- Clocked preset recalls flooded the undo history; graph-driven recalls are silent.
+- 32 phantom `/dev/ttyS*` ports in the serial-port list.
+- Compiler warnings for unused output sockets on every build.
 
 ## [0.4.2] - 2026-07-14
 

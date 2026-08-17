@@ -45,9 +45,35 @@ MIDI learn: emulator-first ({cc,channel} → component binding stored in the
 patch), firmware CC emission as fast-follow. Mockups:
 https://claude.ai/code/artifact/7ee30110-13fd-4f49-b944-d2a0c26d55a9
 
+## Landed 2026-08-16/17 (v0.5.0 – v0.5.3)
+- [x] Subpatches, poly, presets (app + device), samples, logic layer,
+      Code node, assistant — see CHANGELOG 0.5.0
+- [x] Emulator/firmware parity: `test:audio` green on every kind
+- [x] Application menu, Open Recent, examples picker, close guard, OS file
+      open, in-app guide, crash screen, window state
+- [x] `.dpatch` round-trip test; the three data-loss bugs it found fixed
+- [x] CI (test gate on push) + release workflow (tag → AppImage/NSIS/dmg)
+- [x] Real app icon, CHANGELOG, CONTRIBUTING, README, landing page
+
+## Next in line after the public beta
+- [ ] **Tree-wide presets.** Today a preset captures the level you are
+      looking at and only top-level params reach the device. Someone who
+      builds a voice as a subpatch and captures at the root gets a preset
+      that does nothing useful. Design: key inner nodes by their flatten
+      path (`sub/osc`, `poly/osc` → every voice), capture from the root,
+      recall via a `setParamAt(path)` that rewrites the container body,
+      codegen expands `poly/x` to `poly/v{k}/x` columns.
+- [ ] MIDI learn (emulator-first)
+- [ ] Recording emulator output to .wav
+- [ ] Silkscreen mode + drill-template export
+- [ ] ESP32-S3 SuperMini pinout confirmed against a physical board
+- [ ] Code signing (Windows cert, Apple developer account) — unblocks the
+      macOS updater and removes the SmartScreen / Gatekeeper prompts
+
 ## Release checklist (from the 0.4.1 audit)
-- [ ] Commit + tag (user drives all commits)
+- [x] Commit + tag
 - [ ] GitHub repo public + first release with latest.yml (updater is dead
-      until then)
-- [ ] CHANGELOG.md
-- [ ] Multi-size Windows .ico
+      until then) — release.yml does the build; flip visibility, push tag,
+      publish the draft
+- [x] CHANGELOG.md
+- [x] Multi-size Windows .ico
