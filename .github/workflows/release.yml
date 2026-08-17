@@ -1,0 +1,87 @@
+# Cut a release: push a tag like v0.5.3 and this builds every installer and
+# attaches them to the GitHub Release for that tag, together with the
+# `latest*.yml` manifests the in-app updater reads.
+#
+#   git tag v0.5.3 && git push origin v0.5.3
+#
+# electron-builder creates the release if it does not exist and appends to
+# it if it does, so the three OS jobs can publish independently. The
+# release is created as a DRAFT (see `publish` step) — check the artifacts,
+# write the notes, then click Publish; only a published release is seen by
+# the updater.
+#
+# Linux builds AppImage for x64 and arm64 (a Pi 5 or an ARM laptop can run
+# the app; the Daisy toolchain exists there too). Windows builds the NSIS
+# installer and a portable exe. macOS builds an UNSIGNED dmg for both
+# architectures — Gatekeeper will ask the user to right-click → Open the
+# first time, and the in-app updater is disabled on macOS for that reason.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux (AppImage x64 + arm64)
+            args: --linux
+          - os: windows-latest
+            name: Windows (NSIS + portable)
+            args: --win
+          - os: macos-latest
+            name: macOS (dmg x64 + arm64, unsigned)
+            args: --mac
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Gate
+        run: npm run test
+
+      - name: Build bundles
+        run: npm run build:worklets && npx electron-vite build
+
+      # `--publish always` uploads to the release for this tag. GITHUB_TOKEN
+      # is enough — no personal token needed — because the workflow has
+      # `contents: write`.
+      - name: Package and publish
+        run: npx electron-builder ${{ matrix.args }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # electron-builder publishes drafts unless told otherwise; keep it
+          # a draft so the release notes get written before anyone sees it.
+          EP_DRAFT: true
+          # No code signing on any platform yet. Without these, the mac and
+          # windows jobs try to find certificates and fail.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Keep the artifacts on the run too
+        uses: actions/upload-artifact@v4
+        with:
+          name: daisypatcher-${{ matrix.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/latest*.yml
+          if-no-files-found: warn

@@ -1,0 +1,45 @@
+# Runs the same gate as `npm run test` locally: typecheck (main + renderer),
+# codegen snapshots for every fixture × every board, the cross-target
+# emitter contract, and the behavioural feature tests. No compiler, no
+# device — the compile and audio-parity layers need the ARM toolchain and
+# libDaisy clones and stay local for now.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck · snapshots · contract · features
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # serialport is a native module; its prebuilt binaries cover linux-x64
+      # so this is a plain install with no toolchain.
+      - name: Install
+        run: npm ci
+
+      - name: Build worklets
+        run: npm run build:worklets
+
+      - name: Test
+        run: npm run test
+
+      # Prove the three bundles (main, preload, renderer) still build — the
+      # renderer's CSP and asset rules only bite in a production build.
+      - name: Build
+        run: npx electron-vite build

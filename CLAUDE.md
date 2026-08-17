@@ -15,12 +15,12 @@ npm run typecheck      # tsc --noEmit against both tsconfigs (node + web, run bo
 npm run typecheck:node # electron main + preload only
 npm run typecheck:web  # renderer only
 npm run build:worklets # compiles src/audio/worklets/*.worklet.ts → *.worklet.js via esbuild
-npm run test           # typecheck + snapshots + cross-target contract (the pre-commit gate)
+npm run test           # typecheck + snapshots + cross-target contract + features (the pre-commit gate; CI runs the same)
 npm run test:codegen   # codegen snapshot tests (see below); --update rewrites, --only patch1,patch2 filters
 npm run test:contract  # cross-target emitter contract — no compiler needed, seconds to run
 npm run test:compile   # REAL per-node compiles for all four boards; --targets/--only/--clean
 npm run test:audio     # does the emulator SOUND like the firmware? --only/--seconds/--write-wav
-npm run test:features  # behavioural tests: poly, presets-on-device, samples, logic, assistant
+npm run test:features  # behavioural tests: poly, presets-on-device, samples, logic, sync, .dpatch round-trip, assistant
 npm run dist:linux     # AppImage x64+arm64 via electron-builder (flatpak dropped — sandbox can't reach host toolchains)
 npm run dist:win       # NSIS installer + portable exe
 npm run publish        # build + upload to GitHub Releases (feeds the auto-updater)

@@ -51,7 +51,7 @@
     "test:features": "node scripts/feature-tests.mjs",
     "examples": "node scripts/build-examples.mjs",
     "examples:check": "node scripts/build-examples.mjs --check",
-    "test": "npm run typecheck && npm run test:codegen && npm run test:contract",
+    "test": "npm run typecheck && npm run test:codegen && npm run test:contract && npm run test:features",
     "dist": "npm run build:worklets && electron-vite build && electron-builder",
     "dist:linux": "npm run build:worklets && electron-vite build && electron-builder --linux",
     "dist:win": "npm run build:worklets && electron-vite build && electron-builder --win",
@@ -86,6 +86,10 @@
           "*.dpatch",
           "README.md"
         ]
+      },
+      {
+        "from": "build-resources/icon.png",
+        "to": "icon.png"
       }
     ],
     "linux": {
@@ -176,7 +180,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
     "electron-builder": "^26.8.1",
-    "electron-vite": "^2.3.0",
+    "electron-vite": "^3.1.0",
     "esbuild": "^0.28.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

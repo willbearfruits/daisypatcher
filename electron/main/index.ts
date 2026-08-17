@@ -664,8 +664,17 @@ function createWindow(): void {
     minWidth: MIN_W,
     minHeight: MIN_H
   })
+  /*
+   * Window icon for Linux WMs / taskbars (macOS uses the bundle icon,
+   * Windows the exe resource). Packaged: shipped as an extraResource;
+   * dev: straight from the repo.
+   */
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'icon.png')
+    : join(app.getAppPath(), 'build-resources', 'icon.png')
   const win = new BrowserWindow({
     ...restored.bounds,
+    ...(existsSync(iconPath) ? { icon: iconPath } : {}),
     /*
      * 1360, not 1100: the top bar carries three view tabs, four boards, a
      * filename, flash mode and eight controls, and below ~1350px they
