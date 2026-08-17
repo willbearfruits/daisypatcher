@@ -24,9 +24,9 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const ROOT = path.resolve(new URL('..', import.meta.url).pathname)
+const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const require_ = createRequire(import.meta.url)
 const esbuild = require_(path.join(ROOT, 'node_modules/esbuild'))
 

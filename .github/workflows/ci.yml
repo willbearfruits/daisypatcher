@@ -33,9 +33,7 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Build worklets
-        run: npm run build:worklets
-
+      # `pretest` compiles the worklets first.
       - name: Test
         run: npm run test
 

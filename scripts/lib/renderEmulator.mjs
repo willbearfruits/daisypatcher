@@ -75,6 +75,15 @@ export async function loadWorklets(workletDir, _registry, sampleRate = 48000) {
   const files = readdirSync(workletDir)
     .filter((f) => f.endsWith('.worklet.js'))
     .sort()
+  if (files.length === 0) {
+    // Rendering with no worklets would be silence for every node, and a
+    // test that compares against silence can pass by accident. It did:
+    // the release workflow ran the gate before `build:worklets` and 100 of
+    // 102 checks went green with nothing loaded.
+    throw new Error(
+      `no compiled worklets in ${workletDir} — run \`npm run build:worklets\` first`
+    )
+  }
   for (const f of files) {
     await import(pathToFileURL(path.join(workletDir, f)).href)
   }
@@ -128,7 +137,12 @@ export async function renderGraph(opts) {
     const entry = registry[node.kind]
     if (!def || !entry) continue
     const Ctor = classes.get(entry.processorName)
-    if (!Ctor) continue
+    if (!Ctor) {
+      throw new Error(
+        `worklet ${entry.processorName} for kind '${node.kind}' is not compiled — ` +
+          `run \`npm run build:worklets\` (a missing worklet renders silence, which is not a result)`
+      )
+    }
 
     const proc = new Ctor({})
     const descriptors = Ctor.parameterDescriptors ?? []

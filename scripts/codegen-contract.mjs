@@ -38,8 +38,9 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 
-const PROJECT_ROOT = path.resolve(new URL('..', import.meta.url).pathname)
+const PROJECT_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 
 const args = process.argv.slice(2)
 let onlyFilter = null

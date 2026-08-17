@@ -54,11 +54,13 @@ jobs:
       - name: Install
         run: npm ci
 
+      # `pretest` compiles the worklets; the feature tests render through
+      # them and refuse to run against an empty directory.
       - name: Gate
         run: npm run test
 
       - name: Build bundles
-        run: npm run build:worklets && npx electron-vite build
+        run: npx electron-vite build
 
       # `--publish always` uploads to the release for this tag. GITHUB_TOKEN
       # is enough — no personal token needed — because the workflow has
