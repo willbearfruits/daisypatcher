@@ -303,4 +303,4 @@ Presets reach codegen through `GenerateOptions.presets` because they are store s
 
 ## Memory
 
-Claude's persistent memory lives in `/home/glitches/.claude/projects/-home-glitches-Projects-daisypatcher/memory/`. Read `MEMORY.md` there first — it carries user preferences (delegate aggressively, style-first, fresh-start-over-salvage, in-node visual editors, discoverable modulation on target nodes) and the project roadmap (what's shipped, what's deferred).
+Claude Code keeps per-project notes outside the repo (its auto-memory directory for this project). Read that `MEMORY.md` first when it exists — it carries user preferences (delegate aggressively, style-first, fresh-start-over-salvage, in-node visual editors, discoverable modulation on target nodes) and the project roadmap (what's shipped, what's deferred). Nothing in it is needed to build or run the app; it is working context for the assistant, not documentation.

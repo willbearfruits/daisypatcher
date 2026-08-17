@@ -81,6 +81,51 @@ function whichBin(name: string): Promise<boolean> {
   })
 }
 
+/**
+ * How to get a missing tool, per OS.
+ *
+ * The status list said "arm-none-eabi-gcc not found on PATH" and stopped
+ * — accurate, and useless to someone who has never heard of it. Windows
+ * gets one answer for all three Daisy tools because Electro-Smith ships
+ * them together and hunting them down separately is how you end up with
+ * a make that cannot find its shell.
+ */
+function installHint(tool: 'git' | 'gcc' | 'make' | 'dfu-util' | 'python3'): string {
+  const os = process.platform
+  const DAISY_TOOLCHAIN =
+    'install the Daisy Toolchain (github.com/electro-smith/DaisyToolchain) — it bundles gcc, make and dfu-util'
+  switch (tool) {
+    case 'git':
+      return os === 'win32'
+        ? 'install Git for Windows (git-scm.com or `winget install Git.Git`)'
+        : os === 'darwin'
+          ? 'run `xcode-select --install`'
+          : 'install git with your package manager (`sudo apt install git`)'
+    case 'gcc':
+      return os === 'win32'
+        ? DAISY_TOOLCHAIN
+        : os === 'darwin'
+          ? '`brew install --cask gcc-arm-embedded`'
+          : '`sudo apt install gcc-arm-none-eabi` (Fedora: arm-none-eabi-gcc-cs + arm-none-eabi-newlib; Arch: arm-none-eabi-gcc + arm-none-eabi-newlib)'
+    case 'make':
+      return os === 'win32'
+        ? DAISY_TOOLCHAIN
+        : os === 'darwin'
+          ? 'run `xcode-select --install`'
+          : '`sudo apt install build-essential`'
+    case 'dfu-util':
+      return os === 'win32'
+        ? `${DAISY_TOOLCHAIN}; then run Zadig once to bind WinUSB to the Seed in DFU mode`
+        : os === 'darwin'
+          ? '`brew install dfu-util`'
+          : '`sudo apt install dfu-util`'
+    case 'python3':
+      return os === 'win32'
+        ? 'install Python 3 from python.org and tick "Add to PATH"'
+        : 'install python3 with your package manager'
+  }
+}
+
 export async function getSdkStatus(): Promise<SdkStatus> {
   const [gcc, make, dfuUtil, pio, python3, git] = await Promise.all([
     whichBin('arm-none-eabi-gcc'),
@@ -112,10 +157,10 @@ export async function getSdkStatus(): Promise<SdkStatus> {
     (await exists(join(DAISYSP_PATH, 'DaisySP-LGPL', 'build', 'libdaisysp-lgpl.a')))
 
   const issues: string[] = []
-  if (!git) issues.push('git not found on PATH — required to install the SDK')
-  if (!gcc) issues.push('arm-none-eabi-gcc not found on PATH')
-  if (!make) issues.push('make not found on PATH')
-  if (!dfuUtil) issues.push('dfu-util not found on PATH')
+  if (!git) issues.push(`git not found on PATH — required to install the SDK; ${installHint('git')}`)
+  if (!gcc) issues.push(`arm-none-eabi-gcc not found on PATH — ${installHint('gcc')}`)
+  if (!make) issues.push(`make not found on PATH — ${installHint('make')}`)
+  if (!dfuUtil) issues.push(`dfu-util not found on PATH — needed to flash; ${installHint('dfu-util')}`)
   if (!libDaisyDir) issues.push('libDaisy not cloned')
   if (!daisySPDir) issues.push('DaisySP not cloned')
   if (libDaisyDir && !libDaisyBuilt) issues.push('libDaisy not built')
@@ -124,8 +169,8 @@ export async function getSdkStatus(): Promise<SdkStatus> {
 
   // ESP32 issues are surfaced separately — the renderer picks them up
   // via `esp32Ready` + the filtered-by-keyword "pio" items in `issues`.
-  if (!pio) issues.push('platformio (pio) not found on PATH — run `pip install platformio`')
-  if (!python3) issues.push('python3 not found on PATH')
+  if (!pio) issues.push('platformio (pio) not found on PATH — use the ESP32 installer in the top bar, or `pipx install platformio`')
+  if (!python3) issues.push(`python3 not found on PATH — ${installHint('python3')}`)
 
   const toolchain = { gcc, make, dfuUtil, pio, python3, git }
   const ready =
@@ -279,9 +324,20 @@ async function ensureRepo(
 
 export async function installSdk(emit: (msg: string) => void): Promise<void> {
   // Preflight: a missing git otherwise surfaces as a raw `spawn git ENOENT`
-  // in the install modal.
+  // in the install modal, and a missing compiler surfaces as
+  // `arm-none-eabi-gcc: not found` three minutes and fifty megabytes into
+  // the build. Check everything the build will need BEFORE cloning.
   if (!(await whichBin('git'))) {
-    throw new Error('git not found on PATH — install git, then retry the SDK install')
+    throw new Error(`git not found on PATH — ${installHint('git')}, then retry the SDK install`)
+  }
+  if (!(await whichBin('arm-none-eabi-gcc'))) {
+    throw new Error(
+      `arm-none-eabi-gcc not found on PATH — the SDK cannot be built without the ARM compiler. ` +
+        `${installHint('gcc')}, restart Daisypatcher, then retry.`
+    )
+  }
+  if (!(await whichBin('make'))) {
+    throw new Error(`make not found on PATH — ${installHint('make')}, restart Daisypatcher, then retry`)
   }
 
   await mkdir(SDK_ROOT, { recursive: true })

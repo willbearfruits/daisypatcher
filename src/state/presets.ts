@@ -22,6 +22,7 @@
 
 import type { AudioGraph, NodeInstance } from '@/types/graph'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
+import { bodyOf } from './subpatch'
 
 export interface Preset {
   id: string
@@ -150,9 +151,23 @@ export function morphEdits(
   return out
 }
 
+/**
+ * Every node id in the tree — root plus every subpatch / poly body, at any
+ * depth. Presets capture and recall against whichever level is OPEN, so a
+ * preset taken inside a subpatch names inner ids; pruning against the root
+ * alone emptied those on every reopen (the round-trip test caught it).
+ */
+export function allNodeIds(graph: AudioGraph, into = new Set<string>()): Set<string> {
+  for (const n of graph.nodes) {
+    into.add(n.id)
+    if (n.kind === 'subpatch' || n.kind === 'poly') allNodeIds(bodyOf(n), into)
+  }
+  return into
+}
+
 /** Presets referring to nodes that no longer exist, pruned. */
 export function prunePresets(presets: Preset[], graph: AudioGraph): Preset[] {
-  const live = new Set(graph.nodes.map((n) => n.id))
+  const live = allNodeIds(graph)
   let changed = false
   const next = presets.map((p) => {
     const values: Preset['values'] = {}

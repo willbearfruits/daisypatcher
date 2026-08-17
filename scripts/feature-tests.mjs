@@ -52,7 +52,9 @@ writeFileSync(
     `export { captureFrom } from '${p('src/state/presets')}'`,
     `export * from '${p('src/assistant/editSchema')}'`,
     `export { diffConnections } from '${p('src/editor/sync')}'`,
-    `export { systemPrompt, userPrompt } from '${p('src/assistant/prompt')}'`
+    `export { systemPrompt, userPrompt } from '${p('src/assistant/prompt')}'`,
+    `export { parseDpatch, serializePatch, applyLoadedPatch } from '${p('src/state/patchFile')}'`,
+    `export { useEditorStore, rootGraphOf } from '${p('src/state/store')}'`
   ].join('\n'),
   'utf8'
 )
@@ -65,13 +67,13 @@ await esbuild.build({
   format: 'esm',
   target: 'node20',
   logLevel: 'error',
-  alias: { '@': path.join(ROOT, 'src') },
-  external: ['react', 'react-dom']
+  alias: { '@': path.join(ROOT, 'src') }
 })
 
 const M = await import(pathToFileURL(BUNDLE).href)
 const { NODE_DEFINITIONS, WORKLET_REGISTRY, generateProject, flattenGraph, captureFrom } = M
 const { parseEditPlan, validatePlan, describePlan, systemPrompt, userPrompt, diffConnections } = M
+const { parseDpatch, serializePatch, applyLoadedPatch, useEditorStore, rootGraphOf } = M
 
 const { renderGraph } = await import(pathToFileURL(path.join(ROOT, 'scripts/lib/renderEmulator.mjs')).href)
 
@@ -396,6 +398,148 @@ if (want('sync')) {
   chk('identical lists produce an empty diff', same.added.length === 0 && same.removed.length === 0)
   const fromEmpty = diffConnections([], b)
   chk('first load adds everything', fromEmpty.added.length === 2 && fromEmpty.removed.length === 0)
+}
+
+/* =====================================================================
+ * .dpatch round-trip — does a patch survive its own file format?
+ * ===================================================================== */
+if (want('roundtrip')) {
+  g('roundtrip')
+  /*
+   * Build a deliberately awkward state through the REAL store actions —
+   * a subpatch, a poly with a voice body, hardware with pins and a perform
+   * placement, two presets, a collapsed node, non-default canvas prefs and
+   * flash mode — serialise it exactly as Save does, parse it exactly as
+   * Open does, push it through `loadGraph`, and compare. Every field that
+   * differs is a field a user loses on reopen. Snapshots cannot catch this
+   * (they never load anything back) and neither can the app (the loss is
+   * silent).
+   */
+  const S = useEditorStore
+  S.getState().resetGraph()
+  const st = () => S.getState()
+
+  const osc = st().addNode('oscillator', { x: 100, y: 100 })
+  const filt = st().addNode('filter_svf', { x: 300, y: 100 })
+  const out = st().addNode('audio_output', { x: 500, y: 100 })
+  st().setParam(osc, 'frequency', 330)
+  st().setParam(osc, 'waveform', 'sawtooth')
+  st().connect({ nodeId: osc, socketId: 'out' }, { nodeId: filt, socketId: 'in' })
+  st().connect({ nodeId: filt, socketId: 'lp' }, { nodeId: out, socketId: 'left' })
+
+  // A knob from the patch side (auto-links a component with pins)…
+  const knob = st().addNode('knob_in', { x: 100, y: 300 })
+  st().connect({ nodeId: knob, socketId: 'out' }, { nodeId: filt, socketId: 'cv_frequency' })
+  // …and an LED from the hardware side (auto-links a node).
+  const ledComp = st().addHardware('led', { x: 40, y: 40 })
+  st().renameHardware(ledComp, 'blink')
+  st().setPerformPlacement(ledComp, { x: 12, y: 34, size: 1.5, hidden: false, label: 'GO' })
+
+  // Two presets, one edited afterwards so recall has something to do.
+  const p1 = st().capturePreset('bright')
+  st().setParam(osc, 'frequency', 55)
+  const p2 = st().capturePreset('dark')
+  st().renamePreset(p2, 'sub')
+
+  // Collapse the oscillator + filter into a subpatch, collapse the box.
+  st().select([osc, filt])
+  const sub = st().collapseSelectionToSubpatch()
+  chk('fixture: subpatch created', typeof sub === 'string')
+  if (sub) st().toggleCollapsed(sub)
+
+  // A poly node whose voice body is a real graph.
+  const poly = st().addNode('poly', { x: 100, y: 500 })
+  st().setParam(poly, 'voices', 3)
+
+  st().setCanvasPrefs({ gridSnap: true, gridSize: 25, gridShow: false, marqueeSelect: false })
+  st().setLayout({ paletteW: 301, inspectorW: 333, codePanelH: 222 })
+  st().setDaisyFlashMode('sram')
+
+  const before = st()
+  const env = serializePatch(before, 'roundtrip')
+  const text = JSON.stringify(env, null, 2)
+  chk('the file is plain JSON with the v2 marker', /"dpatch": 2/.test(text))
+  chk('the file has no undefined-shaped holes', !/undefined|NaN/.test(text))
+
+  const parsed = parseDpatch(JSON.parse(text))
+  chk('the file parses', parsed !== null)
+  if (parsed) {
+    const keep = {
+      graph: rootGraphOf(before),
+      hardware: before.hardware,
+      presets: before.presets,
+      layout: before.layout,
+      flash: before.daisyFlashMode
+    }
+    // Reset the store hard, then load the way Open does.
+    S.getState().resetGraph()
+    S.getState().setLayout({ paletteW: 1, gridSnap: false, gridSize: 20, gridShow: true, marqueeSelect: true, codePanelH: 1 })
+    S.getState().setDaisyFlashMode('qspi')
+    applyLoadedPatch(parsed, '/tmp/roundtrip.dpatch', S)
+    const after = st()
+
+    const strip = (o) => JSON.parse(JSON.stringify(o))
+    const same = (a, b) => JSON.stringify(strip(a)) === JSON.stringify(strip(b))
+    const diffKeys = (a, b) => {
+      const ks = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
+      return [...ks].filter((k) => !same(a?.[k], b?.[k]))
+    }
+
+    chk('graph: nodes identical', same(keep.graph.nodes, after.graph.nodes),
+      `differs in nodes: ${keep.graph.nodes.map((n, i) => diffKeys(n, after.graph.nodes[i]).map((k) => `${n.id}.${k}`)).flat().join(', ')}`)
+    chk('graph: connections identical', same(keep.graph.connections, after.graph.connections))
+    chk('graph: subpatch body survives', same(
+      keep.graph.nodes.find((n) => n.id === sub)?.params.graph,
+      after.graph.nodes.find((n) => n.id === sub)?.params.graph))
+    chk('graph: collapsed flag survives', after.graph.nodes.find((n) => n.id === sub)?.collapsed === true)
+    chk('graph: poly voice count survives', after.graph.nodes.find((n) => n.id === poly)?.params.voices === 3)
+    chk('hardware: components identical', same(keep.hardware.components, after.hardware.components),
+      `differs: ${keep.hardware.components.map((c, i) => diffKeys(c, after.hardware.components[i]).map((k) => `${c.id}.${k}`)).flat().join(', ')}`)
+    chk('hardware: board survives', after.hardware.board === keep.hardware.board)
+    chk('hardware: perform placement survives',
+      same(after.hardware.components.find((c) => c.id === ledComp)?.perform,
+           keep.hardware.components.find((c) => c.id === ledComp)?.perform))
+    chk('hardware: pins survive', Object.keys(after.hardware.components.find((c) => c.id === ledComp)?.pins ?? {}).length > 0)
+    chk('hardware: label survives', after.hardware.components.find((c) => c.id === ledComp)?.label === 'blink')
+    chk('binding: node still points at its component',
+      after.graph.nodes.find((n) => n.id === knob)?.params.bindingId === keep.graph.nodes.find((n) => n.id === knob)?.params.bindingId)
+    chk('presets: identical', same(keep.presets, after.presets),
+      `${JSON.stringify(keep.presets).length} vs ${JSON.stringify(after.presets).length} bytes`)
+    chk('presets: two of them, renamed one kept its name', after.presets.length === 2 && after.presets[1].name === 'sub')
+    chk('presets: recall still finds its nodes', (() => {
+      // presets store per-node params; every node id it names must exist
+      const ids = new Set(after.graph.nodes.map((n) => n.id))
+      const inner = new Set()
+      for (const n of after.graph.nodes) if (n.kind === 'subpatch' && typeof n.params.graph === 'string') {
+        for (const m of JSON.parse(n.params.graph).nodes) inner.add(m.id)
+      }
+      return after.presets.every((pr) => Object.keys(pr.params ?? pr.values ?? {}).every((id) => ids.has(id) || inner.has(id)))
+    })())
+    const lk = diffKeys(keep.layout, after.layout)
+    chk('layout: every field survives', lk.length === 0, `lost: ${lk.join(', ')}`)
+    chk('layout: canvas prefs survive', after.layout.gridSnap === true && after.layout.gridSize === 25 && after.layout.gridShow === false && after.layout.marqueeSelect === false)
+    chk('flash mode survives', after.daisyFlashMode === 'sram')
+    chk('filePath is set and the patch is clean', after.filePath === '/tmp/roundtrip.dpatch' && after.isDirty === false)
+    chk('target follows the loaded board', after.target === 'daisy_seed')
+
+    // Second generation: save what we loaded and compare the two files.
+    const env2 = serializePatch(after, 'roundtrip')
+    chk('save→load→save is a fixed point', same(env, env2),
+      `top-level: ${diffKeys(env, env2).join(', ')}`)
+  }
+
+  // Legacy and hostile inputs.
+  const v1 = { nodes: [mk('o', 'oscillator'), mk('x', 'audio_output')], connections: [w('c', 'o', 'out', 'x', 'left')], meta: { name: 'v1', sampleRate: 48000, blockSize: 48 } }
+  const l1 = parseDpatch(v1)
+  chk('v1 bare graph loads with an empty layout', l1 !== null && l1.hardware.components.length === 0 && l1.presets.length === 0)
+  const legacyBoard = parseDpatch({ dpatch: 2, graph: v1, hardware: { board: 'esp32_s3', components: [], meta: { name: 'x' } } })
+  chk("legacy board id 'esp32_s3' is coerced", legacyBoard !== null && legacyBoard.hardware.board !== 'esp32_s3')
+  chk('garbage is rejected, not thrown', parseDpatch('nope') === null && parseDpatch(null) === null && parseDpatch({ dpatch: 2 }) === null && parseDpatch({ graph: { nodes: 'x' } }) === null)
+  const badPresets = parseDpatch({ dpatch: 2, graph: v1, hardware: { board: 'daisy_seed', components: [], meta: { name: 'x' } }, presets: [{ id: 1 }, 'x', null] })
+  chk('malformed presets are dropped, the patch still loads', badPresets !== null && badPresets.presets.length === 0)
+  const badLayout = parseDpatch({ dpatch: 2, graph: v1, hardware: { board: 'daisy_seed', components: [], meta: { name: 'x' } }, layout: { paletteW: 'wide', gridSize: -5, daisyFlashMode: 'floppy' } })
+  chk('malformed layout fields are dropped individually', badLayout !== null && badLayout.layout === undefined)
+  S.getState().resetGraph()
 }
 
 /* =====================================================================

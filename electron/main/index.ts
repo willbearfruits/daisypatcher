@@ -35,6 +35,7 @@ import {
   writeSerial
 } from './serialService'
 import { initAutoUpdater } from './updater'
+import { restoreWindowState, trackWindowState } from './windowState'
 
 const isDev = !app.isPackaged
 
@@ -55,6 +56,35 @@ if (isDev && process.env.DP_CDP_PORT) {
 if (isDev && process.env.DP_USER_DATA) {
   app.setPath('userData', process.env.DP_USER_DATA)
 }
+
+/*
+ * GUI launches do not inherit the shell's PATH. On macOS an app opened from
+ * Finder or the Dock sees `/usr/bin:/bin:/usr/sbin:/sbin` — no Homebrew, no
+ * `~/.local/bin`, no pipx shims — so every toolchain check reports "not
+ * found" on a machine where the tools are installed and work fine in a
+ * terminal. Linux desktop launchers (AppImage double-click, .desktop entry)
+ * usually do inherit a login PATH but not always, and `~/.local/bin` is
+ * exactly where `pip install --user platformio` puts `pio`. Appending the
+ * usual suspects is cheap and only ADDS directories, so nothing that
+ * resolved before resolves differently now.
+ */
+function augmentPath(): void {
+  if (process.platform === 'win32') return
+  const home = process.env.HOME ?? ''
+  const extra = [
+    '/opt/homebrew/bin', // Apple-silicon Homebrew
+    '/usr/local/bin', // Intel Homebrew, most manual installs
+    '/opt/local/bin', // MacPorts
+    home && join(home, '.local', 'bin'), // pip --user, pipx
+    home && join(home, '.platformio', 'penv', 'bin'), // PlatformIO's own venv
+    home && join(home, 'bin')
+  ].filter((p): p is string => Boolean(p))
+  const cur = (process.env.PATH ?? '').split(':').filter(Boolean)
+  const seen = new Set(cur)
+  const add = extra.filter((p) => !seen.has(p) && existsSync(p))
+  if (add.length > 0) process.env.PATH = [...cur, ...add].join(':')
+}
+augmentPath()
 
 const FILE_FILTERS = [
   { name: 'Daisy Patch', extensions: ['dpatch', 'json'] },
@@ -626,9 +656,16 @@ function registerIpcHandlers(): void {
 }
 
 function createWindow(): void {
+  const MIN_W = 1360
+  const MIN_H = 700
+  const restored = restoreWindowState({
+    defaultWidth: 1400,
+    defaultHeight: 900,
+    minWidth: MIN_W,
+    minHeight: MIN_H
+  })
   const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    ...restored.bounds,
     /*
      * 1360, not 1100: the top bar carries three view tabs, four boards, a
      * filename, flash mode and eight controls, and below ~1350px they
@@ -636,8 +673,8 @@ function createWindow(): void {
      * a larger one — the window let you shrink into a state where buttons
      * sat on top of each other and half of them were unclickable.
      */
-    minWidth: 1360,
-    minHeight: 700,
+    minWidth: MIN_W,
+    minHeight: MIN_H,
     show: false,
     /*
      * The menu bar is VISIBLE on Linux and Windows. `autoHideMenuBar: true`
@@ -743,7 +780,10 @@ function createWindow(): void {
     win.webContents.send('app:before-close')
   })
 
+  trackWindowState(win)
+
   win.on('ready-to-show', () => {
+    if (restored.maximized) win.maximize()
     win.show()
     // Pop DevTools open in dev so runtime errors (and main→renderer IPC
     // progress) are immediately visible. Closed on release builds.

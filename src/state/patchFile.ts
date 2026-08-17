@@ -36,7 +36,7 @@ interface DpatchLayoutSection extends Partial<LayoutSizes> {
   daisyFlashMode?: DaisyFlashMode
 }
 
-interface DpatchEnvelope {
+export interface DpatchEnvelope {
   dpatch: 2
   graph: AudioGraph
   hardware: HardwareLayout
@@ -95,6 +95,14 @@ function extractLayout(raw: unknown): DpatchLayoutSection | undefined {
   if (typeof src.inspectorW === 'number') out.inspectorW = src.inspectorW
   if (typeof src.buildLogH === 'number') out.buildLogH = src.buildLogH
   if (typeof src.serialMonitorH === 'number') out.serialMonitorH = src.serialMonitorH
+  if (typeof src.codePanelH === 'number') out.codePanelH = src.codePanelH
+  // Canvas prefs. These were written by every save and dropped by every
+  // load until the round-trip test caught it — snap-to-grid came back on
+  // each time a patch was reopened.
+  if (typeof src.gridShow === 'boolean') out.gridShow = src.gridShow
+  if (typeof src.gridSnap === 'boolean') out.gridSnap = src.gridSnap
+  if (typeof src.gridSize === 'number' && src.gridSize > 0) out.gridSize = src.gridSize
+  if (typeof src.marqueeSelect === 'boolean') out.marqueeSelect = src.marqueeSelect
   if (typeof src.paletteCollapsed === 'boolean') out.paletteCollapsed = src.paletteCollapsed
   if (typeof src.paletteCompact === 'boolean') out.paletteCompact = src.paletteCompact
   if (Array.isArray(src.categoriesCollapsed)) {
@@ -125,7 +133,7 @@ function extractLayout(raw: unknown): DpatchLayoutSection | undefined {
 }
 
 /** Parse a file, handling v1 (bare graph) and v2 (envelope) formats. */
-function parseDpatch(parsed: unknown): {
+export function parseDpatch(parsed: unknown): {
   graph: AudioGraph
   hardware: HardwareLayout
   presets: Preset[]
@@ -187,12 +195,17 @@ export async function savePatchAs(
   return writePatchTo(path, store)
 }
 
-async function writePatchTo(
-  path: string,
-  store: Store
-): Promise<{ saved: boolean; path?: string }> {
-  const s = store.getState()
-  const name = stripExt(basename(path))
+/**
+ * The envelope a save writes, from the store's current state.
+ *
+ * Pure and exported so the round-trip can be tested headlessly: build a
+ * rich state, serialise it here, parse it with `parseDpatch`, and compare
+ * — the one check that proves a patch survives its own file format.
+ */
+export function serializePatch(
+  s: ReturnType<Store['getState']>,
+  name: string
+): DpatchEnvelope {
   /*
    * Save the ROOT patch. `s.graph` is whichever level is open, so saving
    * while inside a subpatch would otherwise write the body out as if it
@@ -204,7 +217,7 @@ async function writePatchTo(
     ...s.hardware,
     meta: { ...s.hardware.meta, name }
   }
-  const envelope: DpatchEnvelope = {
+  return {
     dpatch: 2,
     graph: graphToSave,
     hardware: hardwareToSave,
@@ -215,11 +228,19 @@ async function writePatchTo(
     // intended flash target across saves.
     layout: { ...s.layout, daisyFlashMode: s.daisyFlashMode }
   }
+}
+
+async function writePatchTo(
+  path: string,
+  store: Store
+): Promise<{ saved: boolean; path?: string }> {
+  const s = store.getState()
+  const envelope = serializePatch(s, stripExt(basename(path)))
   try {
     await window.daisy.fs.writeFile(path, JSON.stringify(envelope, null, 2))
     store.setState({
-      graph: graphToSave,
-      hardware: hardwareToSave,
+      graph: envelope.graph,
+      hardware: envelope.hardware,
       filePath: path,
       isDirty: false
     })
@@ -270,6 +291,36 @@ export async function openPatch(
 }
 
 /**
+ * Push a parsed file into the store — the load half of the round-trip.
+ * Split out from `openPatchFromPath` so the headless test can run the
+ * exact code the app runs, not a re-implementation of it.
+ */
+export function applyLoadedPatch(
+  loaded: NonNullable<ReturnType<typeof parseDpatch>>,
+  path: string | null,
+  store: Store = useEditorStore
+): void {
+  const s = store.getState()
+  const name = path ? stripExt(basename(path)) : loaded.graph.meta.name
+  const graph: AudioGraph = {
+    ...loaded.graph,
+    meta: { ...loaded.graph.meta, name }
+  }
+  const hardware: HardwareLayout = {
+    ...loaded.hardware,
+    meta: { ...loaded.hardware.meta, name }
+  }
+  s.loadGraph(graph, path, hardware, loaded.presets)
+  if (loaded.layout) {
+    const { daisyFlashMode, ...layoutRest } = loaded.layout
+    s.setLayout(layoutRest)
+    // Flash-mode lives outside LayoutSizes on the store; apply it
+    // separately so older files that omit the field keep the default.
+    if (daisyFlashMode) s.setDaisyFlashMode(daisyFlashMode)
+  }
+}
+
+/**
  * Load a patch the caller already has a path for — a bundled example, a
  * recent file. Does NOT confirm; the caller decides whether there is
  * anything to protect.
@@ -287,23 +338,7 @@ export async function openPatchFromPath(
       s.setStatus({ kind: 'error', message: 'not a valid patch file' })
       return { loaded: false }
     }
-    const name = stripExt(basename(path))
-    const graph: AudioGraph = {
-      ...loaded.graph,
-      meta: { ...loaded.graph.meta, name }
-    }
-    const hardware: HardwareLayout = {
-      ...loaded.hardware,
-      meta: { ...loaded.hardware.meta, name }
-    }
-    s.loadGraph(graph, path, hardware, loaded.presets)
-    if (loaded.layout) {
-      const { daisyFlashMode, ...layoutRest } = loaded.layout
-      s.setLayout(layoutRest)
-      // Flash-mode lives outside LayoutSizes on the store; apply it
-      // separately so older files that omit the field keep the default.
-      if (daisyFlashMode) s.setDaisyFlashMode(daisyFlashMode)
-    }
+    applyLoadedPatch(loaded, path, store)
     s.setStatus({ kind: 'info', message: `opened ${basename(path)}` })
     noteRecent(path)
     return { loaded: true, path }

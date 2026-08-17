@@ -67,6 +67,8 @@ A preset is every knob and switch in the patch — not the wiring. **+ Capture**
 
 Presets compile into the firmware. To recall them *on the device*, add a **Preset** node and patch a trigger into it — a button, a clock division, anything. In Morph mode its CV input walks between two slots. Only numeric parameters travel to the device; the app warns about the rest.
 
+A preset captures the level you are looking at. Nodes inside a subpatch or a poly voice are not part of a preset taken at the top level — capture while inside the box to preset those — and only top-level parameters reach the device for now.
+
 ## Samples
 
 The **Sample** node plays audio from your library. Select it, click **Import…** in the Inspector, and pick any audio file up to 30 seconds. It is decoded, resampled to the patch's rate, and stored once — importing the same file twice costs nothing.

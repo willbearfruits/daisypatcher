@@ -1,7 +1,35 @@
 {
   "name": "daisypatcher",
   "version": "0.5.2",
-  "description": "Visual node-based patcher for the Electro-Smith Daisy Seed \u2014 emulate, compile, flash.",
+  "description": "Visual node-based patcher for the Electro-Smith Daisy Seed and ESP32-S3/C3 — hear the patch in-app, compile it to firmware, flash the board.",
+  "keywords": [
+    "daisy-seed",
+    "esp32",
+    "esp32-s3",
+    "esp32-c3",
+    "dsp",
+    "synthesizer",
+    "eurorack",
+    "node-editor",
+    "patcher",
+    "firmware",
+    "daisysp",
+    "libdaisy",
+    "platformio",
+    "electron"
+  ],
+  "author": {
+    "name": "willbearfruits",
+    "email": "willbear_fruits@proton.me"
+  },
+  "homepage": "https://willbearfruits.github.io/daisypatcher/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/willbearfruits/daisypatcher.git"
+  },
+  "bugs": {
+    "url": "https://github.com/willbearfruits/daisypatcher/issues"
+  },
   "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
@@ -71,8 +99,8 @@
         }
       ],
       "category": "AudioVideo;Audio",
-      "synopsis": "Visual node-based patcher for Daisy Seed and ESP32-S3",
-      "description": "Patch DSP graphs visually, emulate them in-app, compile and flash to Electro-Smith Daisy Seed or ESP32-S3.",
+      "synopsis": "Visual node-based patcher for Daisy Seed and ESP32-S3/C3",
+      "description": "Patch DSP graphs visually, hear them in-app, compile and flash to Electro-Smith Daisy Seed or ESP32-S3/C3.",
       "maintainer": "willbearfruits <willbear_fruits@proton.me>"
     },
     "win": {
@@ -90,6 +118,20 @@
           ]
         }
       ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.music",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "nsis": {
       "oneClick": false,

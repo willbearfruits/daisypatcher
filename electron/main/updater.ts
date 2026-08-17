@@ -84,6 +84,15 @@ export function initAutoUpdater(win: BrowserWindow): void {
   // Belt-and-suspenders: we also check at the call site in index.ts, but if
   // someone ever calls this directly we refuse to proceed in dev.
   if (!app.isPackaged) return
+  /*
+   * macOS updates require a code-signed app — Squirrel.Mac refuses to
+   * install an unsigned bundle, and electron-updater surfaces that as a
+   * cryptic "code signature" error AFTER downloading. The mac build is
+   * unsigned for now (no Apple developer account), so rather than fail
+   * late every six hours, do not offer updates there at all; the release
+   * page is one click away under Help. Remove this once builds are signed.
+   */
+  if (process.platform === 'darwin') return
 
   // No surprise downloads — we prompt the user explicitly before pulling
   // bytes so people on metered connections don't get ambushed. Install on
