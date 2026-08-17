@@ -289,6 +289,21 @@ Presets reach codegen through `GenerateOptions.presets` because they are store s
 - **AudioEngine context doesn't cross Rete's `createRoot`.** Rete mounts each node / connection / socket in its own React root via `createRoot`. React Context from the main app tree (including `AudioEngineProvider`) does NOT traverse that boundary. `useAudioEngine()` in `src/audio/AudioEngineContext.tsx` falls back to a module-level singleton that the provider writes on every render; that's what lets `VisualNode` / `CustomConnection` / `HardwareActivity` tap the engine. If you add another provider that inside-Rete components need, apply the same singleton pattern.
 - **DFU detect latency.** `flashService.detectFlashDevices()` and `deviceDetection.probeSeedDfu()` both have Linux sysfs fast paths (`/sys/bus/usb/devices/*/idVendor`) that sidestep `dfu-util -l -v` when nothing is plugged in. When sysfs first sees `0483:df11`, `detectFlashDevices` runs dfu-util **synchronously** (one-time) to populate a module cache — sysfs sees the device ~50 ms before libusb can open it, so flagging `deviceAvailable=true` on sysfs alone races the flash command. Subsequent polls while the device stays plugged in are sysfs-only.
 
+## Cutting a release
+
+CI (`.github/workflows/ci.yml`) runs `npm run test` + a production build on every push and PR. A release is a tag:
+
+1. Bump `version` in `package.json` AND the two top entries of `package-lock.json`; add the CHANGELOG entry; commit.
+2. `git tag -a vX.Y.Z -m "..." && git push origin main vX.Y.Z`.
+3. `.github/workflows/release.yml` builds Linux AppImage (x64, arm64), Windows NSIS + portable, and an unsigned macOS dmg (x64, arm64) on three runners, and uploads them plus `latest*.yml` to a **draft** release for the tag (`EP_DRAFT: true`).
+4. Check the artifacts, then publish: `gh release edit vX.Y.Z --draft=false --notes-file notes.md`. Only a published release is seen by the in-app updater (which reads `latest.yml`; disabled on macOS because the build is unsigned).
+
+If a tag build fails, fix, move the tag (`git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`, re-tag, push) — nothing has been published yet, so this is safe. The first tag build failed twice for reasons that were invisible locally (gate ran before worklets were compiled; a `URL.pathname` that is not a path on Windows), so read the failed job log before assuming CI is flaky.
+
+`npm run test` has a `pretest` that compiles the worklets: the feature tests render through them and `scripts/lib/renderEmulator.mjs` now **throws** on an empty worklet directory or a missing processor rather than rendering silence — a test that compares against silence can pass by accident, and did.
+
+The website is `docs/index.html`, served by GitHub Pages from `main:/docs` (`.nojekyll` so it is served as-is). Screenshots go in `docs/img/` (`patch-view.png`, `hardware-view.png`, `perform-view.png`); the page hides the figures until the files exist. The README's hero image is `docs/img/patch-view.png` too.
+
 ## Paths worth knowing
 
 - User data / SDK clones: `~/.config/daisypatcher/sdk/{libDaisy,DaisySP}/`
