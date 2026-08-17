@@ -108,7 +108,10 @@ function listFilesRecursive(dir, base = dir) {
   for (const entry of readdirSync(dir)) {
     const p = path.join(dir, entry)
     if (statSync(p).isDirectory()) out.push(...listFilesRecursive(p, base))
-    else out.push(path.relative(base, p))
+    // Generated file keys are always `/`-separated (`src/main.cpp`); on
+    // Windows `path.relative` gives `src\main.cpp` and every nested file
+    // read as removed-and-added. Normalise here, once.
+    else out.push(path.relative(base, p).split(path.sep).join('/'))
   }
   return out.sort()
 }

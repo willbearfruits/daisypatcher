@@ -17,9 +17,16 @@ concurrency:
 
 jobs:
   test:
-    name: typecheck · snapshots · contract · features
-    runs-on: ubuntu-latest
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is in the matrix because the release job runs the same
+        # gate there and it failed twice on things Linux cannot see (CRLF
+        # checkouts, `\` in relative paths, URL.pathname as a path).
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
