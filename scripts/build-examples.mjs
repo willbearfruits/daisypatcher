@@ -477,9 +477,11 @@ function esp32Sequencer() {
     { x: -460, y: 320 }
   )
 
-  q.place('encoder', 'Nav', enc, { x: 140, y: 560 })
-  q.place('oled_ssd1306', 'Display', oled, { x: 300, y: 420 })
-  q.place('pcm5102a', 'Line out', null, { x: 300, y: 700 }, { jumper: 'i2s' })
+  // Below the board (DevKitC shares the Seed's canvas geometry: bottom
+  // edge at y = 1240) — beside it the pin-label columns own the space.
+  q.place('encoder', 'Nav', enc, { x: 440, y: 1300 })
+  q.place('oled_ssd1306', 'Display', oled, { x: 560, y: 1265 })
+  q.place('pcm5102a', 'Line out', null, { x: 760, y: 1260 }, { jumper: 'i2s' })
   return q
 }
 
@@ -735,11 +737,13 @@ function esp32Drone() {
   q.wire(lim, 'out', out, 'left')
   q.wire(lim, 'out', out, 'right')
 
-  q.place('pot', 'Root', root, { x: 120, y: 520 })
-  q.place('pot', 'Spread', spread, { x: 210, y: 520 })
-  q.place('pot', 'Tone', tone, { x: 300, y: 520 })
-  q.place('pot', 'Air', air, { x: 390, y: 520 })
-  q.place('pcm5102a', 'Line out', null, { x: 260, y: 660 }, { jumper: 'i2s' })
+  // The C3 SuperMini is short (board bottom at y = 955); parts sit just
+  // under it.
+  q.place('pot', 'Root', root, { x: 440, y: 1015 })
+  q.place('pot', 'Spread', spread, { x: 505, y: 1015 })
+  q.place('pot', 'Tone', tone, { x: 570, y: 1015 })
+  q.place('pot', 'Air', air, { x: 635, y: 1015 })
+  q.place('pcm5102a', 'Line out', null, { x: 760, y: 985 }, { jumper: 'i2s' })
   return q
 }
 
@@ -830,10 +834,10 @@ function esp32Gesture() {
   q.wire(tof, 'dist', oled, 'c')
   q.wire(rnd, 'out', oled, 'd')
 
-  q.place('gyroscope', 'Motion', imu, { x: 140, y: 480 })
-  q.place('tof', 'Ranger', tof, { x: 260, y: 480 })
-  q.place('oled_ssd1306', 'Display', oled, { x: 380, y: 480 })
-  q.place('pcm5102a', 'Line out', null, { x: 200, y: 640 }, { jumper: 'i2s' })
+  q.place('gyroscope', 'Motion', imu, { x: 440, y: 1265 })
+  q.place('tof', 'Ranger', tof, { x: 560, y: 1265 })
+  q.place('oled_ssd1306', 'Display', oled, { x: 680, y: 1265 })
+  q.place('pcm5102a', 'Line out', null, { x: 860, y: 1260 }, { jumper: 'i2s' })
   return q
 }
 

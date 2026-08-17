@@ -11,6 +11,16 @@ Direction: MIDI learn, recording the emulator to `.wav`, tree-wide presets
 (nodes inside subpatches), Silkscreen mode + drill-template export. See
 `V0_5_PLAN.md` and `V2_PLAN.md`.
 
+## [0.5.4] - 2026-08-17
+
+### Fixed
+- The bundled example patches placed their pots, OLEDs and modules on top of the pin-label columns in the Hardware view. Parts now sit in a row under the board — ADC-side parts under the left column, displays and LEDs under the right — so wires drop straight to their pins. All seven examples, both board families.
+- The updater logged the whole HTTP response (headers, cookies, stack) to stderr on a missing release; one line now.
+
+### Added
+- Screenshots of the three views in the README and on the website.
+- The CI gate also runs on Windows; the release workflow can rebuild a single platform on demand.
+
 ## [0.5.3] - 2026-08-17
 
 First public beta.

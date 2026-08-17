@@ -468,8 +468,8 @@
         "kind": "gyroscope",
         "label": "Motion",
         "position": {
-          "x": 140,
-          "y": 480
+          "x": 440,
+          "y": 1265
         },
         "pins": {
           "sda": "GPIO0",
@@ -489,8 +489,8 @@
         "kind": "tof",
         "label": "Ranger",
         "position": {
-          "x": 260,
-          "y": 480
+          "x": 560,
+          "y": 1265
         },
         "pins": {
           "sda": "GPIO0",
@@ -509,8 +509,8 @@
         "kind": "oled_ssd1306",
         "label": "Display",
         "position": {
-          "x": 380,
-          "y": 480
+          "x": 680,
+          "y": 1265
         },
         "pins": {
           "sda": "GPIO0",
@@ -528,8 +528,8 @@
         "kind": "pcm5102a",
         "label": "Line out",
         "position": {
-          "x": 200,
-          "y": 640
+          "x": 860,
+          "y": 1260
         },
         "pins": {
           "sck": "GPIO4",

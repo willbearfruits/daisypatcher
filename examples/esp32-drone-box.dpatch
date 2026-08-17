@@ -489,8 +489,8 @@
         "kind": "pot",
         "label": "Root",
         "position": {
-          "x": 120,
-          "y": 520
+          "x": 440,
+          "y": 1015
         },
         "pins": {
           "wiper": "GPIO0"
@@ -505,8 +505,8 @@
         "kind": "pot",
         "label": "Spread",
         "position": {
-          "x": 210,
-          "y": 520
+          "x": 505,
+          "y": 1015
         },
         "pins": {
           "wiper": "GPIO1"
@@ -521,8 +521,8 @@
         "kind": "pot",
         "label": "Tone",
         "position": {
-          "x": 300,
-          "y": 520
+          "x": 570,
+          "y": 1015
         },
         "pins": {
           "wiper": "GPIO2"
@@ -537,8 +537,8 @@
         "kind": "pot",
         "label": "Air",
         "position": {
-          "x": 390,
-          "y": 520
+          "x": 635,
+          "y": 1015
         },
         "pins": {
           "wiper": "GPIO3"
@@ -553,8 +553,8 @@
         "kind": "pcm5102a",
         "label": "Line out",
         "position": {
-          "x": 260,
-          "y": 660
+          "x": 760,
+          "y": 985
         },
         "pins": {
           "sck": "GPIO4",

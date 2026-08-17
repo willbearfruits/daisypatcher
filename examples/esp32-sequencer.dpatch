@@ -491,8 +491,8 @@
         "kind": "encoder",
         "label": "Nav",
         "position": {
-          "x": 140,
-          "y": 560
+          "x": 440,
+          "y": 1300
         },
         "pins": {
           "a": "GPIO0",
@@ -510,8 +510,8 @@
         "kind": "oled_ssd1306",
         "label": "Display",
         "position": {
-          "x": 300,
-          "y": 420
+          "x": 560,
+          "y": 1265
         },
         "pins": {
           "sda": "GPIO3",
@@ -529,8 +529,8 @@
         "kind": "pcm5102a",
         "label": "Line out",
         "position": {
-          "x": 300,
-          "y": 700
+          "x": 760,
+          "y": 1260
         },
         "pins": {
           "sck": "GPIO5",
