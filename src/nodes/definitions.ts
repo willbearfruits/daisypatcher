@@ -585,13 +585,27 @@ const CORE_DEFS: Partial<Record<NodeKind, NodeDefinition>> = {
     kind: 'audio_in',
     label: 'Audio In',
     category: 'io',
-    description: 'Hardware stereo input (emulator: silence).',
+    description: 'Hardware stereo input. In the app: your audio interface, chosen in the Inspector.',
     inputs: [],
     outputs: [
       { id: 'left', label: 'L', signal: 'audio' },
       { id: 'right', label: 'R', signal: 'audio' }
     ],
-    params: []
+    params: [
+      /*
+       * Emulator only — which capture device stands in for the codec's
+       * line-in. A placeholder enum, like `sampleId`: the real list comes
+       * from `enumerateDevices()` at runtime and the Inspector renders it
+       * live. `''` = the system default. Never reaches codegen or presets.
+       */
+      {
+        id: 'device',
+        label: 'Input device',
+        kind: 'enum',
+        default: '',
+        options: [{ value: '', label: 'System default' }]
+      }
+    ]
   },
 
   audio_output: {

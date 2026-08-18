@@ -20,6 +20,8 @@ The tabs at the top of the window switch between them. **Ctrl+1 / 2 / 3** does t
 
 The node canvas. Everything about the *sound* lives here.
 
+**Audio In** is your interface: the node's L/R carry whatever the input device selected in the Inspector is receiving, so a patch that starts from the codec's line-in — a sampler, a guitar effect — can be played into at your desk exactly as it will be on the board.
+
 - **Add a node**: drag it from the palette on the left, or press **Ctrl+K** and type its name.
 - **Wire**: drag from an output socket (right side of a node) to an input socket (left side). Cables are colour-coded by what they carry — audio, CV, gate, clock — and only like-to-like connects.
 - **Select**: click a node. Drag on empty canvas to marquee-select several. **Ctrl+A** selects all.
@@ -147,6 +149,7 @@ Provider and model are under **settings** in the panel. **Ollama** (local, no ke
 ## When something is wrong
 
 - **No sound in the app** — press Space; check the Output node is connected; the browser audio engine starts on the first Play.
+- **Audio In hears nothing** — select the node: the Inspector's *Input device* picker shows which interface is open ("listening: …") or why it is not. Pick your interface there; the system default is used otherwise. Voice processing (echo cancellation, AGC) is off, so what you plug in is what the patch gets.
 - **Build button disabled** — the SDK is not installed yet (Daisy) or PlatformIO is missing (ESP32). The top bar's status dot opens the installer.
 - **Flash finds no device** — Daisy: BOOT + RESET for DFU; check the cable carries data. ESP32: some boards need BOOT held while plugging in; the port list only shows real USB devices.
 - **A knob does nothing on the device** — a few parameters are baked into the firmware at build time (buffer sizes, some table lengths). The build log says which, per node.

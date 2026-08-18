@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore, hardwareKindsForNodeKind } from '@/state/store'
 import { SamplePicker } from './SamplePicker'
+import { InputDevicePicker } from './InputDevicePicker'
 import { PresetBar } from './PresetBar'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
 import type { ParamDef } from '@/nodes/definitions'
@@ -186,6 +187,12 @@ function ParamControl({
   // lives in its own component.
   if (param.id === 'sampleId') {
     return <SamplePicker node={node} />
+  }
+
+  // Third one: the capture device for `audio_in` is whatever the OS has
+  // plugged in right now.
+  if (node.kind === 'audio_in' && param.id === 'device') {
+    return <InputDevicePicker node={node} />
   }
 
   if (param.kind === 'number') {

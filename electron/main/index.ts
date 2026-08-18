@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
@@ -655,6 +655,37 @@ function registerIpcHandlers(): void {
   })
 }
 
+/**
+ * What the renderer may ask the OS for.
+ *
+ * A sandboxed renderer's `getUserMedia` goes through the session's
+ * permission handler, and Electron's default for an app that never
+ * installed one is to grant everything — which is the wrong default for a
+ * window that renders untrusted patch files. So: allow AUDIO capture only
+ * (the `audio_in` node uses your interface as the codec's line-in), from
+ * our own renderer only, and deny the rest by name. Video, geolocation,
+ * notifications, MIDI-sysex etc. have no business here.
+ */
+function installPermissionPolicy(): void {
+  const ses = session.defaultSession
+  const isOurs = (url: string): boolean =>
+    url.startsWith('file://') || (isDev && /^https?:\/\/localhost(:\d+)?\//.test(url))
+  ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+    const origin = wc.getURL()
+    if (!isOurs(origin)) return callback(false)
+    if (permission === 'media') {
+      const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+      // Audio only. A request that includes video is denied whole.
+      return callback(types.length > 0 && types.every((t) => t === 'audio'))
+    }
+    callback(false)
+  })
+  ses.setPermissionCheckHandler((wc, permission, origin) => {
+    if (!isOurs(wc?.getURL() ?? origin)) return false
+    return permission === 'media'
+  })
+}
+
 function createWindow(): void {
   const MIN_W = 1360
   const MIN_H = 700
@@ -920,6 +951,7 @@ if (!app.requestSingleInstanceLock()) {
     setRecentGrant(grantPath)
     installAppMenu()
     registerIpcHandlers()
+    installPermissionPolicy()
     createWindow()
 
     app.on('activate', () => {

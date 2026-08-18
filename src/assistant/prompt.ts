@@ -23,6 +23,8 @@ import { supportLevel } from '@/nodes/targetSupport'
 import type { AudioGraph, NodeKind } from '@/types/graph'
 import type { BoardTarget } from '@/types/store'
 
+const HIDDEN_PARAMS = new Set(['bindingId', 'sampleId', 'device', 'source', 'tree', 'elements', 'graph'])
+
 /**
  * Kinds the assistant should not offer.
  *
@@ -46,7 +48,11 @@ function catalogFor(target: BoardTarget): string {
 
     const ins = def.inputs.map((s) => `${s.id}:${s.signal}`).join(' ')
     const outs = def.outputs.map((s) => `${s.id}:${s.signal}`).join(' ')
+    // Emulator-only and structural params are not things to ask a model to
+    // set: `bindingId` is a hardware reference, `sampleId` a content hash,
+    // `device` a capture-device id, and the design blobs are edited in-node.
     const params = def.params
+      .filter((p) => !HIDDEN_PARAMS.has(p.id))
       .map((p) =>
         p.kind === 'number'
           ? `${p.id}=${p.default}[${p.min}..${p.max}]`

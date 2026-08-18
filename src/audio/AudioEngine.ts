@@ -48,6 +48,23 @@ interface LiveNode {
   worklet?: AudioWorkletNode
   /** For `audio_output`: the stereo merger that collects L/R. */
   merger?: ChannelMergerNode
+  /** For `audio_in`: the capture stream standing in for the codec. */
+  capture?: CaptureHandle
+}
+
+/**
+ * One open capture device: the MediaStream, the source node the context
+ * made from it, and the splitter that fans it into the worklet's two
+ * inputs. `deviceId` is what it was opened with, so a param change to the
+ * same id is a no-op instead of a re-prompt.
+ */
+interface CaptureHandle {
+  deviceId: string
+  stream: MediaStream
+  source: MediaStreamAudioSourceNode
+  splitter: ChannelSplitterNode
+  /** A generation counter so a slow `getUserMedia` cannot attach after the node is gone. */
+  gen: number
 }
 
 interface LiveConnection {
@@ -214,6 +231,12 @@ export class AudioEngine implements AudioEngineInterface {
       }
     }
 
+    // The capture device is an engine-side concern, not a worklet param.
+    if (live.kind === 'audio_in' && paramId === 'device') {
+      void this.attachCapture(nodeId, typeof value === 'string' ? value : '')
+      return
+    }
+
     // Enum or unknown param → forward to the processor via port.
     live.worklet.port.postMessage({ type: 'param', paramId, value })
     /*
@@ -333,8 +356,16 @@ export class AudioEngine implements AudioEngineInterface {
     const entry = WORKLET_REGISTRY[node.kind]
     if (!entry) return
 
+    /*
+     * `audio_in` has no sockets but its worklet has two inputs, fed by the
+     * capture device below. That is deliberate: the codec's L/R are not
+     * something a cable can drive, so they must not appear on the node —
+     * but a worklet input is the only way to get real-time samples into a
+     * processor without copying them through the port block by block.
+     */
+    const isAudioIn = node.kind === 'audio_in'
     const worklet = new AudioWorkletNode(this.ctx, entry.processorName, {
-      numberOfInputs: def.inputs.length,
+      numberOfInputs: isAudioIn ? 2 : def.inputs.length,
       numberOfOutputs: def.outputs.length,
       outputChannelCount: def.outputs.length > 0 ? def.outputs.map(() => 1) : []
     })
@@ -354,9 +385,121 @@ export class AudioEngine implements AudioEngineInterface {
     void this.postSamplePcm(worklet, node)
 
     this.nodes.set(node.id, { kind: node.kind, worklet })
+    if (isAudioIn) {
+      const dev = typeof node.params.device === 'string' ? node.params.device : ''
+      void this.attachCapture(node.id, dev)
+    }
 
     // Any taps that were queued for this node can now attach their analyser.
     this.attachPendingTaps(node.id)
+  }
+
+  /* ---------------------------------------------------------------------
+   * Audio input capture — the interface stands in for the codec.
+   * ------------------------------------------------------------------- */
+
+  private captureGen = 0
+
+  /**
+   * Open `deviceId` (or the system default for `''`) and feed it into the
+   * node's worklet. Idempotent per device: re-attaching the same id is a
+   * no-op. Failure — permission denied, device unplugged, no capture
+   * hardware at all — leaves the worklet with empty inputs, i.e. silence,
+   * and reports once through `onCaptureStatus` so the Inspector can say
+   * why the meter is flat rather than let the user blame the patch.
+   *
+   * The constraints turn off the browser's voice processing. Echo
+   * cancellation, noise suppression and AGC are the right defaults for a
+   * call and exactly wrong for a synth input: AGC in particular turns a
+   * steady tone into a slow fade, which is not what the Seed's ADC does.
+   */
+  private async attachCapture(nodeId: string, deviceId: string): Promise<void> {
+    if (!this.ctx) return
+    const live = this.nodes.get(nodeId)
+    if (!live?.worklet) return
+    if (live.capture && live.capture.deviceId === deviceId) return
+    this.detachCapture(nodeId)
+    const gen = ++this.captureGen
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      this.onCaptureStatus(nodeId, 'error', 'audio capture is not available in this environment')
+      return
+    }
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: deviceId ? { exact: deviceId } : undefined,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: { ideal: 2 },
+          sampleRate: { ideal: this.ctx.sampleRate }
+        },
+        video: false
+      })
+    } catch (err) {
+      const e = err as { name?: string; message?: string }
+      const why =
+        e?.name === 'NotAllowedError'
+          ? 'microphone access was denied — allow it for Daisypatcher in your system settings'
+          : e?.name === 'NotFoundError' || e?.name === 'OverconstrainedError'
+            ? 'that input device is not connected — pick another'
+            : `could not open the input: ${e?.message ?? String(err)}`
+      this.onCaptureStatus(nodeId, 'error', why)
+      return
+    }
+    // The node may have been removed, or the device changed again, while
+    // the permission prompt was up.
+    const still = this.nodes.get(nodeId)
+    if (!this.ctx || !still?.worklet || gen !== this.captureGen) {
+      for (const t of stream.getTracks()) t.stop()
+      return
+    }
+    const source = this.ctx.createMediaStreamSource(stream)
+    const splitter = this.ctx.createChannelSplitter(2)
+    source.connect(splitter)
+    splitter.connect(still.worklet, 0, 0)
+    // A mono device has one channel; connecting output 1 of the splitter is
+    // then a silent line and the worklet mirrors L into R itself.
+    splitter.connect(still.worklet, 1, 1)
+    still.capture = { deviceId, stream, source, splitter, gen }
+    const label = stream.getAudioTracks()[0]?.label || 'input'
+    this.onCaptureStatus(nodeId, 'ok', label)
+  }
+
+  private detachCapture(nodeId: string): void {
+    const live = this.nodes.get(nodeId)
+    const cap = live?.capture
+    if (!cap) return
+    try {
+      cap.splitter.disconnect()
+      cap.source.disconnect()
+    } catch {
+      /* ignore */
+    }
+    for (const t of cap.stream.getTracks()) t.stop()
+    if (live) live.capture = undefined
+    this.captureStatus.delete(nodeId)
+  }
+
+  /**
+   * Capture status, per node — what the Inspector shows next to the device
+   * picker: the opened device's label, or why the meter is flat. Kept as a
+   * map so a picker mounted after the attach still sees the result, and as
+   * a subscription so it updates when the user switches device.
+   */
+  private captureStatus = new Map<string, { state: 'ok' | 'error'; detail: string }>()
+  private captureListeners = new Set<() => void>()
+  private onCaptureStatus(nodeId: string, state: 'ok' | 'error', detail: string): void {
+    this.captureStatus.set(nodeId, { state, detail })
+    for (const l of this.captureListeners) l()
+  }
+  getCaptureStatus(nodeId: string): { state: 'ok' | 'error'; detail: string } | null {
+    return this.captureStatus.get(nodeId) ?? null
+  }
+  subscribeCaptureStatus(listener: () => void): () => void {
+    this.captureListeners.add(listener)
+    return () => this.captureListeners.delete(listener)
   }
 
   /**
@@ -468,6 +611,9 @@ export class AudioEngine implements AudioEngineInterface {
     // Detach analysers belonging to any taps pointing at this node so their
     // `AnalyserNode` isn't left dangling off a disconnected worklet.
     this.detachTapsFor(id)
+    // And release the capture device — a stopped track is what turns the
+    // OS "microphone in use" indicator off.
+    this.detachCapture(id)
 
     // Also drop any connections that reference it.
     for (const [cid, conn] of this.connections) {

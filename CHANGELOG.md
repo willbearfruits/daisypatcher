@@ -11,6 +11,12 @@ Direction: MIDI learn, recording the emulator to `.wav`, tree-wide presets
 (nodes inside subpatches), Silkscreen mode + drill-template export. See
 `V0_5_PLAN.md` and `V2_PLAN.md`.
 
+## [Unreleased]
+
+### Added
+- **Audio In plays your interface.** The `audio_in` node — the codec's L/R on the device — now carries a real capture device in the app. Pick it in the Inspector (any input the OS knows; the system default otherwise); the picker says which device is open, or why not. Voice processing (echo cancellation, noise suppression, AGC) is off so a steady tone stays steady. The device choice is emulator-only: it never reaches firmware or presets.
+- The Compile button's tooltip names the selected board.
+
 ## [0.5.6] - 2026-08-18
 
 ### Added

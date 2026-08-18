@@ -105,6 +105,24 @@ All three custom node renderers share a collapse pattern: when `NodeInstance.col
 ### Auto-link patch ↔ hardware
 When a patch-side node from the `'hardware'` category is dropped, `store.addNode()` also creates a paired `PlacedComponent` in the same `mutate()` transaction, points the node's `params.bindingId` at it, and auto-assigns each required role to the first free compatible pin on the current board (via `pinout.pinsForRole`). `SHARED_BUS_ROLES` in `store.ts` (`sda`/`scl`/`sck`/`mclk`) lets I²C devices share one bus. Symmetric: `removeNode` drops the paired `PlacedComponent` unless another graph node still references it. Undo reverts the pair atomically because both live in one `HistorySnapshot`.
 
+### Audio In — the interface stands in for the codec
+
+`audio_in` declares no input sockets but its **worklet** is created with
+`numberOfInputs: 2`; the engine opens the chosen capture device
+(`getUserMedia`, voice processing off), splits it and feeds the worklet's
+two inputs, and the worklet copies input → output. Downstream, taps and
+codegen see the same "hardware L/R" they always did. `params.device` is
+the deviceId (`''` = default); it is in `SIMULATION_PARAMS` and
+`EXCLUDED_PARAMS` and hidden from the assistant catalog — never firmware.
+The main process's `installPermissionPolicy` grants **audio-only** media to
+our own renderer and denies everything else by name (an app that renders
+untrusted `.dpatch` files must not default to Electron's grant-all). The
+Inspector's `InputDevicePicker` re-enumerates on `devicechange` and after
+the first grant, because labels are empty until capture has been allowed.
+Chromium's "Default" device is resolved at *browser* start on PipeWire —
+switching the OS default while the app runs does not follow; pick the
+device explicitly.
+
 ### AudioEngine tap system
 `src/audio/AudioEngine.ts` implements an interface in `src/types/store.ts`. Visual nodes call `engine.tap(nodeId, onFrame, { wantFrequency? })` to fork a node's output through a hidden `AnalyserNode`. A single global `requestAnimationFrame` loop pulls `getFloatTimeDomainData` / `getFloatFrequencyData` into reusable typed arrays and dispatches to all active taps. The visual renderers (scope/VU/spectrum/OLED) and hardware-view activity overlays (LED glow, button flash) consume these frames. To tap a node's INPUT (like OLED elements bound to input sockets), walk the graph to find the connection's source and tap THAT source node — see `tapInput()` in `OledNode.tsx`.
 

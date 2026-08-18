@@ -129,7 +129,7 @@ export function setParamAtPath(
  * Storing those would make a preset able to rewrite a node's behaviour,
  * which is a different and much more surprising feature.
  */
-const EXCLUDED_PARAMS = new Set(['bindingId', 'source', 'tree', 'elements'])
+const EXCLUDED_PARAMS = new Set(['bindingId', 'source', 'tree', 'elements', 'device'])
 
 /**
  * Emulator-only stand-ins for physical controls. A preset that restored
@@ -137,7 +137,7 @@ const EXCLUDED_PARAMS = new Set(['bindingId', 'source', 'tree', 'elements'])
  * app, so they are captured but explicitly skipped on recall for nodes that
  * are bound to something physical.
  */
-export const SIMULATION_PARAMS = new Set(['value', 'sw_value', 'position', 'ax', 'ay', 'az', 'gx', 'gy', 'gz', 'heading', 'dist'])
+export const SIMULATION_PARAMS = new Set(['value', 'sw_value', 'position', 'ax', 'ay', 'az', 'gx', 'gy', 'gz', 'heading', 'dist', 'device'])
 
 /**
  * Kinds whose params a preset must never touch.
