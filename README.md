@@ -157,7 +157,6 @@ Architecture, the checklist for adding a node kind, and every non-obvious gotcha
 ## Known limits (beta)
 
 - The Windows and macOS builds come off CI and are not code-signed; they are less travelled than Linux.
-- Presets capture the level you are looking at: nodes inside a subpatch are not part of a top-level preset, and only top-level parameters reach the device.
 - No MIDI learn, no recording of the emulator to `.wav`, no reverse import of hand-written firmware. See [`V0_5_PLAN.md`](./V0_5_PLAN.md) and [`V2_PLAN.md`](./V2_PLAN.md) for the direction.
 
 ## Contributing

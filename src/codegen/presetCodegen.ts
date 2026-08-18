@@ -62,6 +62,30 @@ function f(n: number): string {
  * — nothing reads them off a preset-only entry, and giving them fake
  * values would invite someone to.
  */
+/**
+ * A preset PATH → the flat node ids it names.
+ *
+ * `generateProject` flattens before any emitter runs, so by the time
+ * presets reach codegen the graph has ids like `sub/osc` (subpatch body)
+ * and `poly/v0/osc` … `poly/v3/osc` (one per voice). A preset stores
+ * `sub/osc` and `poly/osc` — the flatten prefix minus the voice segment —
+ * so the mapping is: strip every `/vN/` from a flat id and compare. One
+ * preset entry for a poly'd param therefore becomes N columns, one per
+ * voice, all written from the same table cell. Root ids match themselves.
+ */
+export function flatIdsForPath(graph: AudioGraph, path: string): string[] {
+  const out: string[] = []
+  for (const n of graph.nodes) {
+    if (n.id === path || pathOfFlatId(n.id) === path) out.push(n.id)
+  }
+  return out
+}
+
+/** `poly/v2/osc` → `poly/osc`; anything without a voice segment unchanged. */
+export function pathOfFlatId(flatId: string): string {
+  return flatId.replace(/\/v\d+\//g, '/')
+}
+
 export function presetParamOverrides(
   graph: AudioGraph,
   presets: readonly Preset[],
@@ -75,41 +99,43 @@ export function presetParamOverrides(
   const warned = new Set<string>()
 
   for (const preset of presets) {
-    for (const [nodeId, entry] of Object.entries(preset.values)) {
-      const node = nodeById.get(nodeId)
-      if (!node) continue // a stale preset entry; the store prunes these
-      const def = NODE_DEFINITIONS[node.kind]
-      if (!def) continue
+    for (const [path, entry] of Object.entries(preset.values)) {
+      for (const nodeId of flatIdsForPath(graph, path)) {
+        const node = nodeById.get(nodeId)
+        if (!node) continue
+        const def = NODE_DEFINITIONS[node.kind]
+        if (!def) continue
 
-      for (const [paramId, value] of Object.entries(entry)) {
-        const key = `${nodeId}|${paramId}`
-        const param = def.params.find((p) => p.id === paramId)
-        if (!param) continue
-        if (SIMULATION_PARAMS.has(paramId)) continue
+        for (const [paramId, value] of Object.entries(entry)) {
+          const key = `${nodeId}|${paramId}`
+          const param = def.params.find((p) => p.id === paramId)
+          if (!param) continue
+          if (SIMULATION_PARAMS.has(paramId)) continue
 
-        if (param.kind !== 'number' || typeof value !== 'number') {
-          if (!warned.has(key)) {
-            warned.add(key)
-            warn(
-              `preset: ${node.kind}.${paramId} is not a numeric param — presets move it ` +
-                `in the app but cannot move it on the device; drive it from a CV ` +
-                `output instead if it needs to change at runtime`
-            )
+          if (param.kind !== 'number' || typeof value !== 'number') {
+            if (!warned.has(key)) {
+              warned.add(key)
+              warn(
+                `preset: ${node.kind}.${paramId} is not a numeric param — presets move it ` +
+                  `in the app but cannot move it on the device; drive it from a CV ` +
+                  `output instead if it needs to change at runtime`
+              )
+            }
+            continue
           }
-          continue
-        }
-        if (out.has(key)) continue
+          if (out.has(key)) continue
 
-        const raw = node.params[paramId]
-        out.set(key, {
-          varName: `dp_mp_${nodeVar(nodeId, node.kind)}_${paramId.replace(/[^A-Za-z0-9_]/g, '_')}`,
-          nodeId,
-          paramId,
-          menuVar: '',
-          entryIndex: -1,
-          initial:
-            typeof raw === 'number' && Number.isFinite(raw) ? raw : ((param.default as number) ?? 0)
-        })
+          const raw = node.params[paramId]
+          out.set(key, {
+            varName: `dp_mp_${nodeVar(nodeId, node.kind)}_${paramId.replace(/[^A-Za-z0-9_]/g, '_')}`,
+            nodeId,
+            paramId,
+            menuVar: '',
+            entryIndex: -1,
+            initial:
+              typeof raw === 'number' && Number.isFinite(raw) ? raw : ((param.default as number) ?? 0)
+          })
+        }
       }
     }
   }
@@ -145,7 +171,8 @@ export function buildPresetTable(
   for (const preset of presets) {
     const row: number[] = []
     for (const col of columns) {
-      const stored = preset.values[col.nodeId]?.[col.paramId]
+      // Column ids are FLAT (`poly/v2/osc`); preset keys are paths.
+      const stored = (preset.values[pathOfFlatId(col.nodeId)] ?? preset.values[col.nodeId])?.[col.paramId]
       if (typeof stored === 'number' && Number.isFinite(stored)) {
         row.push(stored)
         continue

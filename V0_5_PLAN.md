@@ -56,13 +56,9 @@ https://claude.ai/code/artifact/7ee30110-13fd-4f49-b944-d2a0c26d55a9
 - [x] Real app icon, CHANGELOG, CONTRIBUTING, README, landing page
 
 ## Next in line after the public beta
-- [ ] **Tree-wide presets.** Today a preset captures the level you are
-      looking at and only top-level params reach the device. Someone who
-      builds a voice as a subpatch and captures at the root gets a preset
-      that does nothing useful. Design: key inner nodes by their flatten
-      path (`sub/osc`, `poly/osc` → every voice), capture from the root,
-      recall via a `setParamAt(path)` that rewrites the container body,
-      codegen expands `poly/x` to `poly/v{k}/x` columns.
+- [x] **Tree-wide presets** (2026-08-18): keyed by tree path, capture from
+      the root, recall/morph rewrite container bodies, codegen expands
+      `poly/x` per voice. See CLAUDE.md "Presets".
 - [ ] MIDI learn (emulator-first)
 - [ ] Recording emulator output to .wav
 - [ ] Silkscreen mode + drill-template export

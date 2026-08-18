@@ -55,6 +55,8 @@ writeFileSync(
     `export { systemPrompt, userPrompt } from '${p('src/assistant/prompt')}'`,
     `export { parseDpatch, serializePatch, applyLoadedPatch } from '${p('src/state/patchFile')}'`,
     `export { useEditorStore, rootGraphOf } from '${p('src/state/store')}'`,
+    `export { presetParamOverrides, buildPresetTable, flatIdsForPath } from '${p('src/codegen/presetCodegen')}'`,
+    `export { recallEdits, setParamAtPath, walkTree } from '${p('src/state/presets')}'`,
     `export { getBoardPinout } from '${p('src/hardware/boardPinout')}'`
   ].join('\n'),
   'utf8'
@@ -75,6 +77,7 @@ const M = await import(pathToFileURL(BUNDLE).href)
 const { NODE_DEFINITIONS, WORKLET_REGISTRY, generateProject, flattenGraph, captureFrom } = M
 const { parseEditPlan, validatePlan, describePlan, systemPrompt, userPrompt, diffConnections } = M
 const { parseDpatch, serializePatch, applyLoadedPatch, useEditorStore, rootGraphOf, getBoardPinout } = M
+const { presetParamOverrides, buildPresetTable, flatIdsForPath, recallEdits, setParamAtPath, walkTree } = M
 
 const { renderGraph } = await import(pathToFileURL(path.join(ROOT, 'scripts/lib/renderEmulator.mjs')).href)
 
@@ -507,15 +510,15 @@ if (want('roundtrip')) {
     chk('presets: identical', same(keep.presets, after.presets),
       `${JSON.stringify(keep.presets).length} vs ${JSON.stringify(after.presets).length} bytes`)
     chk('presets: two of them, renamed one kept its name', after.presets.length === 2 && after.presets[1].name === 'sub')
-    chk('presets: recall still finds its nodes', (() => {
-      // presets store per-node params; every node id it names must exist
-      const ids = new Set(after.graph.nodes.map((n) => n.id))
-      const inner = new Set()
-      for (const n of after.graph.nodes) if (n.kind === 'subpatch' && typeof n.params.graph === 'string') {
-        for (const m of JSON.parse(n.params.graph).nodes) inner.add(m.id)
-      }
-      return after.presets.every((pr) => Object.keys(pr.params ?? pr.values ?? {}).every((id) => ids.has(id) || inner.has(id)))
+    chk('presets: every key is a live tree PATH (root id or sub/inner)', (() => {
+      // presets are keyed by path; every path must resolve in the tree
+      const paths = new Set()
+      const walk = (g, prefix) => { for (const n of g.nodes) { paths.add(prefix + n.id); if ((n.kind === 'subpatch' || n.kind === 'poly') && typeof n.params.graph === 'string') walk(JSON.parse(n.params.graph), prefix + n.id + '/') } }
+      walk(after.graph, '')
+      return after.presets.every((pr) => Object.keys(pr.values).every((k) => paths.has(k)))
     })())
+    chk('presets: the grouped nodes are keyed under the subpatch (osc → sub/osc)',
+      after.presets.some((pr) => Object.keys(pr.values).some((k) => k === `${sub}/${osc}`)))
     const lk = diffKeys(keep.layout, after.layout)
     chk('layout: every field survives', lk.length === 0, `lost: ${lk.join(', ')}`)
     chk('layout: canvas prefs survive', after.layout.gridSnap === true && after.layout.gridSize === 25 && after.layout.gridShow === false && after.layout.marqueeSelect === false)
@@ -541,6 +544,121 @@ if (want('roundtrip')) {
   const badLayout = parseDpatch({ dpatch: 2, graph: v1, hardware: { board: 'daisy_seed', components: [], meta: { name: 'x' } }, layout: { paletteW: 'wide', gridSize: -5, daisyFlashMode: 'floppy' } })
   chk('malformed layout fields are dropped individually', badLayout !== null && badLayout.layout === undefined)
   S.getState().resetGraph()
+}
+
+/* =====================================================================
+ * Tree-wide presets — a preset reaches into subpatch and poly bodies
+ * ===================================================================== */
+if (want('treepresets')) {
+  g('treepresets')
+  /*
+   * The whole point: someone builds a voice, groups it into a subpatch (or
+   * runs it as a poly), then captures a preset at the top level. Before
+   * this the preset saw only the top level and did nothing useful. Now a
+   * preset is keyed by tree PATH and capture/recall/morph walk the tree.
+   */
+  const S = useEditorStore
+  const st = () => S.getState()
+  st().resetGraph()
+
+  // Root: osc → filt → out; group osc+filt into a subpatch.
+  const osc = st().addNode('oscillator', { x: 0, y: 0 })
+  const filt = st().addNode('filter_svf', { x: 200, y: 0 })
+  const out = st().addNode('audio_output', { x: 400, y: 0 })
+  st().connect({ nodeId: osc, socketId: 'out' }, { nodeId: filt, socketId: 'in' })
+  st().connect({ nodeId: filt, socketId: 'lp' }, { nodeId: out, socketId: 'left' })
+  st().setParam(osc, 'frequency', 220)
+  st().setParam(filt, 'frequency', 800)
+  st().select([osc, filt])
+  const sub = st().collapseSelectionToSubpatch()
+  chk('fixture: grouped', typeof sub === 'string')
+
+  // A poly whose voice body is a real oscillator.
+  const poly = st().addNode('poly', { x: 0, y: 300 })
+  st().setParam(poly, 'voices', 3)
+  st().enterSubpatch(poly)
+  const vosc = st().addNode('oscillator', { x: 0, y: 0 })
+  st().setParam(vosc, 'frequency', 110)
+  const vout = st().addNode('sub_out', { x: 200, y: 0 })
+  st().connect({ nodeId: vosc, socketId: 'out' }, { nodeId: vout, socketId: 'in' })
+  st().exitSubpatch()
+  chk('fixture: back at root', st().subpatchStack.length === 0)
+
+  // ---- capture at the ROOT sees inside both boxes ----
+  const p1 = st().capturePreset('one')
+  const P1 = st().presets.find((p) => p.id === p1)
+  chk('capture keys the grouped osc by path sub/osc', !!P1.values[`${sub}/${osc}`])
+  chk('capture keys the poly voice osc by path poly/osc (no voice segment)', !!P1.values[`${poly}/${vosc}`])
+  chk('capture recorded the inner values', P1.values[`${sub}/${osc}`].frequency === 220 && P1.values[`${poly}/${vosc}`].frequency === 110)
+
+  // Change the inner values, capture 'two'
+  {
+    let root = rootGraphOf(st())
+    root = setParamAtPath(root, `${sub}/${osc}`, 'frequency', 440)
+    root = setParamAtPath(root, `${poly}/${vosc}`, 'frequency', 55)
+    st().loadGraph(root, null, st().hardware, st().presets)
+  }
+  const p2 = st().capturePreset('two')
+  chk('a second capture sees the changed inner values',
+    st().presets.find((p) => p.id === p2).values[`${sub}/${osc}`].frequency === 440)
+
+  // ---- recall from the ROOT moves the inner params ----
+  st().recallPreset(p1)
+  const readInner = (path) => { let v; walkTree(rootGraphOf(st()), (n, pth) => { if (pth === path) v = n.params.frequency }); return v }
+  chk('recall at root sets sub/osc back to 220', readInner(`${sub}/${osc}`) === 220)
+  chk('recall at root sets poly/osc back to 110', readInner(`${poly}/${vosc}`) === 110)
+  chk('recall was one undo entry', st().history.past.length >= 1)
+  const before = st().history.past.length
+  st().recallPreset(p2)
+  chk('second recall is exactly one more history entry', st().history.past.length === before + 1)
+  chk('and it moved both inner values', readInner(`${sub}/${osc}`) === 440 && readInner(`${poly}/${vosc}`) === 55)
+
+  // ---- recall while INSIDE the subpatch: open level updates ----
+  st().enterSubpatch(sub)
+  st().recallPreset(p1)
+  chk('inside the box, the open level shows the recalled value', st().graph.nodes.find((n) => n.id === osc)?.params.frequency === 220)
+  chk('and the root agrees', readInner(`${sub}/${osc}`) === 220)
+  st().exitSubpatch()
+  chk('leaving the box keeps it', readInner(`${sub}/${osc}`) === 220)
+
+  // ---- morph inside a poly body ----
+  st().enterSubpatch(poly)
+  st().beginTransaction()
+  st().morphPresets(p1, p2, 0.5)
+  st().endTransaction()
+  const mid = st().graph.nodes.find((n) => n.id === vosc)?.params.frequency
+  chk('morph at t=0.5 lands halfway for the poly voice (110→55 = 82.5)', Math.abs(mid - 82.5) < 1e-6, String(mid))
+  st().exitSubpatch()
+
+  // ---- codegen: poly/osc expands to one column per voice ----
+  const flat = flattenGraph(rootGraphOf(st()))
+  const ids = flatIdsForPath(flat, `${poly}/${vosc}`)
+  chk('flatIdsForPath maps poly/osc onto 3 voice ids', ids.length === 3 && ids.every((i) => /\/v\d\//.test(i)), ids.join(','))
+  const warns = []
+  const ov = presetParamOverrides(flat, st().presets, (m) => warns.push(m))
+  const cols = [...ov.values()].filter((c) => c.paramId === 'frequency')
+  // 3 voice oscillators + the subpatch's oscillator AND its filter (both have `frequency`).
+  chk('overrides: 3 voice columns + 2 subpatch columns for frequency', cols.length === 5, cols.map((c) => c.nodeId).join(','))
+  const table = buildPresetTable(flat, st().presets, ov)
+  const row1 = table.rows[0], row2 = table.rows[1]
+  const idxV = table.columns.map((c, i) => [c, i]).filter(([c]) => /\/v\d\//.test(c.nodeId) && c.paramId === 'frequency').map(([, i]) => i)
+  chk('preset table: every voice column carries the same value from one path entry', idxV.every((i) => row1[i] === 110) && idxV.every((i) => row2[i] === 55))
+  const idxS = table.columns.findIndex((c) => c.nodeId === `${sub}/${osc}` && c.paramId === 'frequency')
+  chk('preset table: the subpatch column carries its value', idxS >= 0 && row1[idxS] === 220 && row2[idxS] === 440)
+
+  // ---- generated firmware compiles the table for both targets ----
+  for (const target of ['daisy_seed', 'esp32_s3_devkitc']) {
+    const proj = generateProject(rootGraphOf(st()), st().hardware, 'tp', target, { presets: st().presets, daisyFlashMode: 'qspi' })
+    const src = Object.entries(proj.files).find(([k]) => /main\.cpp$/.test(k))?.[1] ?? ''
+    chk(`${target}: firmware has 5 override globals for the frequencies`, (src.match(/dp_mp_[A-Za-z0-9_]+_frequency\b/g) ?? []).filter((v, i, a) => a.indexOf(v) === i).length === 5)
+    chk(`${target}: preset table has 2 rows`, /dp_preset_/.test(src) && /\{\s*220/.test(src) && /\{\s*440/.test(src))
+  }
+
+  // ---- expand a subpatch keeps presets reachable ----
+  st().expandSubpatchNode(sub)
+  const stillOk = recallEdits(rootGraphOf(st()), st().presets.find((p) => p.id === p2)).some((e) => e.path === `${sub}/${osc}`)
+  chk('after expand the preset still reaches the (now root-level, prefixed) node', stillOk)
+  st().resetGraph()
 }
 
 /* =====================================================================

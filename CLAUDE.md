@@ -137,7 +137,7 @@ Structural kinds never reach an emitter, so `scripts/codegen-contract.mjs`
 excludes them by name — they have stray-port emitters that warn and emit
 silence, for the case where one ends up at the root with no parent.
 
-### Presets — parameters, not topology
+### Presets — parameters, not topology, tree-wide
 
 `state/presets.ts`. A preset captures every node's params and nothing else:
 recalling one must never add, remove or rewire a node, because that is the
@@ -145,6 +145,21 @@ one thing you cannot do smoothly while a patch is making sound. Excludes
 `bindingId` (recall must not repoint a knob at a different pot) and the
 opaque design blobs (`source`, `tree`, `elements` — that is structure).
 Simulation params are skipped on hardware-bound nodes, where the pot wins.
+
+**Keys are tree PATHS**, not ids: `osc` at the root, `sub/osc` inside a
+subpatch, `poly/osc` inside a poly — the flatten prefix minus the per-voice
+`/vN/` segment, so one entry means "this param in every voice". Capture
+walks the ROOT (`walkTree`); recall/morph produce path edits and the store
+applies them to the root with `setParamAtPath` (immutable from the leaf
+out) then re-derives the open level (`applyPathEdits`) — so a recall while
+inside a box updates what you see AND the instrument. `collapseSelection`
+re-keys the moved nodes in the same mutation (`rekeyPresets`); expand needs
+nothing because the inner nodes come back with their prefixed ids. Codegen
+maps a path onto flat ids with `flatIdsForPath` (`poly/osc` → `poly/v0/osc`
+… ), one override global per flat node, all written from one table cell.
+`prunePresets` migrates a legacy bare inner id to its one matching path.
+`test:features --only treepresets` covers capture / recall / morph at the
+root and inside boxes, the table, and a real generate for both targets.
 
 Morph interpolates numbers and SNAPS choices at the midpoint — there is no
 value between `sine` and `square`. A recall or a whole morph drag is one

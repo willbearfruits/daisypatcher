@@ -33,6 +33,8 @@ import {
   morphEdits,
   prunePresets,
   recallEdits,
+  rekeyPresets,
+  setParamAtPath,
   type Preset
 } from '@/state/presets'
 import { boardForTarget, targetForBoard } from '@/codegen/targets'
@@ -1358,12 +1360,26 @@ export const useEditorStore = create<EditorStore>((set, get) => {
         })
         return null
       }
-      mutate(() => ({ graph: res.graph }))
+      /*
+       * The grouped nodes' preset paths move with them: `osc` → `sub/osc`
+       * (prefixed by the path of the level we are on, if inside a box).
+       * Same mutation, so undo puts both back.
+       */
+      const here = get().subpatchStack.map((l) => l.nodeId + '/').join('')
+      const rename = new Map<string, string>()
+      for (const nid of st.selection) rename.set(here + nid, `${here}${id}/${nid}`)
+      mutate((s) => ({ graph: res.graph, presets: rekeyPresets(s.presets, rename) }))
       set(syncedSelection(new Set([id])))
       return id
     },
 
     expandSubpatchNode(id) {
+      /*
+       * No preset re-keying needed here: `expandSubpatch` goes through
+       * `flattenGraph`, so the inner nodes rejoin this level ALREADY named
+       * `sub/osc` — and a root-level node whose id is `sub/osc` is reached
+       * by the path `sub/osc`. The preset keys stay correct by construction.
+       */
       mutate((s) => {
         const next = expandSubpatch(s.graph, id)
         return next ? { graph: next } : null
@@ -1412,10 +1428,21 @@ export const useEditorStore = create<EditorStore>((set, get) => {
 
     /* ---------------- presets ---------------- */
 
+    /*
+     * Presets are TREE-WIDE. Capture reads the root (every subpatch and
+     * poly body included, keyed by path); recall and morph write the root
+     * and re-derive whichever level is open. So a preset taken while
+     * inside a box, or taken at the top of a patch whose voice lives in a
+     * poly, moves every knob it saw — which is what "preset" has to mean
+     * once the patch has any structure at all.
+     */
     capturePreset(name) {
       const id = nanoid(8)
-      const graph = get().graph
-      const preset = captureFrom(graph, name?.trim() || `Preset ${get().presets.length + 1}`, id)
+      const preset = captureFrom(
+        rootGraphOf(get()),
+        name?.trim() || `Preset ${get().presets.length + 1}`,
+        id
+      )
       mutate((st) => ({ presets: [...st.presets, preset] }))
       set({ activePresetId: id })
       return id
@@ -1424,24 +1451,27 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     recallPreset(id, opts) {
       const preset = get().presets.find((p) => p.id === id)
       if (!preset) return
-      const edits = recallEdits(get().graph, preset)
+      const edits = recallEdits(rootGraphOf(get()), preset)
+      if (edits.length === 0) {
+        set({ activePresetId: id })
+        return
+      }
       // One transaction for the whole recall: sixty params is one undo
-      // step, not sixty. `setParam` is the single write path so live
-      // worklets and the code node's AST re-post stay correct.
+      // step, not sixty.
       get().beginTransaction()
       if (opts?.silent) txSilent = true
-      for (const e of edits) get().setParam(e.nodeId, e.paramId, e.value)
+      applyPathEdits(edits)
       get().endTransaction()
       set({ activePresetId: id })
     },
 
     updatePreset(id) {
-      const graph = get().graph
+      const root = rootGraphOf(get())
       mutate((st) => {
         const i = st.presets.findIndex((p) => p.id === id)
         if (i < 0) return null
         const next = st.presets.slice()
-        next[i] = captureFrom(graph, st.presets[i].name, id)
+        next[i] = captureFrom(root, st.presets[i].name, id)
         return { presets: next }
       })
       set({ activePresetId: id })
@@ -1483,7 +1513,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       const a = presets.find((p) => p.id === aId)
       const b = presets.find((p) => p.id === bId)
       if (!a || !b) return
-      const edits = morphEdits(get().graph, a, b, t)
+      const edits = morphEdits(rootGraphOf(get()), a, b, t)
       if (edits.length === 0) return
       /*
        * A morph is a gesture, not an edit: dragging the slider produces a
@@ -1491,7 +1521,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
        * one transaction (see the Presets panel), so this deliberately does
        * not open its own — nesting would make each frame an undo entry.
        */
-      for (const e of edits) get().setParam(e.nodeId, e.paramId, e.value)
+      applyPathEdits(edits)
       set({ activePresetId: null })
     },
 
@@ -1738,6 +1768,43 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       if (get().daisyFlashMode === mode) return
       set({ daisyFlashMode: mode })
     }
+  }
+
+  /**
+   * Write preset edits (keyed by tree path) into the ROOT graph, then put
+   * the store back on whichever level is open.
+   *
+   * `state.graph` is the open level and `subpatchStack` holds the outer
+   * ones, so a recall while inside a box has to: rebuild the root
+   * (`rootGraphOf`), apply every edit there (`setParamAtPath` rewrites the
+   * container bodies outward), then re-split — the stack's stored outer
+   * graphs are replaced by the new root's levels and `graph` by the new
+   * body at the same depth. One `mutate`, so it is one history entry.
+   */
+  function applyPathEdits(edits: { path: string; paramId: string; value: number | string }[]): void {
+    if (edits.length === 0) return
+    const st = get()
+    let root = rootGraphOf(st)
+    for (const e of edits) root = setParamAtPath(root, e.path, e.paramId, e.value)
+    // Re-derive the open level from the new root by walking the stack's
+    // container ids down from the top.
+    const stack = st.subpatchStack
+    const newStack: typeof stack = []
+    let cur = root
+    for (const level of stack) {
+      newStack.push({ ...level, graph: cur })
+      const c = cur.nodes.find((n) => n.id === level.nodeId)
+      if (!c) {
+        // Container vanished — cannot happen from a param edit, but never
+        // leave the store pointing at a body that is not in the tree.
+        cur = emptyGraph()
+        break
+      }
+      cur = bodyOf(c)
+    }
+    set({ subpatchStack: newStack })
+    mutate(() => ({ graph: cur }))
+    if (get().activePresetId !== null) set({ activePresetId: null })
   }
 
   /**

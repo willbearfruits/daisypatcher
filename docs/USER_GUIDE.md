@@ -67,7 +67,7 @@ A preset is every knob and switch in the patch — not the wiring. **+ Capture**
 
 Presets compile into the firmware. To recall them *on the device*, add a **Preset** node and patch a trigger into it — a button, a clock division, anything. In Morph mode its CV input walks between two slots. Only numeric parameters travel to the device; the app warns about the rest.
 
-A preset captures the level you are looking at. Nodes inside a subpatch or a poly voice are not part of a preset taken at the top level — capture while inside the box to preset those — and only top-level parameters reach the device for now.
+A preset captures the **whole patch**, boxes included: nodes inside a subpatch, and the voice inside a poly, are part of it wherever you happen to be when you press Capture. A poly voice is one entry that applies to every voice — voices are copies and cannot be tuned apart. On the device the same holds: a preset that moves a voice's oscillator moves it in all N voices.
 
 ## Samples
 
