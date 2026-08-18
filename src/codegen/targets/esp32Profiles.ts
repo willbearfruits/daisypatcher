@@ -26,6 +26,26 @@ export interface Esp32Defaults {
   oled: { sda: number; scl: number }
 }
 
+/**
+ * What a board's external RAM looks like — or `null` for none.
+ *
+ * This is the thing the `platformio.ini` block has to get RIGHT per board:
+ * the S3 family ships the same chip with no PSRAM (N8), 2 MB quad-SPI
+ * PSRAM (R2, the ESP32-S3-Zero / most SuperMinis) or 8 MB octal (R8, the
+ * DevKitC-1 N8R8), and the Arduino core has to be told which at build
+ * time via `board_build.arduino.memory_type`. Emitting the octal settings
+ * for a quad board does not degrade gracefully — the firmware boots into
+ * a PSRAM-init panic loop. So a wrong `hasPsram: true` used to be worse
+ * than `false`, which is why the SuperMini shipped without PSRAM even
+ * though it has 2 MB.
+ */
+export interface Esp32Psram {
+  /** `qspi` (R2, R8 quad) or `opi` (octal, DevKitC-1 N8R8). */
+  bus: 'qspi' | 'opi'
+  /** Flash size string for `board_upload.flash_size` / partition choice. */
+  flash: '4MB' | '8MB' | '16MB'
+}
+
 export interface Esp32Profile {
   boardId: BoardId
   label: string
@@ -34,8 +54,13 @@ export interface Esp32Profile {
   description: string
   /** platformio.ini `board =` / build-env name. */
   pioBoard: string
-  /** Octal PSRAM present. Granulator's ~770 KB EXT_RAM_ATTR buffer needs it. */
-  hasPsram: boolean
+  /**
+   * External PSRAM, or `null`. Drives the platformio.ini memory block and
+   * the palette's PSRAM_DEGRADED note; the granulator asks for PSRAM at
+   * runtime and falls back to a shorter heap buffer either way, so a
+   * wrong `null` costs capture length, not a build.
+   */
+  psram: Esp32Psram | null
   /** TinyUSB device stack (`USBMIDI.h`) — S2/S3 only, never RISC-V C-series. */
   hasTinyUsbMidi: boolean
   /** Native-USB CDC-on-boot build flags. */
@@ -56,18 +81,19 @@ const S3_DEVKITC: Esp32Profile = {
   description: 'Espressif ESP32-S3 DevKitC-1 (Arduino / PlatformIO)',
   pioBoard: PIO_ENV.esp32_s3_devkitc,
   /*
-   * False on purpose, and not a mistake about the hardware.
+   * `null` on purpose, and not a mistake about the hardware.
    *
    * PlatformIO's `esp32-s3-devkitc-1` definition is the N8 variant, which
-   * has no PSRAM; the family also ships as N8R2 and N8R8 and nothing at
-   * build time distinguishes them. Claiming PSRAM here emitted a
-   * `memory_type = qio_opi` block for a chip that may not have it, and a
-   * static PSRAM buffer that overflowed DRAM by half a megabyte on the
-   * default variant. Buffers that want PSRAM now ask for it at runtime and
-   * fall back, so this flag only controls the platformio.ini block — and
-   * the safe answer for a board we cannot identify is "assume not".
+   * has no PSRAM; the family also ships as N8R2 (quad) and N8R8 (octal)
+   * and nothing at build time distinguishes them. Claiming octal here
+   * emitted `memory_type = qio_opi` for a chip that may not have it, and
+   * the wrong bus type is a boot loop, not a warning. Buffers that want
+   * PSRAM ask for it at runtime and fall back, so this only controls the
+   * platformio.ini block — and the safe answer for a board we cannot
+   * identify is "assume none". A user with an N8R8 can add the block by
+   * hand after Eject.
    */
-  hasPsram: false,
+  psram: null,
   hasTinyUsbMidi: true,
   usbCdcOnBoot: true,
   defaults: {
@@ -96,7 +122,7 @@ const C3_SUPERMINI: Esp32Profile = {
   shortLabel: 'C3 SM',
   description: 'ESP32-C3 SuperMini (RISC-V, 16 pins, no PSRAM)',
   pioBoard: PIO_ENV.esp32_c3_supermini,
-  hasPsram: false,
+  psram: null,
   hasTinyUsbMidi: false,
   usbCdcOnBoot: true,
   defaults: {
@@ -110,14 +136,14 @@ const C3_SUPERMINI: Esp32Profile = {
 
 /**
  * ESP32-S3 SuperMini — the ESP32-S3-Zero form factor (18 x 23.5 mm,
- * ESP32-S3FH4R2). See `hardware/esp32S3SuperMiniPinout.ts` for the pin
- * table, checked against a board in hand.
+ * ESP32-S3FH4R2: 4 MB flash, 2 MB quad-SPI PSRAM in the package). See
+ * `hardware/esp32S3SuperMiniPinout.ts` for the pin table, checked against
+ * a board in hand.
  *
- * `hasPsram` is false although the part HAS 2 MB QSPI PSRAM: the codegen's
- * PSRAM block writes the DevKitC N8R8 settings (octal PSRAM, 8 MB flash),
- * which would brick a 4 MB QSPI board's boot. Until that block is
- * per-board the granulator runs from the heap with a shorter buffer,
- * which the palette says.
+ * Unlike the DevKitC, this board IS identifiable — the S3-Zero pinout only
+ * exists on the FH4R2 — so the PSRAM block can be emitted with confidence:
+ * quad bus, 4 MB flash. That gives the granulator its full four-second
+ * buffer here.
  */
 const S3_SUPERMINI: Esp32Profile = {
   boardId: 'esp32_s3_supermini',
@@ -125,7 +151,7 @@ const S3_SUPERMINI: Esp32Profile = {
   shortLabel: 'S3 SM',
   description: 'ESP32-S3 SuperMini / S3-Zero (18 header pins + pads, WS2812 on GPIO21)',
   pioBoard: PIO_ENV.esp32_s3_supermini,
-  hasPsram: false,
+  psram: { bus: 'qspi', flash: '4MB' },
   hasTinyUsbMidi: true,
   usbCdcOnBoot: true,
   defaults: {

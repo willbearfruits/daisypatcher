@@ -423,7 +423,7 @@
           <tbody>
             <tr><td>Daisy Seed</td><td>onboard codec</td><td class="num">94 / 95</td><td>The reference target. First run clones and builds libDaisy + DaisySP.</td></tr>
             <tr><td>ESP32-S3 DevKitC</td><td>I²S DAC — PCM5102A, MAX98357A</td><td class="num">91 / 95</td><td><code>granulator</code> runs with a shorter buffer without PSRAM; <code>expression</code> and the I²S pass-through kinds are stubs.</td></tr>
-            <tr><td>ESP32-S3 SuperMini</td><td>I²S DAC</td><td class="num">91 / 95</td><td>The ESP32-S3-Zero layout: 2 × 9 header pins plus castellated/back pads. As DevKitC otherwise.</td></tr>
+            <tr><td>ESP32-S3 SuperMini</td><td>I²S DAC</td><td class="num">92 / 95</td><td>The ESP32-S3-Zero layout: 2 × 9 header pins plus castellated/back pads. Its 2 MB PSRAM is declared, so the granulator runs at full length here.</td></tr>
             <tr><td>ESP32-C3 SuperMini</td><td>I²S DAC</td><td class="num">88 / 95</td><td>As above, minus USB-MIDI: RISC-V has no TinyUSB device stack.</td></tr>
           </tbody>
         </table>

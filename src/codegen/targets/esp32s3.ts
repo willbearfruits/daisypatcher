@@ -518,13 +518,24 @@ function buildPlatformioIni(
   const libDeps = libs.length
     ? `lib_deps =\n    ${libs.join('\n    ')}\n`
     : ''
-  // Granulator's 4-second capture buffer (~770 KB at 48 kHz fp32) doesn't fit
-  // in DRAM; we place it in external PSRAM via EXT_RAM_ATTR. Enable the octal
-  // PSRAM mapping so malloc/BSS in PSRAM is available. Gated on the profile:
-  // emitting this for a board without PSRAM produces a config that looks
-  // right and then fails to link.
-  const psramBlock = features.hasGranulator && profile.hasPsram
-    ? `board_build.arduino.memory_type = qio_opi\nboard_build.flash_mode = qio\nboard_upload.flash_size = 8MB\nboard_build.partitions = default_8MB.csv\n`
+  /*
+   * The granulator's 4-second capture buffer (~770 KB at 48 kHz fp32)
+   * does not fit in DRAM; it `ps_malloc`s and falls back to a short heap
+   * buffer. For the malloc to succeed the Arduino core must be told the
+   * board's PSRAM bus at build time — and told the RIGHT one: `qio_opi` on
+   * a quad-PSRAM part is a boot loop, not a warning. So the block is
+   * emitted from the profile's descriptor, only when a board declares
+   * one, and only when something wants it.
+   */
+  // The Arduino core's 4 MB default table is plain `default.csv`; the
+  // sized names only exist from 8 MB up (checked in tools/partitions/).
+  const partitions =
+    profile.psram?.flash === '4MB' ? 'default.csv' : `default_${profile.psram?.flash}.csv`
+  const psramBlock = features.hasGranulator && profile.psram
+    ? `board_build.arduino.memory_type = qio_${profile.psram.bus}\n` +
+      `board_build.flash_mode = qio\n` +
+      `board_upload.flash_size = ${profile.psram.flash}\n` +
+      `board_build.partitions = ${partitions}\n`
     : ''
   // USB MIDI needs the USB CDC / MODE flags already present; no extra libs
   // since USBMIDI ships in the Arduino-ESP32 core.

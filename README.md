@@ -54,7 +54,7 @@
 |---|---|---|
 | **Daisy Seed** | onboard codec | The reference target. 94 of 95 kinds native. |
 | **ESP32-S3 DevKitC** | I²S DAC (PCM5102A / MAX98357A) | 91 native; `granulator` runs with a shorter buffer without PSRAM; `expression` and the I²S pass-through kinds are stubs. |
-| **ESP32-S3 SuperMini** | I²S DAC | The ESP32-S3-Zero layout: 2 × 9 header pins plus the castellated/back pads, bindable from the inspector. As DevKitC otherwise. |
+| **ESP32-S3 SuperMini** | I²S DAC | The ESP32-S3-Zero layout: 2 × 9 header pins plus the castellated/back pads, bindable from the inspector. 92 native — its 2 MB PSRAM is declared, so the granulator gets its full buffer. |
 | **ESP32-C3 SuperMini** | I²S DAC | As above, minus USB-MIDI (RISC-V has no TinyUSB device stack). |
 
 The palette greys out what the selected board cannot run, and says why. The pin cards each drawing was checked against are in [`docs/boards/`](docs/boards/).

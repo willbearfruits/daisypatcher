@@ -116,7 +116,7 @@ export const TARGET_SUPPORT: Partial<Record<NodeKind, Partial<Record<BoardTarget
         continue
       }
       for (const kind of ESP32_STUBS) put(kind, board, 'stub')
-      if (!profile.hasPsram) for (const kind of PSRAM_DEGRADED) put(kind, board, 'stub')
+      if (!profile.psram) for (const kind of PSRAM_DEGRADED) put(kind, board, 'stub')
       if (!profile.hasTinyUsbMidi) for (const kind of NEEDS_TINYUSB) put(kind, board, 'unsupported')
     }
     return out

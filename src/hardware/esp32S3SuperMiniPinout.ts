@@ -26,10 +26,10 @@
  *   - Arduino-core defaults on the S3: I2C SDA=8 SCL=9, SPI SS=10 MOSI=11
  *     SCK=12 MISO=13, UART0 TX=43 RX=44. I2S has no fixed pins (GPIO
  *     matrix), so any header pin carries BCLK/WS/DATA.
- *   - The 2 MB PSRAM is QSPI on a 4 MB-flash part; the codegen's PSRAM
- *     block currently assumes the DevKitC N8R8 (octal, 8 MB), so
- *     `hasPsram` stays false here until that block is per-board. The
- *     granulator still runs, with a shorter buffer from the heap.
+ *   - The 2 MB PSRAM is quad-SPI on a 4 MB-flash part; the target profile
+ *     declares `psram: { bus: 'qspi', flash: '4MB' }` and codegen emits the
+ *     matching platformio.ini block, so the granulator gets its full
+ *     buffer here.
  */
 import type { PinCapabilities } from '@/types/hardware'
 import type { BoardGeometry } from './boardPinout'
