@@ -26,6 +26,7 @@ import { emptyGraph } from '@/types/graph'
 import type { BoardPin, HardwareKind, HardwareLayout, PlacedComponent } from '@/types/hardware'
 import { emptyHardwareLayout, KIND_ROLES } from '@/types/hardware'
 import { getBoardPinout } from '@/hardware/boardPinout'
+import { nextFreePosition } from '@/hardware/autoPlace'
 import { NODE_DEFINITIONS } from '@/nodes/definitions'
 import {
   captureFrom,
@@ -726,14 +727,14 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       if (hwKind) {
         const hwId = nanoid(8)
         const layout = get().hardware
-        // Cascade placement so multiple drops don't stack exactly on top
-        // of each other in the hardware view. User moves them later.
-        const totalPlaced = layout.components.length
+        // First free slot in the band under the board — see autoPlace.ts.
+        // The user moves it later; what matters is that it does not land
+        // on top of the pin labels.
         hwComponent = {
           id: hwId,
           kind: hwKind,
           label: nextLabelFor(layout.components, hwKind),
-          position: { x: 100 + totalPlaced * 40, y: 100 + totalPlaced * 40 },
+          position: nextFreePosition(layout, hwKind),
           pins: autoAssignPins(layout, hwKind),
           config: defaultHardwareConfig(hwKind)
         }

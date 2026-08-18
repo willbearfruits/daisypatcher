@@ -30,15 +30,25 @@
  * (CanvasShell.module.css): accent mark with glow, dim mono copy, delayed
  * fade-in so transient zero-component frames never flash it. Top-anchored
  * so it doesn't cover the board silhouette centered below. */
+/*
+ * Bottom-left card, not a centred overlay. Since "fit" frames the board
+ * to the viewport, anything centred sits ON the board — on a 22-row
+ * DevKitC the old overlay covered the top three pins on each side. The
+ * corner is the one place guaranteed empty on every board.
+ */
 .emptyHint {
   position: absolute;
-  inset: 0;
+  left: var(--dp-space-4);
+  bottom: var(--dp-space-4);
+  max-width: 300px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
+  align-items: flex-start;
   gap: var(--dp-space-2);
-  padding-top: 10%;
+  padding: var(--dp-space-3) var(--dp-space-4);
+  background: color-mix(in srgb, var(--dp-surface) 88%, transparent);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-md);
   pointer-events: none;
   animation: emptyHintFadeIn var(--dp-motion-slow) var(--dp-ease) 120ms backwards;
 }
@@ -69,8 +79,7 @@
   color: var(--dp-text-dim);
   text-transform: lowercase;
   letter-spacing: 0.08em;
-  max-width: 420px;
-  text-align: center;
+  line-height: 1.5;
 }
 
 /* Cursor affordances for pan. */

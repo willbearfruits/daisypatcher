@@ -460,15 +460,104 @@ function HardwareViewInner() {
   )
 
   /* Pan / zoom. */
+  /*
+   * "Fit" frames what is actually there — the board, its two label
+   * columns, and every placed component — at whatever zoom that takes,
+   * centred in the viewport. It used to reset to 1× at the canvas origin,
+   * which put a SuperMini in the lower-middle of a mostly empty screen and
+   * a fully-labelled Seed with its label columns off the sides.
+   */
   const fitToBoard = useCallback(() => {
-    setZoom(1)
-    setVbOrigin({ x: 0, y: 0 })
-  }, [])
+    const g = geom
+    // Board + name pills; the label rows are measured below because their
+    // width varies fourfold between a Seed (nine alt-functions a pin) and
+    // a SuperMini (one or two).
+    let minX = g.boardX - ROW_GAP_FROM_BOARD - NAME_PILL_W
+    let maxX = g.boardX + g.boardW + ROW_GAP_FROM_BOARD + NAME_PILL_W
+    let minY = g.boardY - 40 // USB shell / antenna overhang
+    let maxY = g.boardY + g.boardH + 40
+    // Every pin row draws one hit-rect spanning name pill + all its
+    // function pills — exactly the extent we want. Read them rather than
+    // re-deriving the pill layout here.
+    const svg = svgRef.current
+    if (svg) {
+      for (const r of Array.from(svg.querySelectorAll('rect[data-pin-row]'))) {
+        const x = Number(r.getAttribute('x'))
+        const w = Number(r.getAttribute('width'))
+        if (Number.isFinite(x) && Number.isFinite(w)) {
+          minX = Math.min(minX, x)
+          maxX = Math.max(maxX, x + w)
+        }
+      }
+    }
+    for (const c of useEditorStore.getState().hardware.components) {
+      const sz = shapeSizeCanvas(c.kind)
+      const half = Math.max(sz.w, sz.h) / 2 + 24 // room for the label under it
+      minX = Math.min(minX, c.position.x - half)
+      maxX = Math.max(maxX, c.position.x + half)
+      minY = Math.min(minY, c.position.y - half)
+      maxY = Math.max(maxY, c.position.y + half)
+    }
+    const pad = 40
+    const bw = maxX - minX + pad * 2
+    const bh = maxY - minY + pad * 2
+    // Viewport aspect: the SVG uses xMidYMid meet, so the visible canvas is
+    // CANVAS_W × CANVAS_H scaled to the element; only the ratio matters.
+    const el = rootRef.current
+    const aspect = el && el.clientHeight > 0 ? el.clientWidth / el.clientHeight : CANVAS_W / CANVAS_H
+    const canvasAspect = CANVAS_W / CANVAS_H
+    // The viewBox is CANVAS_W/zoom × CANVAS_H/zoom; with `meet` the shorter
+    // side letterboxes, so size to whichever axis binds.
+    const visW = aspect >= canvasAspect ? CANVAS_W : CANVAS_H * aspect
+    const visH = aspect >= canvasAspect ? CANVAS_W / aspect : CANVAS_H
+    const z = Math.max(0.3, Math.min(4, Math.min(visW / bw, visH / bh)))
+    const vbW = CANVAS_W / z
+    const vbH = CANVAS_H / z
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    setZoom(z)
+    setVbOrigin({ x: cx - vbW / 2, y: cy - vbH / 2 })
+  }, [geom])
+
+  // Frame the board whenever it changes (first open, target switch). After
+  // paint, so the pin rows it measures exist; and once more a frame later
+  // for the first mount, when the label toggle state settles.
+  useEffect(() => {
+    const a = requestAnimationFrame(() => {
+      fitToBoard()
+    })
+    return () => cancelAnimationFrame(a)
+  }, [fitToBoard, board, showLabels])
 
   const zoomActualSize = useCallback(() => {
     setZoom(1)
     setVbOrigin({ x: 0, y: 0 })
   }, [])
+
+  /*
+   * The toolbar +/− buttons zoom about the BOARD's centre, not the canvas
+   * origin. Scaling the viewBox from (0,0) kept the top-left corner still
+   * and pushed the board — which sits mid-canvas — off the bottom edge on
+   * the second click; you would zoom in and lose the thing you were
+   * looking at. Same math as the wheel handler, with the anchor pinned.
+   */
+  const zoomAboutBoard = useCallback(
+    (factor: number) => {
+      const z0 = zoomRef.current
+      const z1 = Math.max(0.3, Math.min(4, z0 * factor))
+      if (z1 === z0) return
+      const vb0 = vbOriginRef.current
+      const g = geom
+      const ax = g.boardX + g.boardW / 2
+      const ay = g.boardY + g.boardH / 2
+      setZoom(z1)
+      setVbOrigin({
+        x: ax - (ax - vb0.x) * (z0 / z1),
+        y: ay - (ay - vb0.y) * (z0 / z1)
+      })
+    },
+    [geom]
+  )
 
   const toggleGrid = useCallback(() => setShowGrid((v) => !v), [])
   const toggleSnap = useCallback(() => setSnap((v) => !v), [])
@@ -717,8 +806,8 @@ function HardwareViewInner() {
         zoom={zoom}
         onFitToBoard={fitToBoard}
         onZoomActual={zoomActualSize}
-        onZoomIn={() => setZoom((z) => Math.min(4, z * 1.2))}
-        onZoomOut={() => setZoom((z) => Math.max(0.3, z / 1.2))}
+        onZoomIn={() => zoomAboutBoard(1.2)}
+        onZoomOut={() => zoomAboutBoard(1 / 1.2)}
       />
 
       {components.length === 0 ? (
