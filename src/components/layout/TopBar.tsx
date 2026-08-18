@@ -359,14 +359,20 @@ function CompileButton() {
   const sdkReady = useCompileStore((s) => s.sdkReady)
   const sdkChecked = useCompileStore((s) => s.sdkChecked)
   const build = useCompileStore((s) => s.build)
+  const target = useEditorStore((s) => s.target)
 
   const glowing = useGlowPhase(glowUntil)
   const disabled = building || (sdkChecked && !sdkReady)
+  // Named for the SELECTED board — this said "Daisy Seed" whatever the
+  // top bar had lit, and the flash button next to it already got it right.
+  const boardLabel = getTarget(target).label
   const title = !sdkReady && sdkChecked
-    ? 'SDK not installed \u2014 install via settings menu'
+    ? isEsp32Target(target)
+      ? 'PlatformIO not installed \u2014 click the board status dot to install'
+      : 'Daisy SDK not installed \u2014 click the board status dot to install'
     : building
-      ? 'Compiling\u2026'
-      : 'Compile patch for Daisy Seed'
+      ? `Compiling for ${boardLabel}\u2026`
+      : `Compile patch for ${boardLabel} (Ctrl+Enter)`
 
   const glowClass =
     glowing && lastSuccess === true
