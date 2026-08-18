@@ -11,6 +11,16 @@ Direction: MIDI learn, recording the emulator to `.wav`, tree-wide presets
 (nodes inside subpatches), Silkscreen mode + drill-template export. See
 `V0_5_PLAN.md` and `V2_PLAN.md`.
 
+## [0.5.6] - 2026-08-18
+
+### Added
+- **Presets are tree-wide.** A preset now captures every node in the patch — inside subpatches and inside a poly's voice — wherever you are when you press Capture. Recall and morph reach into the boxes too, and a recall while you are inside one updates what you see. On the device a poly voice's parameter becomes one table slot per voice, all set from the one preset entry. Grouping nodes into a subpatch carries their preset entries with them.
+- The ESP32-S3 SuperMini declares its 2 MB quad-SPI PSRAM: the granulator gets its full four-second buffer there (92 of 95 kinds native).
+- Hardware view: **fit** frames the board, its labels and every part at whatever zoom that takes, and runs on open and on every board switch; the +/− buttons zoom about the board; a part created from the patch side lands in the free band under the board instead of on the pin labels; the empty-state hint is a small corner card.
+
+### Fixed
+- The PSRAM block in `platformio.ini` was one-size (DevKitC N8R8 octal); it is now per board, from a `psram: { bus, flash }` descriptor.
+
 ## [0.5.5] - 2026-08-17
 
 **Pinout corrections — please re-check any ESP32 wiring made with an earlier build.** Three of the four board drawings were wrong; a knob you wired by following the Hardware view may be on the wrong pad.
