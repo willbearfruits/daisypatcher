@@ -56,7 +56,7 @@ The classic first contribution. Six or seven files, all listed under **Node cata
 
 ### Scope
 
-Before starting on a feature, open an issue or look at [`V0_5_PLAN.md`](./V0_5_PLAN.md) / [`V2_PLAN.md`](./V2_PLAN.md) — some things are deliberately not done yet, and a few (having the assistant write C++, per-instance sockets on the Code node, eval in the renderer) are deliberately not done at all. The reasoning is in `CLAUDE.md`.
+Before starting on a feature, open an issue or read [`ROADMAP.md`](./ROADMAP.md) — it says what is planned, in what order, and why. Note in particular that **runtime-loadable custom nodes (`.dpnode`) are the intended way for the catalogue to grow**: a custom node is a Code-node source plus metadata, needs no rebuild and no TypeScript, and cannot drift between emulator and firmware because both come from one parse. If you are about to hand-write a node kind in seven files, check whether it should be a `.dpnode` instead. Also look at [`V2_PLAN.md`](./V2_PLAN.md) — some things are deliberately not done yet, and a few (having the assistant write C++, per-instance sockets on the Code node, eval in the renderer) are deliberately not done at all. The reasoning is in `CLAUDE.md`.
 
 ## License
 

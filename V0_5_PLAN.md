@@ -55,6 +55,10 @@ https://claude.ai/code/artifact/7ee30110-13fd-4f49-b944-d2a0c26d55a9
 - [x] CI (test gate on push) + release workflow (tag → AppImage/NSIS/dmg)
 - [x] Real app icon, CHANGELOG, CONTRIBUTING, README, landing page
 
+> **Superseded.** The forward-looking plan now lives in `ROADMAP.md` at the
+> repo root. This file is kept as the record of what the v0.5 milestone
+> contained. The list below is historical.
+
 ## Next in line after the public beta
 - [x] **Tree-wide presets** (2026-08-18): keyed by tree path, capture from
       the root, recall/morph rewrite container bodies, codegen expands

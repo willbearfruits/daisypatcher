@@ -157,7 +157,7 @@ Architecture, the checklist for adding a node kind, and every non-obvious gotcha
 ## Known limits (beta)
 
 - The Windows and macOS builds come off CI and are not code-signed; they are less travelled than Linux.
-- No MIDI learn, no recording of the emulator to `.wav`, no reverse import of hand-written firmware. See [`V0_5_PLAN.md`](./V0_5_PLAN.md) and [`V2_PLAN.md`](./V2_PLAN.md) for the direction.
+- No MIDI learn, no recording of the emulator to `.wav`, no reverse import of hand-written firmware. See [`ROADMAP.md`](./ROADMAP.md) for where this is going — including runtime-loadable custom nodes, which is how the catalogue is meant to grow.
 
 ## Contributing
 
