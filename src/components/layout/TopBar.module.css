@@ -22,6 +22,24 @@
    */
   position: relative;
   z-index: var(--dp-z-chrome, 20);
+  /*
+   * macOS uses `titleBarStyle: 'hiddenInset'` (see electron/main/index.ts)
+   * so the OS gives us no title bar and no drag region of its own — the
+   * content area fills the whole window. This row is the only thing tall
+   * enough to grab, so it opts itself into the drag region and every
+   * clickable descendant opts back out below. Harmless on Windows/Linux,
+   * where the frame already supplies its own drag/move handling.
+   */
+  -webkit-app-region: drag;
+}
+
+.root button,
+.root input,
+.root select,
+.root a,
+.root [role='tab'],
+.root [role='option'] {
+  -webkit-app-region: no-drag;
 }
 
 .left {

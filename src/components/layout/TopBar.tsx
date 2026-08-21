@@ -230,8 +230,22 @@ export function TopBar() {
   const [verificationOpen, setVerificationOpen] = useState(false)
   const [testKind, setTestKind] = useState<NodeKind | null>(null)
 
+  /*
+   * The drag region (`-webkit-app-region: drag` in TopBar.module.css)
+   * substitutes for the title bar `hiddenInset` removes, but it's just a
+   * mouse listener to Chromium — macOS never learns to zoom the window on
+   * a second click there the way it would for a real NSWindow title bar.
+   * Skip it entirely over interactive descendants so double-clicking a
+   * button/tab doesn't ALSO toggle the window size.
+   */
+  const onRootDoubleClick = (e: React.MouseEvent): void => {
+    const target = e.target as HTMLElement
+    if (target.closest('button, input, select, a, [role="tab"], [role="option"]')) return
+    void window.daisy.window.titlebarDoubleClick()
+  }
+
   return (
-    <div className={styles.root}>
+    <div className={styles.root} onDoubleClick={onRootDoubleClick}>
       <div className={styles.left}>
         <span className={styles.dot} aria-hidden />
         <span className={styles.wordmark}>DAISYPATCHER</span>
