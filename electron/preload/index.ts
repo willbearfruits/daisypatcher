@@ -269,8 +269,6 @@ const api = {
     /** Represented file + edited flag: macOS proxy icon and title-bar dot. */
     setDocument: (p: { path: string | null; edited: boolean }): void =>
       ipcRenderer.send('window:document', p),
-    // Custom drag region (see TopBar.module.css) has no native title bar
-    // behind it, so double-click-to-zoom needs to be wired up by hand.
     titlebarDoubleClick: (): Promise<void> =>
       ipcRenderer.invoke('window:titlebarDoubleClick')
   },
