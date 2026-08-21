@@ -22,6 +22,16 @@
    */
   position: relative;
   z-index: var(--dp-z-chrome, 20);
+  -webkit-app-region: drag;
+}
+
+.root button,
+.root input,
+.root select,
+.root a,
+.root [role='tab'],
+.root [role='option'] {
+  -webkit-app-region: no-drag;
 }
 
 .left {

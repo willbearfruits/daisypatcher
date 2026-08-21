@@ -268,7 +268,9 @@ const api = {
   window: {
     /** Represented file + edited flag: macOS proxy icon and title-bar dot. */
     setDocument: (p: { path: string | null; edited: boolean }): void =>
-      ipcRenderer.send('window:document', p)
+      ipcRenderer.send('window:document', p),
+    titlebarDoubleClick: (): Promise<void> =>
+      ipcRenderer.invoke('window:titlebarDoubleClick')
   },
   /** Errors the main process caught instead of dying from. */
   onMainError: (cb: (msg: string) => void): (() => void) => onChannel('app:main-error', cb),

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, systemPreferences } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
@@ -227,6 +227,32 @@ async function pickOpenPath(): Promise<PickResult> {
 }
 
 function registerIpcHandlers(): void {
+  /*
+   * `titleBarStyle: 'hiddenInset'` gives the renderer the drag region
+   * (`-webkit-app-region: drag` on the TopBar, see TopBar.module.css) but
+   * NOT the OS's usual double-click-to-zoom behaviour that a real title
+   * bar has for free — Chromium's drag region is a plain mouse listener,
+   * not an NSWindow title bar, so nothing tells macOS to react to the
+   * second click. The renderer's own dblclick handler calls this so we
+   * can honour the user's actual System Settings > Desktop & Dock choice
+   * ("Zoom", "Minimize" or "None") instead of hardcoding one.
+   */
+  ipcMain.handle('window:titlebarDoubleClick', (evt) => {
+    if (process.platform !== 'darwin') return
+    const win = BrowserWindow.fromWebContents(evt.sender)
+    if (!win) return
+    const action = systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string')
+    if (action === 'Minimize') {
+      win.minimize()
+    } else if (action === 'None') {
+      // no-op, matches the system setting
+    } else {
+      // Default action ('Maximize', or unset) mirrors a native title bar.
+      if (win.isMaximized()) win.unmaximize()
+      else win.maximize()
+    }
+  })
+
   ipcMain.handle('dialog:save', async (evt, defaultName: string) => {
     /*
      * Parent the modal to the window that MADE the call, not to whatever
